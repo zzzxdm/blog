@@ -114,6 +114,7 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 			u.role,
 			u.status,
 			u.avatar_text,
+			u.email_verified,
 			COALESCE((SELECT max(s.created_at) FROM sessions s WHERE s.user_id = u.id), u.created_at) AS last_login_at,
 			u.created_at,
 			(SELECT count(*)::int FROM comments c WHERE c.author_id = u.id) AS comment_count,
@@ -145,6 +146,7 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 			&user.Role,
 			&user.Status,
 			&user.AvatarText,
+			&user.EmailVerified,
 			&user.LastLoginAt,
 			&user.RegisteredAt,
 			&user.CommentCount,
@@ -152,8 +154,6 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
-
-		user.EmailVerified = true
 		user.ModerationNote = moderationNote(user.Status)
 		if settings, err := repo.getAccountSettings(ctx, auth.User{
 			ID:          user.ID,

@@ -5,7 +5,9 @@ import AccountLayout from "../../components/AccountLayout.vue";
 import {
   changePassword,
   getAccountSettings,
+  requestEmailVerification,
   updateAccountSettings,
+  verifyEmail,
   type AccountSettings
 } from "../../shared/api";
 import { useAuthStore } from "../../stores/auth";
@@ -19,6 +21,8 @@ const error = ref("");
 const message = ref("");
 const currentPassword = ref("");
 const newPassword = ref("");
+const verificationToken = ref("");
+const verificationSaving = ref(false);
 
 onMounted(load);
 
@@ -80,6 +84,44 @@ async function savePassword() {
     passwordSaving.value = false;
   }
 }
+
+async function sendVerification() {
+  verificationSaving.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const response = await requestEmailVerification();
+    verificationToken.value = response.verificationToken || "";
+    message.value = response.verificationToken ? `验证 token：${response.verificationToken}` : "验证入口已发送。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "发送验证失败";
+  } finally {
+    verificationSaving.value = false;
+  }
+}
+
+async function confirmVerification() {
+  if (!verificationToken.value) {
+    error.value = "请输入邮箱验证 token";
+    return;
+  }
+
+  verificationSaving.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const response = await verifyEmail(verificationToken.value);
+    auth.user = response.user;
+    verificationToken.value = "";
+    message.value = "邮箱已验证。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "邮箱验证失败";
+  } finally {
+    verificationSaving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -115,6 +157,18 @@ async function savePassword() {
           <div class="panel-title"><h2>登录安全</h2></div>
           <div class="settings-stack">
             <div class="field"><label for="email">登录邮箱</label><input v-model="settings.email" class="input" id="email" readonly></div>
+            <div class="review-note">
+              <strong>{{ auth.user?.emailVerified ? "邮箱已验证" : "邮箱未验证" }}</strong>
+              <p>邮箱用于找回密码、重要账号事件提醒和后续两步验证。</p>
+            </div>
+            <div v-if="!auth.user?.emailVerified" class="field">
+              <label for="verification-token">邮箱验证 token</label>
+              <input v-model="verificationToken" class="input" id="verification-token">
+            </div>
+            <div v-if="!auth.user?.emailVerified" class="header-actions">
+              <button class="button-secondary" type="button" :disabled="verificationSaving" @click="sendVerification">{{ verificationSaving ? "发送中..." : "发送验证" }}</button>
+              <button class="button-secondary" type="button" :disabled="verificationSaving || !verificationToken" @click="confirmVerification">确认验证</button>
+            </div>
             <div class="field"><label for="current-password">当前密码</label><input v-model="currentPassword" class="input" id="current-password" type="password" autocomplete="current-password"></div>
             <div class="field"><label for="new-password">新密码</label><input v-model="newPassword" class="input" id="new-password" type="password" autocomplete="new-password" placeholder="至少 6 位"></div>
             <button class="button-secondary" type="button" :disabled="passwordSaving || !currentPassword || !newPassword" @click="savePassword">{{ passwordSaving ? "更新中..." : "更新密码" }}</button>

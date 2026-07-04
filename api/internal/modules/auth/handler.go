@@ -27,6 +27,10 @@ func RegisterRoutes(router gin.IRouter, store Store) {
 	router.POST("/auth/login", handler.Login)
 	router.POST("/auth/register", handler.Register)
 	router.POST("/auth/logout", handler.Logout)
+	router.POST("/auth/email-verification", handler.RequestEmailVerification)
+	router.POST("/auth/verify-email", handler.VerifyEmail)
+	router.POST("/auth/forgot-password", handler.ForgotPassword)
+	router.POST("/auth/reset-password", handler.ResetPassword)
 	router.GET("/me", handler.Me)
 	router.PUT("/me/password", handler.ChangePassword)
 }
@@ -128,7 +132,18 @@ func (handler *Handler) Register(ctx *gin.Context) {
 	}
 
 	setSessionCookie(ctx, token)
-	ctx.JSON(http.StatusCreated, gin.H{"user": user})
+
+	verificationToken, err := handler.store.RequestEmailVerification(user.ID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification"})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"user":              user,
+		"verificationToken": verificationToken,
+		"delivery":          "dev-response",
+	})
 }
 
 func (handler *Handler) Logout(ctx *gin.Context) {
@@ -175,6 +190,91 @@ func (handler *Handler) ChangePassword(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (handler *Handler) RequestEmailVerification(ctx *gin.Context) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	token, err := handler.store.RequestEmailVerification(user.ID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"ok":                true,
+		"verificationToken": token,
+		"delivery":          "dev-response",
+	})
+}
+
+func (handler *Handler) VerifyEmail(ctx *gin.Context) {
+	var request TokenRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid verification payload"})
+		return
+	}
+
+	user, err := handler.store.VerifyEmail(request.Token)
+	if err != nil {
+		if errors.Is(err, ErrInvalidToken) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "verification token is invalid or expired"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+func (handler *Handler) ForgotPassword(ctx *gin.Context) {
+	var request ForgotPasswordRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid forgot password payload"})
+		return
+	}
+
+	token, err := handler.store.RequestPasswordReset(request.Email)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"ok":         true,
+		"resetToken": token,
+		"delivery":   "dev-response",
+	})
+}
+
+func (handler *Handler) ResetPassword(ctx *gin.Context) {
+	var request ResetPasswordRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid reset password payload"})
+		return
+	}
+
+	if len(request.NewPassword) < 6 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "new password must be at least 6 characters"})
+		return
+	}
+
+	if err := handler.store.ResetPassword(request.Token, request.NewPassword); err != nil {
+		if errors.Is(err, ErrInvalidToken) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "reset token is invalid or expired"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
 		return
 	}
 

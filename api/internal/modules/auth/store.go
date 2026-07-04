@@ -15,9 +15,15 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailExists        = errors.New("email already exists")
 	ErrInvalidSession     = errors.New("invalid session")
+	ErrInvalidToken       = errors.New("invalid token")
 )
 
 type session struct {
+	UserID    string
+	ExpiresAt time.Time
+}
+
+type authToken struct {
 	UserID    string
 	ExpiresAt time.Time
 }
@@ -27,6 +33,10 @@ type Store interface {
 	Register(request RegisterRequest) (User, string, error)
 	UserBySession(token string) (User, error)
 	ChangePassword(userID string, currentPassword string, newPassword string) error
+	RequestEmailVerification(userID string) (string, error)
+	VerifyEmail(token string) (User, error)
+	RequestPasswordReset(email string) (string, error)
+	ResetPassword(token string, newPassword string) error
 	DeleteSession(token string)
 }
 
@@ -36,6 +46,8 @@ type MemoryStore struct {
 	usersByEmail   map[string]string
 	passwordHashes map[string][]byte
 	sessions       map[string]session
+	emailTokens    map[string]authToken
+	resetTokens    map[string]authToken
 	now            func() time.Time
 }
 
@@ -45,25 +57,29 @@ func NewMemoryStore() *MemoryStore {
 		usersByEmail:   map[string]string{},
 		passwordHashes: map[string][]byte{},
 		sessions:       map[string]session{},
+		emailTokens:    map[string]authToken{},
+		resetTokens:    map[string]authToken{},
 		now:            time.Now,
 	}
 
 	store.mustSeed(User{
-		ID:          "user_linyi",
-		Email:       "linyi@example.com",
-		DisplayName: "林一",
-		Role:        "user",
-		Status:      "active",
-		AvatarText:  "林",
+		ID:            "user_linyi",
+		Email:         "linyi@example.com",
+		DisplayName:   "林一",
+		Role:          "user",
+		Status:        "active",
+		AvatarText:    "林",
+		EmailVerified: true,
 	}, "password")
 
 	store.mustSeed(User{
-		ID:          "user_admin",
-		Email:       "admin@example.com",
-		DisplayName: "管理员",
-		Role:        "admin",
-		Status:      "active",
-		AvatarText:  "管",
+		ID:            "user_admin",
+		Email:         "admin@example.com",
+		DisplayName:   "管理员",
+		Role:          "admin",
+		Status:        "active",
+		AvatarText:    "管",
+		EmailVerified: true,
 	}, "password")
 
 	return store
@@ -112,12 +128,13 @@ func (store *MemoryStore) Register(request RegisterRequest) (User, string, error
 	}
 
 	user := User{
-		ID:          "user_" + strings.ReplaceAll(strings.Split(normalizedEmail, "@")[0], ".", "_"),
-		Email:       normalizedEmail,
-		DisplayName: displayName,
-		Role:        "user",
-		Status:      "active",
-		AvatarText:  firstRune(displayName),
+		ID:            "user_" + strings.ReplaceAll(strings.Split(normalizedEmail, "@")[0], ".", "_"),
+		Email:         normalizedEmail,
+		DisplayName:   displayName,
+		Role:          "user",
+		Status:        "active",
+		AvatarText:    firstRune(displayName),
+		EmailVerified: false,
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
@@ -169,6 +186,104 @@ func (store *MemoryStore) ChangePassword(userID string, currentPassword string, 
 	}
 
 	store.passwordHashes[userID] = newHash
+	return nil
+}
+
+func (store *MemoryStore) RequestEmailVerification(userID string) (string, error) {
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if _, ok := store.usersByID[userID]; !ok {
+		return "", ErrInvalidSession
+	}
+
+	store.emailTokens[token] = authToken{
+		UserID:    userID,
+		ExpiresAt: store.now().Add(24 * time.Hour),
+	}
+
+	return token, nil
+}
+
+func (store *MemoryStore) VerifyEmail(token string) (User, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	normalizedToken := strings.TrimSpace(token)
+	record, ok := store.emailTokens[normalizedToken]
+	if !ok || record.ExpiresAt.Before(store.now()) {
+		return User{}, ErrInvalidToken
+	}
+
+	user, ok := store.usersByID[record.UserID]
+	if !ok {
+		return User{}, ErrInvalidToken
+	}
+
+	user.EmailVerified = true
+	store.usersByID[user.ID] = user
+	delete(store.emailTokens, normalizedToken)
+
+	return user, nil
+}
+
+func (store *MemoryStore) RequestPasswordReset(email string) (string, error) {
+	normalizedEmail := normalizeEmail(email)
+
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	userID, ok := store.usersByEmail[normalizedEmail]
+	if !ok {
+		return "", nil
+	}
+
+	user := store.usersByID[userID]
+	if user.Status == "banned" || user.Status == "deleted" {
+		return "", nil
+	}
+
+	store.resetTokens[token] = authToken{
+		UserID:    userID,
+		ExpiresAt: store.now().Add(30 * time.Minute),
+	}
+
+	return token, nil
+}
+
+func (store *MemoryStore) ResetPassword(token string, newPassword string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	normalizedToken := strings.TrimSpace(token)
+	record, ok := store.resetTokens[normalizedToken]
+	if !ok || record.ExpiresAt.Before(store.now()) {
+		return ErrInvalidToken
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	store.passwordHashes[record.UserID] = newHash
+	for sessionToken, session := range store.sessions {
+		if session.UserID == record.UserID {
+			delete(store.sessions, sessionToken)
+		}
+	}
+	delete(store.resetTokens, normalizedToken)
+
 	return nil
 }
 

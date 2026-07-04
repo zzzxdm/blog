@@ -613,6 +613,82 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 	}
 }
 
+func TestEmailVerificationAndPasswordReset(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	registerReq := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(`{"email":"verify@example.com","password":"secret123","displayName":"验证用户"}`))
+	registerReq.Header.Set("Content-Type", "application/json")
+	registerRec := httptest.NewRecorder()
+	router.ServeHTTP(registerRec, registerReq)
+	if registerRec.Code != http.StatusCreated || !strings.Contains(registerRec.Body.String(), `"emailVerified":false`) {
+		t.Fatalf("expected unverified registered user, got status=%d body=%q", registerRec.Code, registerRec.Body.String())
+	}
+
+	var registered struct {
+		VerificationToken string `json:"verificationToken"`
+	}
+	if err := json.Unmarshal(registerRec.Body.Bytes(), &registered); err != nil {
+		t.Fatalf("decode registered user: %v", err)
+	}
+	if registered.VerificationToken == "" {
+		t.Fatalf("expected verification token in dev response")
+	}
+
+	verifyReq := httptest.NewRequest(http.MethodPost, "/api/auth/verify-email", bytes.NewBufferString(`{"token":"`+registered.VerificationToken+`"}`))
+	verifyReq.Header.Set("Content-Type", "application/json")
+	verifyRec := httptest.NewRecorder()
+	router.ServeHTTP(verifyRec, verifyReq)
+	if verifyRec.Code != http.StatusOK || !strings.Contains(verifyRec.Body.String(), `"emailVerified":true`) {
+		t.Fatalf("expected verified user, got status=%d body=%q", verifyRec.Code, verifyRec.Body.String())
+	}
+
+	forgotReq := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewBufferString(`{"email":"verify@example.com"}`))
+	forgotReq.Header.Set("Content-Type", "application/json")
+	forgotRec := httptest.NewRecorder()
+	router.ServeHTTP(forgotRec, forgotReq)
+	if forgotRec.Code != http.StatusOK {
+		t.Fatalf("expected forgot password accepted, got status=%d body=%q", forgotRec.Code, forgotRec.Body.String())
+	}
+
+	var forgot struct {
+		ResetToken string `json:"resetToken"`
+	}
+	if err := json.Unmarshal(forgotRec.Body.Bytes(), &forgot); err != nil {
+		t.Fatalf("decode reset token: %v", err)
+	}
+	if forgot.ResetToken == "" {
+		t.Fatalf("expected reset token in dev response")
+	}
+
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", bytes.NewBufferString(`{"token":"`+forgot.ResetToken+`","newPassword":"reset123"}`))
+	resetReq.Header.Set("Content-Type", "application/json")
+	resetRec := httptest.NewRecorder()
+	router.ServeHTTP(resetRec, resetReq)
+	if resetRec.Code != http.StatusOK || !strings.Contains(resetRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected password reset, got status=%d body=%q", resetRec.Code, resetRec.Body.String())
+	}
+
+	oldLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"verify@example.com","password":"secret123"}`))
+	oldLoginReq.Header.Set("Content-Type", "application/json")
+	oldLoginRec := httptest.NewRecorder()
+	router.ServeHTTP(oldLoginRec, oldLoginReq)
+	if oldLoginRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected old password rejected, got status=%d body=%q", oldLoginRec.Code, oldLoginRec.Body.String())
+	}
+
+	newLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"verify@example.com","password":"reset123"}`))
+	newLoginReq.Header.Set("Content-Type", "application/json")
+	newLoginRec := httptest.NewRecorder()
+	router.ServeHTTP(newLoginRec, newLoginReq)
+	if newLoginRec.Code != http.StatusOK || !strings.Contains(newLoginRec.Body.String(), `"emailVerified":true`) {
+		t.Fatalf("expected new password login, got status=%d body=%q", newLoginRec.Code, newLoginRec.Body.String())
+	}
+}
+
 func TestAdminPostSaveAndPublish(t *testing.T) {
 	router := NewRouter(config.Config{
 		AppEnv:    "test",

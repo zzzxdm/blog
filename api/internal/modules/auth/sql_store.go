@@ -98,9 +98,9 @@ func (store *SQLStore) Register(request RegisterRequest) (User, string, error) {
 	}
 
 	if _, err := tx.ExecContext(context.Background(), `
-		INSERT INTO users (id, email, display_name, role, status, avatar_text, password_hash)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, user.ID, user.Email, user.DisplayName, user.Role, user.Status, user.AvatarText, string(hash)); err != nil {
+		INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, user.ID, user.Email, user.DisplayName, user.Role, user.Status, user.AvatarText, user.EmailVerified, string(hash)); err != nil {
 		return User{}, "", fmt.Errorf("insert user: %w", err)
 	}
 
@@ -127,12 +127,12 @@ func (store *SQLStore) Register(request RegisterRequest) (User, string, error) {
 func (store *SQLStore) UserBySession(token string) (User, error) {
 	var user User
 	err := store.db.QueryRowContext(context.Background(), `
-		SELECT u.id, u.email, u.display_name, u.role, u.status, u.avatar_text
+		SELECT u.id, u.email, u.display_name, u.role, u.status, u.avatar_text, u.email_verified
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token = $1
 			AND s.expires_at > now()
-	`, token).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText)
+	`, token).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return User{}, ErrInvalidSession
@@ -169,6 +169,156 @@ func (store *SQLStore) ChangePassword(userID string, currentPassword string, new
 	return nil
 }
 
+func (store *SQLStore) RequestEmailVerification(userID string) (string, error) {
+	var exists bool
+	if err := store.db.QueryRowContext(context.Background(), "SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)", userID).Scan(&exists); err != nil {
+		return "", fmt.Errorf("check verification user: %w", err)
+	}
+	if !exists {
+		return "", ErrInvalidSession
+	}
+
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := store.db.ExecContext(context.Background(), `
+		INSERT INTO email_verification_tokens (token, user_id, expires_at)
+		VALUES ($1, $2, $3)
+	`, token, userID, store.now().Add(24*time.Hour)); err != nil {
+		return "", fmt.Errorf("insert email verification token: %w", err)
+	}
+
+	return token, nil
+}
+
+func (store *SQLStore) VerifyEmail(token string) (User, error) {
+	tx, err := store.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return User{}, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var userID string
+	err = tx.QueryRowContext(context.Background(), `
+		SELECT user_id
+		FROM email_verification_tokens
+		WHERE token = $1
+			AND expires_at > now()
+	`, strings.TrimSpace(token)).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, ErrInvalidToken
+		}
+		return User{}, fmt.Errorf("load verification token: %w", err)
+	}
+
+	var user User
+	err = tx.QueryRowContext(context.Background(), `
+		UPDATE users
+		SET email_verified = true
+		WHERE id = $1
+		RETURNING id, email, display_name, role, status, avatar_text, email_verified
+	`, userID).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified)
+	if err != nil {
+		return User{}, fmt.Errorf("verify user email: %w", err)
+	}
+
+	if _, err := tx.ExecContext(context.Background(), "DELETE FROM email_verification_tokens WHERE user_id = $1", userID); err != nil {
+		return User{}, fmt.Errorf("delete verification tokens: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return User{}, err
+	}
+	committed = true
+
+	return user, nil
+}
+
+func (store *SQLStore) RequestPasswordReset(email string) (string, error) {
+	user, _, err := store.userByEmail(context.Background(), email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	if user.Status == "banned" || user.Status == "deleted" {
+		return "", nil
+	}
+
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := store.db.ExecContext(context.Background(), `
+		INSERT INTO password_reset_tokens (token, user_id, expires_at)
+		VALUES ($1, $2, $3)
+	`, token, user.ID, store.now().Add(30*time.Minute)); err != nil {
+		return "", fmt.Errorf("insert password reset token: %w", err)
+	}
+
+	return token, nil
+}
+
+func (store *SQLStore) ResetPassword(token string, newPassword string) error {
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	tx, err := store.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var userID string
+	err = tx.QueryRowContext(context.Background(), `
+		SELECT user_id
+		FROM password_reset_tokens
+		WHERE token = $1
+			AND expires_at > now()
+			AND used_at IS NULL
+	`, strings.TrimSpace(token)).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidToken
+		}
+		return fmt.Errorf("load password reset token: %w", err)
+	}
+
+	if _, err := tx.ExecContext(context.Background(), "UPDATE users SET password_hash = $2 WHERE id = $1", userID, string(newHash)); err != nil {
+		return fmt.Errorf("reset password: %w", err)
+	}
+	if _, err := tx.ExecContext(context.Background(), "UPDATE password_reset_tokens SET used_at = now() WHERE token = $1", strings.TrimSpace(token)); err != nil {
+		return fmt.Errorf("mark password reset token used: %w", err)
+	}
+	if _, err := tx.ExecContext(context.Background(), "DELETE FROM sessions WHERE user_id = $1", userID); err != nil {
+		return fmt.Errorf("delete reset user sessions: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+
+	return nil
+}
+
 func (store *SQLStore) DeleteSession(token string) {
 	_, _ = store.db.ExecContext(context.Background(), `DELETE FROM sessions WHERE token = $1`, token)
 }
@@ -177,10 +327,10 @@ func (store *SQLStore) userByEmail(ctx context.Context, email string) (User, str
 	var user User
 	var hash string
 	err := store.db.QueryRowContext(ctx, `
-		SELECT id, email, display_name, role, status, avatar_text, password_hash
+		SELECT id, email, display_name, role, status, avatar_text, email_verified, password_hash
 		FROM users
 		WHERE email = $1
-	`, normalizeEmail(email)).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &hash)
+	`, normalizeEmail(email)).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified, &hash)
 
 	return user, hash, err
 }
@@ -192,56 +342,61 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 	}{
 		{
 			User: User{
-				ID:          "user_linyi",
-				Email:       "linyi@example.com",
-				DisplayName: "林一",
-				Role:        "user",
-				Status:      "active",
-				AvatarText:  "林",
+				ID:            "user_linyi",
+				Email:         "linyi@example.com",
+				DisplayName:   "林一",
+				Role:          "user",
+				Status:        "active",
+				AvatarText:    "林",
+				EmailVerified: true,
 			},
 			Password: "password",
 		},
 		{
 			User: User{
-				ID:          "user_admin",
-				Email:       "admin@example.com",
-				DisplayName: "管理员",
-				Role:        "admin",
-				Status:      "active",
-				AvatarText:  "管",
+				ID:            "user_admin",
+				Email:         "admin@example.com",
+				DisplayName:   "管理员",
+				Role:          "admin",
+				Status:        "active",
+				AvatarText:    "管",
+				EmailVerified: true,
 			},
 			Password: "password",
 		},
 		{
 			User: User{
-				ID:          "user_chen",
-				Email:       "chen@example.com",
-				DisplayName: "陈默",
-				Role:        "user",
-				Status:      "active",
-				AvatarText:  "陈",
+				ID:            "user_chen",
+				Email:         "chen@example.com",
+				DisplayName:   "陈默",
+				Role:          "user",
+				Status:        "active",
+				AvatarText:    "陈",
+				EmailVerified: true,
 			},
 			Password: "password",
 		},
 		{
 			User: User{
-				ID:          "user_market",
-				Email:       "market@example.com",
-				DisplayName: "market_user",
-				Role:        "user",
-				Status:      "muted",
-				AvatarText:  "m",
+				ID:            "user_market",
+				Email:         "market@example.com",
+				DisplayName:   "market_user",
+				Role:          "user",
+				Status:        "muted",
+				AvatarText:    "m",
+				EmailVerified: true,
 			},
 			Password: "password",
 		},
 		{
 			User: User{
-				ID:          "user_noise",
-				Email:       "noise@example.com",
-				DisplayName: "noise_2048",
-				Role:        "user",
-				Status:      "banned",
-				AvatarText:  "n",
+				ID:            "user_noise",
+				Email:         "noise@example.com",
+				DisplayName:   "noise_2048",
+				Role:          "user",
+				Status:        "banned",
+				AvatarText:    "n",
+				EmailVerified: true,
 			},
 			Password: "password",
 		},
@@ -254,15 +409,16 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 		}
 
 		if _, err := store.db.ExecContext(ctx, `
-			INSERT INTO users (id, email, display_name, role, status, avatar_text, password_hash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE SET
 				email = EXCLUDED.email,
 				display_name = EXCLUDED.display_name,
 				role = EXCLUDED.role,
 				status = EXCLUDED.status,
-				avatar_text = EXCLUDED.avatar_text
-		`, seed.User.ID, normalizeEmail(seed.User.Email), seed.User.DisplayName, seed.User.Role, seed.User.Status, seed.User.AvatarText, string(hash)); err != nil {
+				avatar_text = EXCLUDED.avatar_text,
+				email_verified = EXCLUDED.email_verified
+		`, seed.User.ID, normalizeEmail(seed.User.Email), seed.User.DisplayName, seed.User.Role, seed.User.Status, seed.User.AvatarText, seed.User.EmailVerified, string(hash)); err != nil {
 			return fmt.Errorf("seed user %s: %w", seed.User.ID, err)
 		}
 	}

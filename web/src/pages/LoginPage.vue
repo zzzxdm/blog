@@ -2,16 +2,19 @@
 import { ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { forgotPassword, resetPassword } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 
-const mode = ref<"login" | "register">("login");
+const mode = ref<"login" | "register" | "forgot" | "reset">("login");
 const email = ref("linyi@example.com");
 const password = ref("password");
 const displayName = ref("林一");
+const resetToken = ref("");
+const newPassword = ref("");
 const message = ref("");
 
 async function submit() {
@@ -20,14 +23,54 @@ async function submit() {
   try {
     if (mode.value === "login") {
       await auth.login(email.value, password.value);
-    } else {
-      await auth.register(email.value, password.value, displayName.value);
+      await router.push(String(route.query.redirect || "/account"));
+      return;
     }
 
-    await router.push(String(route.query.redirect || "/account"));
+    if (mode.value === "register") {
+      await auth.register(email.value, password.value, displayName.value);
+      await router.push(String(route.query.redirect || "/account/settings"));
+      return;
+    }
+
+    if (mode.value === "forgot") {
+      const response = await forgotPassword(email.value);
+      resetToken.value = response.resetToken || "";
+      mode.value = "reset";
+      message.value = response.resetToken ? `重置 token：${response.resetToken}` : "如果邮箱存在，重置入口会发送到该邮箱。";
+      return;
+    }
+
+    await resetPassword(resetToken.value, newPassword.value);
+    mode.value = "login";
+    password.value = "";
+    newPassword.value = "";
+    message.value = "密码已重置，请使用新密码登录。";
   } catch {
     message.value = auth.error || "操作失败";
   }
+}
+
+function title() {
+  if (mode.value === "register") return "创建账号";
+  if (mode.value === "forgot") return "找回密码";
+  if (mode.value === "reset") return "重置密码";
+  return "欢迎回来";
+}
+
+function description() {
+  if (mode.value === "register") return "注册后可以投稿、评论、收藏并接收站内信。";
+  if (mode.value === "forgot") return "输入账号邮箱，系统会生成一次性重置入口。";
+  if (mode.value === "reset") return "输入重置 token 和新密码完成更新。";
+  return "登录后可继续评论、查看收藏和接收回复通知。";
+}
+
+function buttonText() {
+  if (auth.loading) return "处理中...";
+  if (mode.value === "register") return "注册";
+  if (mode.value === "forgot") return "发送重置入口";
+  if (mode.value === "reset") return "重置密码";
+  return "登录";
 }
 </script>
 
@@ -54,25 +97,34 @@ async function submit() {
           <a :class="{ active: mode === 'login' }" href="#login" @click.prevent="mode = 'login'">登录</a>
           <a :class="{ active: mode === 'register' }" href="#register" @click.prevent="mode = 'register'">注册</a>
         </div>
-        <h2>{{ mode === "login" ? "欢迎回来" : "创建账号" }}</h2>
-        <p>{{ mode === "login" ? "登录后可继续评论、查看收藏和接收回复通知。" : "注册后可以投稿、评论、收藏并接收站内信。" }}</p>
+        <h2>{{ title() }}</h2>
+        <p>{{ description() }}</p>
 
         <form class="settings-stack" @submit.prevent="submit">
           <div v-if="mode === 'register'" class="field">
             <label for="displayName">昵称</label>
             <input v-model="displayName" class="input" id="displayName" type="text">
           </div>
-          <div class="field">
+          <div v-if="mode !== 'reset'" class="field">
             <label for="email">邮箱</label>
             <input v-model="email" class="input" id="email" type="email" autocomplete="email">
           </div>
-          <div class="field">
+          <div v-if="mode === 'login' || mode === 'register'" class="field">
             <label for="password">密码</label>
             <input v-model="password" class="input" id="password" type="password" autocomplete="current-password">
           </div>
-          <button class="button" type="submit" :disabled="auth.loading">{{ auth.loading ? "处理中..." : mode === "login" ? "登录" : "注册" }}</button>
-          <button class="button-secondary" type="button">使用 GitHub 登录</button>
-          <p v-if="message" class="error">{{ message }}</p>
+          <div v-if="mode === 'reset'" class="field">
+            <label for="reset-token">重置 token</label>
+            <input v-model="resetToken" class="input" id="reset-token">
+          </div>
+          <div v-if="mode === 'reset'" class="field">
+            <label for="new-password">新密码</label>
+            <input v-model="newPassword" class="input" id="new-password" type="password" autocomplete="new-password">
+          </div>
+          <button class="button" type="submit" :disabled="auth.loading">{{ buttonText() }}</button>
+          <button v-if="mode === 'login'" class="button-secondary" type="button" @click="mode = 'forgot'">忘记密码</button>
+          <button v-if="mode === 'forgot' || mode === 'reset'" class="button-secondary" type="button" @click="mode = 'login'">返回登录</button>
+          <p v-if="message" class="muted">{{ message }}</p>
         </form>
 
         <div class="section-heading" style="margin: 20px 0 0;">

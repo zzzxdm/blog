@@ -76,10 +76,20 @@ export interface User {
   role: string;
   status: string;
   avatarText: string;
+  emailVerified: boolean;
 }
 
 export interface AuthResponse {
   user: User;
+  verificationToken?: string;
+  delivery?: string;
+}
+
+export interface TokenResponse {
+  ok: boolean;
+  verificationToken?: string;
+  resetToken?: string;
+  delivery?: string;
 }
 
 export interface Comment {
@@ -555,6 +565,31 @@ export async function register(email: string, password: string, displayName: str
 
 export async function logout(): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>("/auth/logout", { method: "POST" });
+}
+
+export async function requestEmailVerification(): Promise<TokenResponse> {
+  return request<TokenResponse>("/auth/email-verification", { method: "POST" });
+}
+
+export async function verifyEmail(token: string): Promise<AuthResponse> {
+  return request<AuthResponse>("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token })
+  });
+}
+
+export async function forgotPassword(email: string): Promise<TokenResponse> {
+  return request<TokenResponse>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email })
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword })
+  });
 }
 
 export async function getMe(): Promise<AuthResponse> {

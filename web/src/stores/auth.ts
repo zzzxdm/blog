@@ -6,6 +6,7 @@ import {
   login,
   logout,
   register,
+  type AuthResponse,
   type User
 } from "../shared/api";
 
@@ -40,13 +41,14 @@ export const useAuthStore = defineStore("auth", {
         this.loading = false;
       }
     },
-    async login(email: string, password: string) {
+    async login(email: string, password: string): Promise<AuthResponse> {
       this.loading = true;
       this.error = null;
 
       try {
         const response = await login(email, password);
         this.user = response.user;
+        return response;
       } catch (error) {
         this.error = error instanceof Error ? error.message : "登录失败";
         throw error;
@@ -54,13 +56,14 @@ export const useAuthStore = defineStore("auth", {
         this.loading = false;
       }
     },
-    async register(email: string, password: string, displayName: string) {
+    async register(email: string, password: string, displayName: string): Promise<AuthResponse> {
       this.loading = true;
       this.error = null;
 
       try {
         const response = await register(email, password, displayName);
         this.user = response.user;
+        return response;
       } catch (error) {
         this.error = error instanceof Error ? error.message : "注册失败";
         throw error;
