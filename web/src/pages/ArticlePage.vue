@@ -6,12 +6,14 @@ import {
   ApiError,
   createComment,
   getComments,
+  getPosts,
   getReaction,
   reportComment,
   setBookmark,
   setPostReaction,
   toggleCommentLike,
   type Comment,
+  type Post,
   type ReactionSummary
 } from "../shared/api";
 import { renderMarkdown } from "../shared/markdown";
@@ -33,6 +35,7 @@ const commentError = ref("");
 const commentNotice = ref("");
 const commentActionId = ref("");
 const replyTo = ref<Comment | null>(null);
+const relatedPosts = ref<Post[]>([]);
 const reaction = ref<ReactionSummary | null>(null);
 const reactionLoading = ref(false);
 const reactionError = ref("");
@@ -47,6 +50,7 @@ function load() {
     void posts.loadBySlug(slug);
     void loadComments(slug);
     void loadReaction(slug);
+    void loadRelatedPosts(slug);
   }
 }
 
@@ -135,6 +139,15 @@ async function loadReaction(slug: string) {
     reactionError.value = error instanceof Error ? error.message : "文章反馈加载失败";
   } finally {
     reactionLoading.value = false;
+  }
+}
+
+async function loadRelatedPosts(slug: string) {
+  try {
+    const response = await getPosts({ pageSize: 4 });
+    relatedPosts.value = response.items.filter((item) => item.slug !== slug).slice(0, 2);
+  } catch {
+    relatedPosts.value = [];
   }
 }
 
@@ -490,21 +503,15 @@ interface Post {
           </div>
         </section>
 
-        <section class="panel">
+        <section v-if="relatedPosts.length" class="panel">
           <div class="panel-title">
             <h2>相关文章</h2>
           </div>
           <ul class="link-list">
-            <li>
-              <RouterLink to="/posts/postgres-redis-blog-boundary">
-                <strong>Redis 和 PostgreSQL 在博客中的分工</strong>
-                <span>架构 · 14 分钟</span>
-              </RouterLink>
-            </li>
-            <li>
-              <RouterLink to="/posts/post-version-history">
-                <strong>为什么博客后台需要文章版本历史</strong>
-                <span>内容治理 · 6 分钟</span>
+            <li v-for="item in relatedPosts" :key="item.slug">
+              <RouterLink :to="`/posts/${item.slug}`">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.category }} · {{ item.readingTime }} 分钟</span>
               </RouterLink>
             </li>
           </ul>
