@@ -1,5 +1,106 @@
 <script setup lang="ts">
+import { onMounted, ref } from "vue";
+
 import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  createAdminMessage,
+  getAdminMessages,
+  type MessageStats,
+  type MessageType,
+  type StationMessage
+} from "../../shared/api";
+
+const messages = ref<StationMessage[]>([]);
+const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
+const loading = ref(false);
+const sending = ref(false);
+const error = ref("");
+const message = ref("");
+
+const recipientId = ref("user_linyi");
+const recipientName = ref("林一");
+const messageType = ref<MessageType>("admin");
+const priority = ref("normal");
+const title = ref("优质投稿用户邀请");
+const body = ref("你最近的投稿质量较高，欢迎继续提交工程实践和写作工作流相关内容。");
+const targetTitle = ref("投稿激励");
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const response = await getAdminMessages();
+    messages.value = response.items;
+    stats.value = response.stats;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "站内信记录加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function send() {
+  sending.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await createAdminMessage({
+      recipientId: recipientId.value,
+      recipientName: recipientName.value,
+      type: messageType.value,
+      priority: priority.value,
+      title: title.value,
+      body: body.value,
+      targetType: "admin-message",
+      targetTitle: targetTitle.value
+    });
+    message.value = "站内信已发送。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "站内信发送失败";
+  } finally {
+    sending.value = false;
+  }
+}
+
+function formatTime(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function typeText(value: MessageType) {
+  if (value === "review") {
+    return "投稿审核";
+  }
+  if (value === "system") {
+    return "公告";
+  }
+  if (value === "comment") {
+    return "评论";
+  }
+  if (value === "account") {
+    return "账号";
+  }
+  return "管理员";
+}
+
+function typeClass(value: MessageType) {
+  if (value === "review") {
+    return "review";
+  }
+  if (value === "system" || value === "account") {
+    return "muted";
+  }
+  return "published";
+}
 </script>
 
 <template>
@@ -7,20 +108,23 @@ import AdminLayout from "../../components/AdminLayout.vue";
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button">导出记录</button>
-        <button class="button" type="button">新建消息</button>
+        <button class="button" type="button" :disabled="sending" @click="send">新建消息</button>
       </div>
     </template>
 
     <section class="stats-grid" aria-label="站内信统计">
-      <div class="stat-card"><span>本月发送</span><strong>128</strong></div>
-      <div class="stat-card"><span>当前未读</span><strong>59</strong></div>
-      <div class="stat-card"><span>今日发送</span><strong>6</strong></div>
-      <div class="stat-card"><span>送达率</span><strong>99.1%</strong></div>
+      <div class="stat-card"><span>总发送</span><strong>{{ stats.total }}</strong></div>
+      <div class="stat-card"><span>当前未读</span><strong>{{ stats.unread }}</strong></div>
+      <div class="stat-card"><span>审核消息</span><strong>{{ stats.review }}</strong></div>
+      <div class="stat-card"><span>管理员消息</span><strong>{{ stats.admin }}</strong></div>
     </section>
+
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="message" class="muted">{{ message }}</p>
 
     <section class="admin-grid-2">
       <section class="table-panel" aria-label="发送记录">
-        <form class="table-toolbar">
+        <form class="table-toolbar" @submit.prevent="load">
           <input class="input" type="search" placeholder="搜索标题、接收人、类型" aria-label="搜索站内信">
           <select class="input" aria-label="消息类型">
             <option>全部类型</option>
@@ -37,7 +141,8 @@ import AdminLayout from "../../components/AdminLayout.vue";
           </select>
         </form>
 
-        <table>
+        <p v-if="loading" class="muted">正在加载站内信记录...</p>
+        <table v-else>
           <thead>
             <tr>
               <th>消息</th>
@@ -50,41 +155,14 @@ import AdminLayout from "../../components/AdminLayout.vue";
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td><strong>你的投稿已退回修改</strong><div class="meta-row"><span>关联投稿：如何写一篇可维护的技术文章</span></div></td>
-              <td>林一</td>
-              <td><span class="status review">投稿审核</span></td>
+            <tr v-for="item in messages" :key="item.id">
+              <td><strong>{{ item.title }}</strong><div class="meta-row"><span>{{ item.targetTitle || item.body }}</span></div></td>
+              <td>{{ item.recipientName }}</td>
+              <td><span class="status" :class="typeClass(item.type)">{{ typeText(item.type) }}</span></td>
               <td>1 / 1</td>
-              <td>0 / 1</td>
-              <td>刚刚</td>
+              <td>{{ item.status === "unread" ? "0 / 1" : "1 / 1" }}</td>
+              <td>{{ formatTime(item.createdAt) }}</td>
               <td><button class="button-secondary" type="button">查看</button></td>
-            </tr>
-            <tr>
-              <td><strong>本周将维护媒体库上传服务</strong><div class="meta-row"><span>普通注册用户</span><span>重要</span></div></td>
-              <td>全部用户</td>
-              <td><span class="status muted">公告</span></td>
-              <td>1,246 / 1,248</td>
-              <td>812 / 1,248</td>
-              <td>今天 09:30</td>
-              <td><button class="button-secondary" type="button">统计</button></td>
-            </tr>
-            <tr>
-              <td><strong>优质投稿用户邀请</strong><div class="meta-row"><span>筛选：近 30 天通过投稿不少于 2 篇</span></div></td>
-              <td>12 人</td>
-              <td><span class="status published">管理员</span></td>
-              <td>12 / 12</td>
-              <td>9 / 12</td>
-              <td>昨天</td>
-              <td><button class="button-secondary" type="button">复用</button></td>
-            </tr>
-            <tr>
-              <td><strong>评论审核策略更新</strong><div class="meta-row"><span>定时发送：今晚 20:00</span></div></td>
-              <td>作者、编辑</td>
-              <td><span class="status draft">系统</span></td>
-              <td>待发送</td>
-              <td>待发送</td>
-              <td>定时中</td>
-              <td><button class="button-secondary" type="button">撤回</button></td>
             </tr>
           </tbody>
         </table>
@@ -94,16 +172,17 @@ import AdminLayout from "../../components/AdminLayout.vue";
         <div class="panel-title">
           <h2>发送站内信</h2>
         </div>
-        <form class="message-compose">
+        <form class="message-compose" @submit.prevent="send">
           <div class="field"><label for="message-scope">接收范围</label><select class="input" id="message-scope"><option>指定用户</option><option>全部注册用户</option><option>按角色发送</option><option>按用户筛选条件发送</option></select></div>
-          <div class="field"><label for="message-recipient">接收人或条件</label><input class="input" id="message-recipient" value="林一 / linyi@example.com"></div>
-          <div class="field"><label for="message-type">消息类型</label><select class="input" id="message-type"><option>管理员消息</option><option>投稿审核</option><option>站点公告</option><option>系统事件</option></select></div>
-          <div class="field"><label for="message-priority">优先级</label><select class="input" id="message-priority"><option>普通</option><option>重要</option><option>紧急</option></select></div>
-          <div class="field"><label for="message-title">标题</label><input class="input" id="message-title" value="你的投稿已退回修改"></div>
-          <div class="field"><label for="message-content">正文</label><textarea class="input" id="message-content">摘要过短，建议明确文章解决的问题；正文中有一段代码没有解释上下文；封面图缺少 alt 文本。修改后可以重新提交。</textarea></div>
-          <div class="field"><label for="message-target">关联目标</label><input class="input" id="message-target" value="投稿：如何写一篇可维护的技术文章"></div>
+          <div class="field"><label for="message-recipient">接收人 ID</label><input v-model="recipientId" class="input" id="message-recipient"></div>
+          <div class="field"><label for="message-recipient-name">接收人名称</label><input v-model="recipientName" class="input" id="message-recipient-name"></div>
+          <div class="field"><label for="message-type">消息类型</label><select v-model="messageType" class="input" id="message-type"><option value="admin">管理员消息</option><option value="review">投稿审核</option><option value="system">站点公告</option><option value="account">系统事件</option></select></div>
+          <div class="field"><label for="message-priority">优先级</label><select v-model="priority" class="input" id="message-priority"><option value="normal">普通</option><option value="important">重要</option><option value="urgent">紧急</option></select></div>
+          <div class="field"><label for="message-title">标题</label><input v-model="title" class="input" id="message-title"></div>
+          <div class="field"><label for="message-content">正文</label><textarea v-model="body" class="input" id="message-content"></textarea></div>
+          <div class="field"><label for="message-target">关联目标</label><input v-model="targetTitle" class="input" id="message-target"></div>
           <div class="header-actions">
-            <button class="button" type="button">发送</button>
+            <button class="button" type="submit" :disabled="sending">{{ sending ? "发送中..." : "发送" }}</button>
             <button class="button-secondary" type="button">定时</button>
           </div>
         </form>

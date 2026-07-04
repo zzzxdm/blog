@@ -78,6 +78,104 @@ export interface ReactionSummary {
   bookmarked: boolean;
 }
 
+export type SubmissionStatus = "draft" | "submitted" | "returned" | "rejected" | "published";
+
+export interface Submission {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  title: string;
+  summary: string;
+  content: string;
+  category: string;
+  tags: string[];
+  coverImage: string;
+  slug: string;
+  status: SubmissionStatus;
+  reviewNote: string;
+  reviewerId?: string;
+  reviewerName?: string;
+  publishedPostSlug?: string;
+  wordCount: number;
+  version: number;
+  riskLevel: string;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  publishedAt?: string;
+}
+
+export interface SubmissionStats {
+  draft: number;
+  submitted: number;
+  returned: number;
+  rejected: number;
+  published: number;
+  total: number;
+}
+
+export interface SubmissionListResponse {
+  items: Submission[];
+  total: number;
+  stats: SubmissionStats;
+}
+
+export interface SubmissionPayload {
+  title: string;
+  summary: string;
+  content: string;
+  category: string;
+  tags: string[];
+  coverImage: string;
+  slug: string;
+  submit?: boolean;
+}
+
+export interface ReviewPayload {
+  action: "approve" | "return" | "reject";
+  note: string;
+  slug?: string;
+  category?: string;
+}
+
+export type MessageType = "review" | "comment" | "system" | "admin" | "account";
+export type MessageStatus = "unread" | "read" | "archived";
+
+export interface StationMessage {
+  id: string;
+  recipientId: string;
+  recipientName: string;
+  senderId: string;
+  senderName: string;
+  type: MessageType;
+  priority: string;
+  title: string;
+  body: string;
+  targetType?: string;
+  targetId?: string;
+  targetTitle?: string;
+  status: MessageStatus;
+  readAt?: string;
+  archivedAt?: string;
+  createdAt: string;
+}
+
+export interface MessageStats {
+  unread: number;
+  review: number;
+  admin: number;
+  archived: number;
+  total: number;
+}
+
+export interface MessageListResponse {
+  items: StationMessage[];
+  total: number;
+  stats: MessageStats;
+}
+
 export interface ListResponse<T> {
   items: T[];
   page: number;
@@ -159,6 +257,88 @@ export async function setBookmark(postSlug: string, bookmarked: boolean): Promis
   });
 }
 
+export async function getMySubmissions(status = ""): Promise<SubmissionListResponse> {
+  const query = toQuery({ status });
+  return request<SubmissionListResponse>(`/submissions${query}`);
+}
+
+export async function createSubmission(payload: SubmissionPayload): Promise<Submission> {
+  return request<Submission>("/submissions", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateSubmission(id: string, payload: SubmissionPayload): Promise<Submission> {
+  return request<Submission>(`/submissions/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function submitExistingSubmission(id: string): Promise<Submission> {
+  return request<Submission>(`/submissions/${encodeURIComponent(id)}/submit`, {
+    method: "POST"
+  });
+}
+
+export async function getAdminSubmissions(status = ""): Promise<SubmissionListResponse> {
+  const query = toQuery({ status });
+  return request<SubmissionListResponse>(`/admin/submissions${query}`);
+}
+
+export async function reviewSubmission(id: string, payload: ReviewPayload): Promise<Submission> {
+  return request<Submission>(`/admin/submissions/${encodeURIComponent(id)}/review`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getMessages(params: { status?: string; type?: string } = {}): Promise<MessageListResponse> {
+  const query = toQuery(params);
+  return request<MessageListResponse>(`/messages${query}`);
+}
+
+export async function markMessageRead(id: string): Promise<StationMessage> {
+  return request<StationMessage>(`/messages/${encodeURIComponent(id)}/read`, {
+    method: "PUT"
+  });
+}
+
+export async function markAllMessagesRead(): Promise<{ stats: MessageStats }> {
+  return request<{ stats: MessageStats }>("/messages/read-all", {
+    method: "PUT"
+  });
+}
+
+export async function archiveMessage(id: string): Promise<StationMessage> {
+  return request<StationMessage>(`/messages/${encodeURIComponent(id)}/archive`, {
+    method: "PUT"
+  });
+}
+
+export async function getAdminMessages(params: { status?: string; type?: string } = {}): Promise<MessageListResponse> {
+  const query = toQuery(params);
+  return request<MessageListResponse>(`/admin/messages${query}`);
+}
+
+export async function createAdminMessage(payload: {
+  recipientId: string;
+  recipientName: string;
+  type: MessageType;
+  priority: string;
+  title: string;
+  body: string;
+  targetType?: string;
+  targetId?: string;
+  targetTitle?: string;
+}): Promise<StationMessage> {
+  return request<StationMessage>("/admin/messages", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -186,10 +366,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function toQuery(params: PostListParams): string {
+function toQuery(params: object): string {
   const search = new URLSearchParams();
 
-  Object.entries(params).forEach(([key, value]) => {
+  Object.entries(params as Record<string, unknown>).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") {
       return;
     }

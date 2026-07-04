@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -91,4 +92,114 @@ func TestAuthCommentAndReactionFlow(t *testing.T) {
 	if !strings.Contains(reactionRec.Body.String(), `"myReaction":"dislike"`) {
 		t.Fatalf("expected dislike reaction, got %q", reactionRec.Body.String())
 	}
+}
+
+func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	userCookies := loginForTest(t, router, "linyi@example.com", "password")
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/submissions", bytes.NewBufferString(`{
+		"title":"审核通过后公开的测试投稿",
+		"summary":"这是一篇用于验证投稿审核闭环的文章。",
+		"content":"用户提交文章后，管理员审核通过，文章应该进入公开文章列表，同时用户收到站内信。",
+		"category":"工程实践",
+		"tags":["投稿","审核"],
+		"slug":"approved-submission-test",
+		"submit":true
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		createReq.AddCookie(cookie)
+	}
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected submission created, got status=%d body=%q", createRec.Code, createRec.Body.String())
+	}
+
+	var created struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created submission: %v", err)
+	}
+	if created.ID == "" || created.Status != "submitted" {
+		t.Fatalf("expected submitted submission, got %+v", created)
+	}
+
+	userAdminReq := httptest.NewRequest(http.MethodGet, "/api/admin/submissions", nil)
+	for _, cookie := range userCookies {
+		userAdminReq.AddCookie(cookie)
+	}
+	userAdminRec := httptest.NewRecorder()
+	router.ServeHTTP(userAdminRec, userAdminReq)
+	if userAdminRec.Code != http.StatusForbidden {
+		t.Fatalf("expected non-admin status 403, got %d", userAdminRec.Code)
+	}
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+
+	reviewReq := httptest.NewRequest(http.MethodPost, "/api/admin/submissions/"+created.ID+"/review", bytes.NewBufferString(`{
+		"action":"approve",
+		"note":"内容结构清楚，可以发布。",
+		"slug":"approved-submission-test",
+		"category":"工程实践"
+	}`))
+	reviewReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		reviewReq.AddCookie(cookie)
+	}
+	reviewRec := httptest.NewRecorder()
+	router.ServeHTTP(reviewRec, reviewReq)
+
+	if reviewRec.Code != http.StatusOK {
+		t.Fatalf("expected review status 200, got %d body=%q", reviewRec.Code, reviewRec.Body.String())
+	}
+	if !strings.Contains(reviewRec.Body.String(), `"status":"published"`) {
+		t.Fatalf("expected published submission, got %q", reviewRec.Body.String())
+	}
+
+	postReq := httptest.NewRequest(http.MethodGet, "/api/posts/approved-submission-test", nil)
+	postRec := httptest.NewRecorder()
+	router.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusOK || !strings.Contains(postRec.Body.String(), "审核通过后公开的测试投稿") {
+		t.Fatalf("expected published post, got status=%d body=%q", postRec.Code, postRec.Body.String())
+	}
+
+	messagesReq := httptest.NewRequest(http.MethodGet, "/api/messages", nil)
+	for _, cookie := range userCookies {
+		messagesReq.AddCookie(cookie)
+	}
+	messagesRec := httptest.NewRecorder()
+	router.ServeHTTP(messagesRec, messagesReq)
+	if messagesRec.Code != http.StatusOK || !strings.Contains(messagesRec.Body.String(), "你的投稿已通过并发布") {
+		t.Fatalf("expected review message, got status=%d body=%q", messagesRec.Code, messagesRec.Body.String())
+	}
+}
+
+func loginForTest(t *testing.T, router http.Handler, email string, password string) []*http.Cookie {
+	t.Helper()
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"`+email+`","password":"`+password+`"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	router.ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d body=%q", loginRec.Code, loginRec.Body.String())
+	}
+
+	cookies := loginRec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatalf("expected session cookie after login")
+	}
+
+	return cookies
 }

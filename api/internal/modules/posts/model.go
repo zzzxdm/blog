@@ -1,6 +1,9 @@
 package posts
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Post struct {
 	ID           string    `json:"id"`
@@ -34,4 +37,19 @@ type ListResult struct {
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 	Total    int    `json:"total"`
+}
+
+type PublishInput struct {
+	Slug       string
+	Title      string
+	Summary    string
+	Content    string
+	Category   string
+	Tags       []string
+	CoverImage string
+	AuthorName string
+}
+
+type Publisher interface {
+	Publish(ctx context.Context, input PublishInput) (Post, error)
 }

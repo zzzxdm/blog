@@ -67,6 +67,20 @@ func RequireUser(ctx *gin.Context) (User, bool) {
 	return user, true
 }
 
+func RequireAdmin(ctx *gin.Context) (User, bool) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return User{}, false
+	}
+
+	if user.Role != "admin" {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "admin required"})
+		return User{}, false
+	}
+
+	return user, true
+}
+
 func (handler *Handler) Login(ctx *gin.Context) {
 	var request Credentials
 	if err := ctx.ShouldBindJSON(&request); err != nil {

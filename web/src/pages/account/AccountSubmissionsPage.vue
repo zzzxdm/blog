@@ -1,5 +1,79 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+
 import AccountLayout from "../../components/AccountLayout.vue";
+import {
+  getMySubmissions,
+  type Submission,
+  type SubmissionStats
+} from "../../shared/api";
+
+const submissions = ref<Submission[]>([]);
+const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const loading = ref(false);
+const error = ref("");
+const status = ref("");
+
+const returnedSubmission = computed(() => submissions.value.find((item) => item.status === "returned" && item.reviewNote));
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const response = await getMySubmissions(status.value);
+    submissions.value = response.items;
+    stats.value = response.stats;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "投稿列表加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function formatDate(value?: string) {
+  if (!value) {
+    return "未提交";
+  }
+
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function statusText(value: Submission["status"]) {
+  if (value === "submitted") {
+    return "待审核";
+  }
+  if (value === "returned") {
+    return "退回";
+  }
+  if (value === "rejected") {
+    return "已拒绝";
+  }
+  if (value === "published") {
+    return "已发布";
+  }
+  return "草稿";
+}
+
+function statusClass(value: Submission["status"]) {
+  if (value === "submitted") {
+    return "review";
+  }
+  if (value === "returned" || value === "rejected") {
+    return "rejected";
+  }
+  if (value === "published") {
+    return "published";
+  }
+  return "draft";
+}
 </script>
 
 <template>
@@ -9,65 +83,53 @@ import AccountLayout from "../../components/AccountLayout.vue";
     </template>
 
     <section class="stats-grid" aria-label="投稿统计">
-      <div class="stat-card"><span>草稿</span><strong>1</strong></div>
-      <div class="stat-card"><span>待审核</span><strong>2</strong></div>
-      <div class="stat-card"><span>退回修改</span><strong>1</strong></div>
-      <div class="stat-card"><span>已发布</span><strong>3</strong></div>
+      <div class="stat-card"><span>草稿</span><strong>{{ stats.draft }}</strong></div>
+      <div class="stat-card"><span>待审核</span><strong>{{ stats.submitted }}</strong></div>
+      <div class="stat-card"><span>退回修改</span><strong>{{ stats.returned }}</strong></div>
+      <div class="stat-card"><span>已发布</span><strong>{{ stats.published }}</strong></div>
     </section>
 
     <section class="table-panel">
-      <form class="table-toolbar">
+      <form class="table-toolbar" @submit.prevent="load">
         <input class="input" type="search" placeholder="搜索投稿标题" aria-label="搜索投稿">
-        <select class="input" aria-label="投稿状态"><option>全部状态</option><option>草稿</option><option>待审核</option><option>退回修改</option><option>已发布</option></select>
+        <select v-model="status" class="input" aria-label="投稿状态" @change="load">
+          <option value="">全部状态</option>
+          <option value="draft">草稿</option>
+          <option value="submitted">待审核</option>
+          <option value="returned">退回修改</option>
+          <option value="published">已发布</option>
+        </select>
         <select class="input" aria-label="排序"><option>最近更新</option><option>最近提交</option><option>已发布优先</option></select>
       </form>
 
-      <table>
+      <p v-if="loading" class="muted">正在加载投稿...</p>
+      <p v-else-if="error" class="error">{{ error }}</p>
+
+      <table v-else>
         <thead>
           <tr><th>投稿</th><th>状态</th><th>分类</th><th>提交时间</th><th>审核意见</th><th>操作</th></tr>
         </thead>
         <tbody>
-          <tr>
-            <td><strong>用户评论系统应该怎么设计</strong><div class="meta-row"><span>自动保存于 15:42</span></div></td>
-            <td><span class="status draft">草稿</span></td>
-            <td>用户系统</td>
-            <td>未提交</td>
-            <td>未提交审核</td>
-            <td><RouterLink class="button-secondary" to="/submit">继续编辑</RouterLink></td>
-          </tr>
-          <tr>
-            <td><strong>开放投稿入口后如何做反垃圾</strong><div class="meta-row"><span>版本 2</span></div></td>
-            <td><span class="status review">待审核</span></td>
-            <td>内容治理</td>
-            <td>今天 10:24</td>
-            <td>等待编辑审核</td>
-            <td><button class="button-secondary" type="button">查看</button></td>
-          </tr>
-          <tr>
-            <td><strong>如何写一篇可维护的技术文章</strong><div class="meta-row"><span>需要补充图片 alt 文本</span></div></td>
-            <td><span class="status rejected">退回</span></td>
-            <td>写作工作流</td>
-            <td>昨天 18:08</td>
-            <td>补充摘要和代码示例</td>
-            <td><RouterLink class="button-secondary" to="/submit">修改后提交</RouterLink></td>
-          </tr>
-          <tr>
-            <td><strong>版本历史如何保护内容资产</strong><div class="meta-row"><span>已发布到专题“写作工作流”</span></div></td>
-            <td><span class="status published">已发布</span></td>
-            <td>内容治理</td>
-            <td>2026-06-18</td>
-            <td>审核通过</td>
-            <td><RouterLink class="button-secondary" to="/posts/post-version-history">查看文章</RouterLink></td>
+          <tr v-for="item in submissions" :key="item.id">
+            <td><strong>{{ item.title }}</strong><div class="meta-row"><span>版本 {{ item.version }}</span><span>{{ item.wordCount }} 字</span></div></td>
+            <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
+            <td>{{ item.category }}</td>
+            <td>{{ formatDate(item.submittedAt) }}</td>
+            <td>{{ item.reviewNote || (item.status === "submitted" ? "等待编辑审核" : "未提交审核") }}</td>
+            <td>
+              <RouterLink v-if="item.status === 'published' && item.publishedPostSlug" class="button-secondary" :to="`/posts/${item.publishedPostSlug}`">查看文章</RouterLink>
+              <RouterLink v-else class="button-secondary" to="/submit">{{ item.status === "draft" || item.status === "returned" ? "继续编辑" : "查看" }}</RouterLink>
+            </td>
           </tr>
         </tbody>
       </table>
     </section>
 
-    <section class="panel">
+    <section v-if="returnedSubmission" class="panel">
       <div class="panel-title"><h2>退回修改说明</h2></div>
       <div class="review-note">
-        <strong>《如何写一篇可维护的技术文章》</strong>
-        <p>摘要过短，建议明确文章解决的问题；正文中有一段代码没有解释上下文；封面图缺少 alt 文本。修改后可以重新提交。</p>
+        <strong>《{{ returnedSubmission.title }}》</strong>
+        <p>{{ returnedSubmission.reviewNote }}</p>
       </div>
     </section>
   </AccountLayout>

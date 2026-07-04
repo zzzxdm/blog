@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { RouterLink } from "vue-router";
-import { useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 
 const mode = ref<"login" | "register">("login");
@@ -24,7 +24,7 @@ async function submit() {
       await auth.register(email.value, password.value, displayName.value);
     }
 
-    await router.push("/account");
+    await router.push(String(route.query.redirect || "/account"));
   } catch {
     message.value = auth.error || "操作失败";
   }

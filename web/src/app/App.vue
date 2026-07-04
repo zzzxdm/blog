@@ -54,7 +54,7 @@ function logout() {
         </div>
         <RouterLink :class="{ active: route.name === 'submit' }" to="/submit">投稿</RouterLink>
         <RouterLink :class="{ active: route.path.startsWith('/account') }" to="/account">我的</RouterLink>
-        <RouterLink :class="{ active: route.path.startsWith('/admin') }" to="/admin">后台</RouterLink>
+        <RouterLink v-if="auth.user?.role === 'admin'" :class="{ active: route.path.startsWith('/admin') }" to="/admin">后台</RouterLink>
       </nav>
       <div class="header-actions">
         <button class="icon-button" type="button" aria-label="搜索" @click="searchOpen = true">⌕</button>

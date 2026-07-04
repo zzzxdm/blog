@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type SQLRepository struct {
@@ -166,6 +167,88 @@ func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Post, er
 	return post, nil
 }
 
+func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Post, error) {
+	title := strings.TrimSpace(input.Title)
+	content := strings.TrimSpace(input.Content)
+	if title == "" || content == "" {
+		return Post{}, ErrInvalidPost
+	}
+
+	tx, err := repo.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Post{}, fmt.Errorf("begin publish transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	category := defaultString(strings.TrimSpace(input.Category), "投稿")
+	categoryID, err := ensureCategory(ctx, tx, category)
+	if err != nil {
+		return Post{}, err
+	}
+
+	baseSlug := defaultString(slugify(input.Slug), slugify(title))
+	if baseSlug == "" {
+		baseSlug = "post"
+	}
+
+	slug, err := uniqueSQLSlug(ctx, tx, baseSlug)
+	if err != nil {
+		return Post{}, err
+	}
+
+	var postID string
+	publishedAt := time.Now()
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO posts (
+			slug, title, summary, content, status, source, category_id, author_name,
+			cover_image, reading_time, view_count, like_count, dislike_count, comment_count, published_at
+		)
+		VALUES ($1, $2, $3, $4, 'published', 'submission', $5, $6, $7, $8, 0, 0, 0, 0, $9)
+		RETURNING id::text
+	`,
+		slug,
+		title,
+		strings.TrimSpace(input.Summary),
+		content,
+		categoryID,
+		defaultString(strings.TrimSpace(input.AuthorName), "注册用户"),
+		defaultString(strings.TrimSpace(input.CoverImage), "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80"),
+		estimateReadingTime(content),
+		publishedAt,
+	).Scan(&postID)
+	if err != nil {
+		return Post{}, fmt.Errorf("insert published post: %w", err)
+	}
+
+	for _, tag := range normalizeTags(input.Tags) {
+		tagID, err := ensureTag(ctx, tx, tag)
+		if err != nil {
+			return Post{}, err
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO post_tags (post_id, tag_id)
+			VALUES ($1::uuid, $2::uuid)
+			ON CONFLICT DO NOTHING
+		`, postID, tagID); err != nil {
+			return Post{}, fmt.Errorf("insert post tag: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Post{}, fmt.Errorf("commit publish transaction: %w", err)
+	}
+	committed = true
+
+	return repo.GetBySlug(ctx, slug)
+}
+
 func (repo *SQLRepository) count(ctx context.Context, keyword string, category string, tag string) (int, error) {
 	var total int
 	err := repo.db.QueryRowContext(ctx, `
@@ -214,6 +297,85 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 	}
 
 	return total, nil
+}
+
+func ensureCategory(ctx context.Context, tx *sql.Tx, category string) (string, error) {
+	var categoryID string
+	err := tx.QueryRowContext(ctx, `
+		SELECT id::text
+		FROM categories
+		WHERE lower(name) = lower($1) OR lower(slug) = lower($1)
+		LIMIT 1
+	`, category).Scan(&categoryID)
+	if err == nil {
+		return categoryID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("query category: %w", err)
+	}
+
+	slug := slugify(category)
+	if slug == "" {
+		slug = fmt.Sprintf("category-%d", time.Now().UnixNano())
+	}
+
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO categories (slug, name)
+		VALUES ($1, $2)
+		RETURNING id::text
+	`, slug, category).Scan(&categoryID)
+	if err != nil {
+		return "", fmt.Errorf("insert category: %w", err)
+	}
+
+	return categoryID, nil
+}
+
+func ensureTag(ctx context.Context, tx *sql.Tx, tag string) (string, error) {
+	var tagID string
+	err := tx.QueryRowContext(ctx, `
+		SELECT id::text
+		FROM tags
+		WHERE lower(name) = lower($1) OR lower(slug) = lower($1)
+		LIMIT 1
+	`, tag).Scan(&tagID)
+	if err == nil {
+		return tagID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("query tag: %w", err)
+	}
+
+	slug := slugify(tag)
+	if slug == "" {
+		slug = fmt.Sprintf("tag-%d", time.Now().UnixNano())
+	}
+
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO tags (slug, name)
+		VALUES ($1, $2)
+		RETURNING id::text
+	`, slug, tag).Scan(&tagID)
+	if err != nil {
+		return "", fmt.Errorf("insert tag: %w", err)
+	}
+
+	return tagID, nil
+}
+
+func uniqueSQLSlug(ctx context.Context, tx *sql.Tx, slug string) (string, error) {
+	candidate := slug
+	for suffix := 2; ; suffix++ {
+		var exists bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM posts WHERE slug = $1)`, candidate).Scan(&exists); err != nil {
+			return "", fmt.Errorf("query slug: %w", err)
+		}
+		if !exists {
+			return candidate, nil
+		}
+
+		candidate = fmt.Sprintf("%s-%d", slug, suffix)
+	}
 }
 
 type postScanner interface {

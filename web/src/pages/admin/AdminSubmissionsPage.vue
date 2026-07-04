@@ -1,33 +1,156 @@
 <script setup lang="ts">
+import { computed, onMounted, ref, watch } from "vue";
+
 import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  getAdminSubmissions,
+  reviewSubmission,
+  type Submission,
+  type SubmissionStats
+} from "../../shared/api";
+
+const submissions = ref<Submission[]>([]);
+const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const selectedId = ref("");
+const filterStatus = ref("submitted");
+const loading = ref(false);
+const acting = ref(false);
+const error = ref("");
+const message = ref("");
+const reviewNote = ref("内容结构清楚，可以发布。建议把标题和摘要再压缩一点。");
+const publishSlug = ref("");
+const publishCategory = ref("工程实践");
+
+const selected = computed(() => submissions.value.find((item) => item.id === selectedId.value) || submissions.value[0]);
+const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).map((item) => item.trim()).filter(Boolean) || []);
+
+onMounted(load);
+
+watch(selected, (item) => {
+  if (!item) {
+    return;
+  }
+  reviewNote.value = item.reviewNote || "内容结构清楚，可以发布。建议把标题和摘要再压缩一点。";
+  publishSlug.value = item.slug;
+  publishCategory.value = item.category;
+});
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const response = await getAdminSubmissions(filterStatus.value);
+    submissions.value = response.items;
+    stats.value = response.stats;
+    if (!submissions.value.some((item) => item.id === selectedId.value)) {
+      selectedId.value = submissions.value[0]?.id || "";
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "投稿审核列表加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function review(action: "approve" | "return" | "reject") {
+  if (!selected.value) {
+    return;
+  }
+
+  acting.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const updated = await reviewSubmission(selected.value.id, {
+      action,
+      note: reviewNote.value,
+      slug: publishSlug.value,
+      category: publishCategory.value
+    });
+    message.value = action === "approve" ? `已发布为 /posts/${updated.publishedPostSlug}` : "审核结果已发送给投稿人。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "审核操作失败";
+  } finally {
+    acting.value = false;
+  }
+}
+
+function formatDate(value?: string) {
+  if (!value) {
+    return "未提交";
+  }
+
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function statusText(value: Submission["status"]) {
+  if (value === "submitted") {
+    return "待审核";
+  }
+  if (value === "returned") {
+    return "待复审";
+  }
+  if (value === "rejected") {
+    return "已拒绝";
+  }
+  if (value === "published") {
+    return "已发布";
+  }
+  return "草稿";
+}
+
+function statusClass(value: Submission["status"]) {
+  if (value === "submitted" || value === "returned") {
+    return "review";
+  }
+  if (value === "rejected") {
+    return "rejected";
+  }
+  if (value === "published") {
+    return "published";
+  }
+  return "draft";
+}
 </script>
 
 <template>
   <AdminLayout title="投稿审核" description="审核登录用户提交的文章，确认质量后发布到正式内容库。" mobile-title="投稿审核" primary-action="通过发布">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">退回修改</button>
-        <button class="button" type="button">通过并发布</button>
+        <button class="button-secondary" type="button" :disabled="acting || !selected" @click="review('return')">退回修改</button>
+        <button class="button" type="button" :disabled="acting || !selected" @click="review('approve')">通过并发布</button>
       </div>
     </template>
 
     <section class="stats-grid" aria-label="投稿统计">
-      <div class="stat-card"><span>待审核</span><strong>12</strong></div>
-      <div class="stat-card"><span>今日提交</span><strong>5</strong></div>
-      <div class="stat-card"><span>退回修改</span><strong>8</strong></div>
-      <div class="stat-card"><span>本月发布</span><strong>19</strong></div>
+      <div class="stat-card"><span>待审核</span><strong>{{ stats.submitted }}</strong></div>
+      <div class="stat-card"><span>今日提交</span><strong>{{ submissions.length }}</strong></div>
+      <div class="stat-card"><span>退回修改</span><strong>{{ stats.returned }}</strong></div>
+      <div class="stat-card"><span>已发布</span><strong>{{ stats.published }}</strong></div>
     </section>
+
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="message" class="muted">{{ message }}</p>
 
     <section class="admin-grid-2">
       <div class="settings-stack">
         <section class="table-panel">
-          <form class="table-toolbar">
+          <form class="table-toolbar" @submit.prevent="load">
             <input class="input" type="search" placeholder="搜索投稿标题、投稿人、标签" aria-label="搜索投稿">
-            <select class="input" aria-label="投稿状态">
-              <option>全部状态</option>
-              <option>待审核</option>
-              <option>退回修改</option>
-              <option>已发布</option>
+            <select v-model="filterStatus" class="input" aria-label="投稿状态" @change="load">
+              <option value="">全部状态</option>
+              <option value="submitted">待审核</option>
+              <option value="returned">退回修改</option>
+              <option value="published">已发布</option>
+              <option value="rejected">已拒绝</option>
             </select>
             <select class="input" aria-label="排序">
               <option>最近提交</option>
@@ -36,7 +159,8 @@ import AdminLayout from "../../components/AdminLayout.vue";
             </select>
           </form>
 
-          <table>
+          <p v-if="loading" class="muted">正在加载投稿...</p>
+          <table v-else>
             <thead>
               <tr>
                 <th>投稿</th>
@@ -48,77 +172,52 @@ import AdminLayout from "../../components/AdminLayout.vue";
               </tr>
             </thead>
             <tbody>
-              <tr>
+              <tr v-for="item in submissions" :key="item.id">
                 <td>
-                  <strong>用户评论系统应该怎么设计</strong>
-                  <div class="meta-row"><span>用户系统</span><span>2,480 字</span></div>
+                  <strong>{{ item.title }}</strong>
+                  <div class="meta-row"><span>{{ item.category }}</span><span>{{ item.wordCount }} 字</span></div>
                 </td>
-                <td>林一<div class="meta-row"><span>42 条评论</span><span>3 篇已发布</span></div></td>
-                <td><span class="status review">待审核</span></td>
-                <td>低</td>
-                <td>今天 15:42</td>
-                <td><button class="button-secondary" type="button">查看</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>开放投稿入口后如何做反垃圾</strong>
-                  <div class="meta-row"><span>内容治理</span><span>包含 2 个外链</span></div>
-                </td>
-                <td>陈默<div class="meta-row"><span>已验证邮箱</span></div></td>
-                <td><span class="status review">待审核</span></td>
-                <td>中</td>
-                <td>今天 10:24</td>
-                <td><button class="button-secondary" type="button">查看</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>如何写一篇可维护的技术文章</strong>
-                  <div class="meta-row"><span>写作工作流</span><span>二次提交</span></div>
-                </td>
-                <td>林一<div class="meta-row"><span>退回后已修改</span></div></td>
-                <td><span class="status review">待复审</span></td>
-                <td>低</td>
-                <td>昨天 18:08</td>
-                <td><button class="button-secondary" type="button">查看</button></td>
+                <td>{{ item.authorName }}<div class="meta-row"><span>版本 {{ item.version }}</span></div></td>
+                <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
+                <td>{{ item.riskLevel }}</td>
+                <td>{{ formatDate(item.submittedAt) }}</td>
+                <td><button class="button-secondary" type="button" @click="selectedId = item.id">查看</button></td>
               </tr>
             </tbody>
           </table>
         </section>
 
-        <section class="editor-panel">
+        <section v-if="selected" class="editor-panel">
           <div class="editor-toolbar">
             <div class="meta-row">
               <span class="tag">投稿预览</span>
-              <span>用户系统</span>
-              <span>2,480 字</span>
+              <span>{{ selected.category }}</span>
+              <span>{{ selected.wordCount }} 字</span>
             </div>
             <button class="button-secondary" type="button">编辑内容</button>
           </div>
           <article class="preview-area" style="min-height: 420px;">
-            <h1>用户评论系统应该怎么设计</h1>
-            <p>登录用户评论、审核、举报、通知和禁言机制，是开放内容站点的基础能力。</p>
-            <h2>评论不是简单留言</h2>
-            <p>评论需要和用户系统、通知系统、反垃圾策略一起设计。一个可维护的评论系统，需要把用户状态、评论状态、审核流程和通知机制放在一起考虑。</p>
-            <h2>审核状态</h2>
-            <p>建议至少支持待审核、已通过、已拒绝、垃圾评论和已删除状态。用户可以看到自己的待审核评论，管理员可以查看所有状态。</p>
+            <h1>{{ selected.title }}</h1>
+            <p>{{ selected.summary }}</p>
+            <p v-for="paragraph in previewParagraphs" :key="paragraph">{{ paragraph }}</p>
           </article>
         </section>
       </div>
 
-      <aside class="settings-stack">
+      <aside v-if="selected" class="settings-stack">
         <section class="panel">
           <div class="panel-title">
             <h2>审核动作</h2>
-            <span class="status review">待审核</span>
+            <span class="status" :class="statusClass(selected.status)">{{ statusText(selected.status) }}</span>
           </div>
           <div class="settings-stack">
             <div class="field">
               <label for="review-note">审核意见</label>
-              <textarea class="input" id="review-note">内容结构清楚，可以发布。建议把标题调整为“登录用户评论系统应该怎么设计”，并补一段评论举报流程。</textarea>
+              <textarea v-model="reviewNote" class="input" id="review-note"></textarea>
             </div>
-            <button class="button" type="button">通过并发布</button>
-            <button class="button-secondary" type="button">退回修改</button>
-            <button class="button-secondary" type="button">拒绝投稿</button>
+            <button class="button" type="button" :disabled="acting" @click="review('approve')">通过并发布</button>
+            <button class="button-secondary" type="button" :disabled="acting" @click="review('return')">退回修改</button>
+            <button class="button-secondary" type="button" :disabled="acting" @click="review('reject')">拒绝投稿</button>
           </div>
         </section>
 
@@ -127,23 +226,23 @@ import AdminLayout from "../../components/AdminLayout.vue";
             <h2>投稿人</h2>
           </div>
           <div class="profile-hero">
-            <span class="avatar">林</span>
+            <span class="avatar">{{ selected.authorAvatar }}</span>
             <div>
-              <strong>林一</strong>
-              <div class="meta-row"><span>已验证邮箱</span><span>注册用户</span></div>
+              <strong>{{ selected.authorName }}</strong>
+              <div class="meta-row"><span>注册用户</span><span>{{ selected.authorId }}</span></div>
             </div>
           </div>
           <div class="settings-stack" style="margin-top: 16px;">
             <div class="setting-row">
               <div>
                 <strong>历史投稿</strong>
-                <div class="meta-row"><span>3 篇已发布，1 篇退回</span></div>
+                <div class="meta-row"><span>统计会在用户模块完成后接入</span></div>
               </div>
             </div>
             <div class="setting-row">
               <div>
                 <strong>评论质量</strong>
-                <div class="meta-row"><span>42 条评论，126 次获赞</span></div>
+                <div class="meta-row"><span>评论审核模块会补充质量指标</span></div>
               </div>
             </div>
             <button class="button-secondary" type="button">升级为作者</button>
@@ -155,9 +254,9 @@ import AdminLayout from "../../components/AdminLayout.vue";
             <h2>发布设置</h2>
           </div>
           <div class="settings-stack">
-            <div class="field"><label for="slug">Slug</label><input class="input" id="slug" value="user-comment-system-design"></div>
-            <div class="field"><label for="category">分类</label><select class="input" id="category"><option>用户系统</option><option>内容治理</option><option>工程实践</option></select></div>
-            <div class="field"><label for="publish-time">发布时间</label><input class="input" id="publish-time" type="datetime-local" value="2026-07-04T20:00"></div>
+            <div class="field"><label for="slug">Slug</label><input v-model="publishSlug" class="input" id="slug"></div>
+            <div class="field"><label for="category">分类</label><select v-model="publishCategory" class="input" id="category"><option>用户系统</option><option>内容治理</option><option>工程实践</option><option>写作工作流</option></select></div>
+            <div class="field"><label for="publish-time">发布时间</label><input class="input" id="publish-time" type="datetime-local"></div>
           </div>
         </section>
       </aside>

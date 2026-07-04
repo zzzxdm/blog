@@ -3,12 +3,15 @@ package posts
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 var ErrNotFound = errors.New("post not found")
+var ErrInvalidPost = errors.New("invalid post")
 
 type Repository interface {
 	List(ctx context.Context, query ListQuery) (ListResult, error)
@@ -16,6 +19,7 @@ type Repository interface {
 }
 
 type MemoryRepository struct {
+	mu    sync.RWMutex
 	posts []Post
 }
 
@@ -28,6 +32,7 @@ func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (ListResu
 	pageSize := normalizePageSize(query.PageSize)
 	filtered := make([]Post, 0, len(repo.posts))
 
+	repo.mu.RLock()
 	for _, post := range repo.posts {
 		if !matches(post, query) {
 			continue
@@ -35,6 +40,7 @@ func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (ListResu
 
 		filtered = append(filtered, post)
 	}
+	repo.mu.RUnlock()
 
 	sortPosts(filtered, query.Sort)
 
@@ -58,6 +64,9 @@ func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (ListResu
 }
 
 func (repo *MemoryRepository) GetBySlug(_ context.Context, slug string) (Post, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
 	for _, post := range repo.posts {
 		if post.Slug == slug {
 			return post, nil
@@ -65,6 +74,66 @@ func (repo *MemoryRepository) GetBySlug(_ context.Context, slug string) (Post, e
 	}
 
 	return Post{}, ErrNotFound
+}
+
+func (repo *MemoryRepository) Publish(_ context.Context, input PublishInput) (Post, error) {
+	title := strings.TrimSpace(input.Title)
+	content := strings.TrimSpace(input.Content)
+	if title == "" || content == "" {
+		return Post{}, ErrInvalidPost
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	slug := repo.uniqueSlugLocked(defaultString(slugify(input.Slug), slugify(title)))
+	if slug == "" {
+		slug = repo.uniqueSlugLocked(fmt.Sprintf("post-%03d", len(repo.posts)+1))
+	}
+
+	post := Post{
+		ID:           fmt.Sprintf("post_memory_%03d", len(repo.posts)+1),
+		Slug:         slug,
+		Title:        title,
+		Summary:      strings.TrimSpace(input.Summary),
+		Content:      content,
+		Category:     defaultString(strings.TrimSpace(input.Category), "投稿"),
+		Tags:         normalizeTags(input.Tags),
+		CoverImage:   defaultString(strings.TrimSpace(input.CoverImage), "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80"),
+		AuthorName:   defaultString(strings.TrimSpace(input.AuthorName), "注册用户"),
+		ReadingTime:  estimateReadingTime(content),
+		ViewCount:    0,
+		LikeCount:    0,
+		DislikeCount: 0,
+		CommentCount: 0,
+		PublishedAt:  time.Now(),
+	}
+	repo.posts = append(repo.posts, post)
+
+	return post, nil
+}
+
+func (repo *MemoryRepository) uniqueSlugLocked(slug string) string {
+	if slug == "" {
+		return ""
+	}
+
+	candidate := slug
+	for suffix := 2; repo.hasSlugLocked(candidate); suffix++ {
+		candidate = fmt.Sprintf("%s-%d", slug, suffix)
+	}
+
+	return candidate
+}
+
+func (repo *MemoryRepository) hasSlugLocked(slug string) bool {
+	for _, post := range repo.posts {
+		if post.Slug == slug {
+			return true
+		}
+	}
+
+	return false
 }
 
 func matches(post Post, query ListQuery) bool {
@@ -100,6 +169,70 @@ func hasTag(tags []string, tag string) bool {
 	}
 
 	return false
+}
+
+func slugify(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	lastDash := false
+
+	for _, item := range value {
+		isLetter := item >= 'a' && item <= 'z'
+		isDigit := item >= '0' && item <= '9'
+		if isLetter || isDigit {
+			builder.WriteRune(item)
+			lastDash = false
+			continue
+		}
+
+		if !lastDash {
+			builder.WriteRune('-')
+			lastDash = true
+		}
+	}
+
+	return strings.Trim(builder.String(), "-")
+}
+
+func normalizeTags(tags []string) []string {
+	result := make([]string, 0, len(tags))
+	seen := map[string]bool{}
+	for _, tag := range tags {
+		value := strings.TrimSpace(tag)
+		if value == "" || seen[strings.ToLower(value)] {
+			continue
+		}
+
+		seen[strings.ToLower(value)] = true
+		result = append(result, value)
+	}
+
+	return result
+}
+
+func estimateReadingTime(content string) int {
+	runes := len([]rune(strings.TrimSpace(content)))
+	if runes == 0 {
+		return 1
+	}
+
+	minutes := runes / 500
+	if runes%500 != 0 {
+		minutes++
+	}
+	if minutes < 1 {
+		return 1
+	}
+
+	return minutes
+}
+
+func defaultString(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+
+	return value
 }
 
 func sortPosts(posts []Post, sortMode string) {

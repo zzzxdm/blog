@@ -7,8 +7,10 @@ import (
 	"blog/api/internal/config"
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/comments"
+	"blog/api/internal/modules/messages"
 	"blog/api/internal/modules/posts"
 	"blog/api/internal/modules/reactions"
+	"blog/api/internal/modules/submissions"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,6 +46,15 @@ func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) 
 	posts.RegisterPublicRoutes(api, postRepo)
 	comments.RegisterRoutes(api, comments.NewMemoryRepository())
 	reactions.RegisterRoutes(api, reactions.NewMemoryRepository())
+
+	messageRepo := messages.NewMemoryRepository()
+	messages.RegisterRoutes(api, messageRepo)
+
+	var publisher posts.Publisher
+	if item, ok := postRepo.(posts.Publisher); ok {
+		publisher = item
+	}
+	submissions.RegisterRoutes(api, submissions.NewMemoryRepository(), messageRepo, publisher)
 
 	return router
 }
