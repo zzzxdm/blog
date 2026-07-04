@@ -825,13 +825,111 @@ func TestAdminPostSaveAndPublish(t *testing.T) {
 	}
 
 	var created struct {
-		ID string `json:"id"`
+		ID      string `json:"id"`
+		Version int    `json:"version"`
 	}
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode admin post: %v", err)
 	}
 	if created.ID == "" {
 		t.Fatalf("expected admin post id, got %q", createRec.Body.String())
+	}
+	if created.Version != 1 {
+		t.Fatalf("expected initial version 1, got %+v", created)
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/admin/posts/"+created.ID, bytes.NewBufferString(`{
+		"title":"后台发布流程验证第二版",
+		"summary":"验证管理员保存草稿、版本历史和发布到前台。",
+		"content":"这是第二版内容，用于验证版本历史可以记录每一次保存。",
+		"status":"draft",
+		"category":"工程实践",
+		"tags":["后台","发布","版本"],
+		"slug":"admin-publish-flow-check",
+		"coverImage":"https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1200&q=80",
+		"seoTitle":"后台发布流程验证第二版",
+		"seoDescription":"验证管理员保存草稿、版本历史和发布到前台。"
+	}`))
+	updateReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		updateReq.AddCookie(cookie)
+	}
+	updateRec := httptest.NewRecorder()
+	router.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected admin post updated, got status=%d body=%q", updateRec.Code, updateRec.Body.String())
+	}
+
+	var updated struct {
+		Version int    `json:"version"`
+		Title   string `json:"title"`
+	}
+	if err := json.Unmarshal(updateRec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode updated admin post: %v", err)
+	}
+	if updated.Version != 2 || updated.Title != "后台发布流程验证第二版" {
+		t.Fatalf("expected version 2 update, got %+v", updated)
+	}
+
+	revisionsReq := httptest.NewRequest(http.MethodGet, "/api/admin/posts/"+created.ID+"/revisions", nil)
+	for _, cookie := range adminCookies {
+		revisionsReq.AddCookie(cookie)
+	}
+	revisionsRec := httptest.NewRecorder()
+	router.ServeHTTP(revisionsRec, revisionsReq)
+	if revisionsRec.Code != http.StatusOK {
+		t.Fatalf("expected admin post revisions, got status=%d body=%q", revisionsRec.Code, revisionsRec.Body.String())
+	}
+
+	var revisions struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+			Title   string `json:"title"`
+			Content string `json:"content"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(revisionsRec.Body.Bytes(), &revisions); err != nil {
+		t.Fatalf("decode admin post revisions: %v", err)
+	}
+	if revisions.Total != 2 || len(revisions.Items) != 2 {
+		t.Fatalf("expected two revisions, got %+v", revisions)
+	}
+
+	var firstRevisionID string
+	for _, revision := range revisions.Items {
+		if revision.Version == 1 {
+			firstRevisionID = revision.ID
+			if revision.Title != "后台发布流程验证" || !strings.Contains(revision.Content, "发布动作应该调用公开文章发布能力") {
+				t.Fatalf("expected first revision snapshot, got %+v", revision)
+			}
+		}
+	}
+	if firstRevisionID == "" {
+		t.Fatalf("expected first revision id, got %+v", revisions)
+	}
+
+	restoreReq := httptest.NewRequest(http.MethodPost, "/api/admin/posts/"+created.ID+"/revisions/"+firstRevisionID+"/restore", nil)
+	for _, cookie := range adminCookies {
+		restoreReq.AddCookie(cookie)
+	}
+	restoreRec := httptest.NewRecorder()
+	router.ServeHTTP(restoreRec, restoreReq)
+	if restoreRec.Code != http.StatusOK {
+		t.Fatalf("expected revision restored, got status=%d body=%q", restoreRec.Code, restoreRec.Body.String())
+	}
+
+	var restored struct {
+		Version int    `json:"version"`
+		Title   string `json:"title"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(restoreRec.Body.Bytes(), &restored); err != nil {
+		t.Fatalf("decode restored admin post: %v", err)
+	}
+	if restored.Version != 3 || restored.Title != "后台发布流程验证" || !strings.Contains(restored.Content, "发布动作应该调用公开文章发布能力") {
+		t.Fatalf("expected restored first revision as version 3, got %+v", restored)
 	}
 
 	publishReq := httptest.NewRequest(http.MethodPost, "/api/admin/posts/"+created.ID+"/publish", nil)

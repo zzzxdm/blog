@@ -109,6 +109,7 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	if item.Status == "" {
 		item.Status = StatusDraft
 	}
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
 	if err := repo.savePost(ctx, item, false); err != nil {
 		return AdminPost{}, err
@@ -153,6 +154,46 @@ func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher pos
 	item.UpdatedAt = now
 	item.ViewCount = published.ViewCount
 	item.CommentCount = published.CommentCount
+	item.Version++
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+
+	if err := repo.savePost(ctx, item, false); err != nil {
+		return AdminPost{}, err
+	}
+
+	return clonePost(item), nil
+}
+
+func (repo *SQLRepository) ListRevisions(ctx context.Context, id string) (RevisionListResult, error) {
+	item, err := repo.Get(ctx, id)
+	if err != nil {
+		return RevisionListResult{}, err
+	}
+
+	revisions := sortedRevisions(item)
+	return RevisionListResult{
+		Items: revisions,
+		Total: len(revisions),
+	}, nil
+}
+
+func (repo *SQLRepository) RestoreRevision(ctx context.Context, id string, revisionID string) (AdminPost, error) {
+	item, err := repo.Get(ctx, id)
+	if err != nil {
+		return AdminPost{}, err
+	}
+
+	revision, ok := findRevision(item, revisionID)
+	if !ok {
+		return AdminPost{}, ErrRevisionNotFound
+	}
+
+	now := repo.now()
+	item = restoreFromRevision(item, revision)
+	item.Version++
+	item.UpdatedAt = now
+	item.ReadingTime = estimateReadingTime(item.Content)
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
 	if err := repo.savePost(ctx, item, false); err != nil {
 		return AdminPost{}, err

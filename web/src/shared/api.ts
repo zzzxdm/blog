@@ -465,6 +465,23 @@ export interface AdminPost {
   updatedAt: string;
 }
 
+export interface AdminPostRevision {
+  id: string;
+  version: number;
+  slug: string;
+  title: string;
+  summary: string;
+  content: string;
+  status: AdminPostStatus;
+  category: string;
+  tags: string[];
+  coverImage: string;
+  seoTitle: string;
+  seoDescription: string;
+  authorName: string;
+  createdAt: string;
+}
+
 export interface AdminPostStats {
   published: number;
   draft: number;
@@ -477,6 +494,11 @@ export interface AdminPostListResponse {
   items: AdminPost[];
   total: number;
   stats: AdminPostStats;
+}
+
+export interface AdminPostRevisionListResponse {
+  items: AdminPostRevision[];
+  total: number;
 }
 
 export interface AdminPostPayload {
@@ -889,6 +911,10 @@ export async function getAdminPost(id: string): Promise<AdminPost> {
   return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}`);
 }
 
+export async function getAdminPostRevisions(id: string): Promise<AdminPostRevisionListResponse> {
+  return request<AdminPostRevisionListResponse>(`/admin/posts/${encodeURIComponent(id)}/revisions`);
+}
+
 export async function createAdminPost(payload: AdminPostPayload): Promise<AdminPost> {
   return request<AdminPost>("/admin/posts", {
     method: "POST",
@@ -905,6 +931,12 @@ export async function updateAdminPost(id: string, payload: AdminPostPayload): Pr
 
 export async function publishAdminPost(id: string): Promise<AdminPost> {
   return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/publish`, {
+    method: "POST"
+  });
+}
+
+export async function restoreAdminPostRevision(id: string, revisionId: string): Promise<AdminPost> {
+  return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/restore`, {
     method: "POST"
   });
 }

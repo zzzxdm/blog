@@ -24,9 +24,11 @@ func RegisterRoutes(router gin.IRouter, repo Repository, publisher posts.Publish
 
 	router.GET("/admin/posts", handler.List)
 	router.GET("/admin/posts/:id", handler.Get)
+	router.GET("/admin/posts/:id/revisions", handler.ListRevisions)
 	router.POST("/admin/posts", handler.Create)
 	router.PUT("/admin/posts/:id", handler.Update)
 	router.POST("/admin/posts/:id/publish", handler.Publish)
+	router.POST("/admin/posts/:id/revisions/:revisionId/restore", handler.RestoreRevision)
 }
 
 func (handler *Handler) List(ctx *gin.Context) {
@@ -103,9 +105,41 @@ func (handler *Handler) Publish(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, post)
 }
 
+func (handler *Handler) ListRevisions(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.ListRevisions(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) RestoreRevision(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	post, err := handler.repo.RestoreRevision(ctx.Request.Context(), ctx.Param("id"), ctx.Param("revisionId"))
+	if err != nil {
+		handler.writeError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, post)
+}
+
 func (handler *Handler) writeError(ctx *gin.Context, err error) {
 	if errors.Is(err, ErrPostNotFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "admin post not found"})
+		return
+	}
+	if errors.Is(err, ErrRevisionNotFound) {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "admin post revision not found"})
 		return
 	}
 	if errors.Is(err, ErrInvalidPost) {

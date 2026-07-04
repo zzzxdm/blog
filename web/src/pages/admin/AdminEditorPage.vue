@@ -7,11 +7,14 @@ import {
   createAdminPost,
   getCategories,
   getAdminPost,
+  getAdminPostRevisions,
   getTags,
   publishAdminPost,
+  restoreAdminPostRevision,
   updateAdminPost,
   type AdminPost,
   type AdminPostPayload,
+  type AdminPostRevision,
   type AdminPostStatus,
   type Category,
   type Tag
@@ -22,10 +25,13 @@ const route = useRoute();
 const current = ref<AdminPost | null>(null);
 const loading = ref(false);
 const saving = ref(false);
+const revisionLoading = ref(false);
+const restoringId = ref("");
 const error = ref("");
 const message = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
+const revisions = ref<AdminPostRevision[]>([]);
 
 const title = ref("如何设计一个内容长期增长的博客系统");
 const summary = ref("博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。");
@@ -79,11 +85,30 @@ async function load() {
   error.value = "";
 
   try {
-    applyPost(await getAdminPost(id));
+    const post = await getAdminPost(id);
+    applyPost(post);
+    await loadRevisions(post.id);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "文章加载失败";
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadRevisions(id = current.value?.id || "") {
+  if (!id) {
+    revisions.value = [];
+    return;
+  }
+
+  revisionLoading.value = true;
+
+  try {
+    revisions.value = (await getAdminPostRevisions(id)).items;
+  } catch {
+    revisions.value = [];
+  } finally {
+    revisionLoading.value = false;
   }
 }
 
@@ -130,6 +155,7 @@ async function save(nextStatus: AdminPostStatus) {
       ? await updateAdminPost(current.value.id, payload(nextStatus))
       : await createAdminPost(payload(nextStatus));
     applyPost(saved);
+    await loadRevisions(saved.id);
     message.value = "草稿已保存。";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "保存失败";
@@ -149,11 +175,33 @@ async function publish() {
       : await createAdminPost(payload("draft"));
     const published = await publishAdminPost(saved.id);
     applyPost(published);
+    await loadRevisions(published.id);
     message.value = `已发布到 /posts/${published.publishedPostSlug || published.slug}`;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "发布失败";
   } finally {
     saving.value = false;
+  }
+}
+
+async function restoreRevision(revision: AdminPostRevision) {
+  if (!current.value || !window.confirm(`恢复到版本 ${revision.version}？`)) {
+    return;
+  }
+
+  restoringId.value = revision.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const restored = await restoreAdminPostRevision(current.value.id, revision.id);
+    applyPost(restored);
+    await loadRevisions(restored.id);
+    message.value = `已恢复到版本 ${revision.version}。`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "版本恢复失败";
+  } finally {
+    restoringId.value = "";
   }
 }
 
@@ -163,6 +211,15 @@ function statusText(value: AdminPostStatus) {
   if (value === "review") return "待审核";
   if (value === "archived") return "已归档";
   return "草稿";
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 </script>
 
@@ -290,6 +347,29 @@ function statusText(value: AdminPostStatus) {
           <div class="settings-stack">
             <div class="field"><label for="seo-title">SEO 标题</label><input v-model="seoTitle" class="input" id="seo-title"></div>
             <div class="field"><label for="seo-description">SEO 描述</label><textarea v-model="seoDescription" class="input" id="seo-description"></textarea></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h2>版本历史</h2>
+            <span class="tag">{{ revisions.length }} 个版本</span>
+          </div>
+          <div class="timeline">
+            <p v-if="revisionLoading" class="muted">正在加载版本...</p>
+            <p v-else-if="!current" class="muted">保存草稿后生成版本记录。</p>
+            <p v-else-if="!revisions.length" class="muted">暂无版本记录。</p>
+            <article v-for="revision in revisions" :key="revision.id" class="timeline-item">
+              <strong>版本 {{ revision.version }} · {{ revision.title }}</strong>
+              <p>{{ revision.summary || "无摘要" }}</p>
+              <div class="meta-row">
+                <span>{{ formatDate(revision.createdAt) }}</span>
+                <span>{{ revision.authorName }}</span>
+                <button class="button-secondary" type="button" :disabled="restoringId === revision.id || revision.version === current?.version" @click="restoreRevision(revision)">
+                  {{ restoringId === revision.id ? "恢复中..." : "恢复" }}
+                </button>
+              </div>
+            </article>
           </div>
         </section>
       </aside>

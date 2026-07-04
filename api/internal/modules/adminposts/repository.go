@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	ErrPostNotFound = errors.New("admin post not found")
-	ErrInvalidPost  = errors.New("invalid admin post")
+	ErrPostNotFound     = errors.New("admin post not found")
+	ErrRevisionNotFound = errors.New("admin post revision not found")
+	ErrInvalidPost      = errors.New("invalid admin post")
 )
 
 type Repository interface {
@@ -22,6 +23,8 @@ type Repository interface {
 	Get(ctx context.Context, id string) (AdminPost, error)
 	Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error)
 	Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error)
+	ListRevisions(ctx context.Context, id string) (RevisionListResult, error)
+	RestoreRevision(ctx context.Context, id string, revisionID string) (AdminPost, error)
 }
 
 type MemoryRepository struct {
@@ -113,6 +116,7 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 	if item.Status == "" {
 		item.Status = StatusDraft
 	}
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
 	repo.items[item.ID] = item
 	return clonePost(item), nil
@@ -163,6 +167,49 @@ func (repo *MemoryRepository) Publish(ctx context.Context, id string, publisher 
 	item.UpdatedAt = now
 	item.ViewCount = published.ViewCount
 	item.CommentCount = published.CommentCount
+	item.Version++
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+	repo.items[item.ID] = item
+
+	return clonePost(item), nil
+}
+
+func (repo *MemoryRepository) ListRevisions(_ context.Context, id string) (RevisionListResult, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	item, ok := repo.items[id]
+	if !ok {
+		return RevisionListResult{}, ErrPostNotFound
+	}
+
+	revisions := sortedRevisions(item)
+	return RevisionListResult{
+		Items: revisions,
+		Total: len(revisions),
+	}, nil
+}
+
+func (repo *MemoryRepository) RestoreRevision(_ context.Context, id string, revisionID string) (AdminPost, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	item, ok := repo.items[id]
+	if !ok {
+		return AdminPost{}, ErrPostNotFound
+	}
+
+	revision, ok := findRevision(item, revisionID)
+	if !ok {
+		return AdminPost{}, ErrRevisionNotFound
+	}
+
+	now := repo.now()
+	item = restoreFromRevision(item, revision)
+	item.Version++
+	item.UpdatedAt = now
+	item.ReadingTime = estimateReadingTime(item.Content)
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 	repo.items[item.ID] = item
 
 	return clonePost(item), nil
@@ -186,7 +233,91 @@ func countStats(items []AdminPost) Stats {
 
 func clonePost(item AdminPost) AdminPost {
 	item.Tags = append([]string{}, item.Tags...)
+	item.Revisions = cloneRevisions(item.Revisions)
 	return item
+}
+
+func snapshotRevision(item AdminPost, createdAt time.Time) Revision {
+	return Revision{
+		ID:             fmt.Sprintf("%s_rev_%d", item.ID, item.Version),
+		Version:        item.Version,
+		Slug:           item.Slug,
+		Title:          item.Title,
+		Summary:        item.Summary,
+		Content:        item.Content,
+		Status:         item.Status,
+		Category:       item.Category,
+		Tags:           append([]string{}, item.Tags...),
+		CoverImage:     item.CoverImage,
+		SEOtitle:       item.SEOtitle,
+		SEODescription: item.SEODescription,
+		AuthorName:     item.AuthorName,
+		CreatedAt:      createdAt,
+	}
+}
+
+func appendRevision(revisions []Revision, revision Revision) []Revision {
+	filtered := make([]Revision, 0, len(revisions)+1)
+	for _, item := range revisions {
+		if item.ID == revision.ID || item.Version == revision.Version {
+			continue
+		}
+
+		filtered = append(filtered, cloneRevision(item))
+	}
+
+	filtered = append(filtered, cloneRevision(revision))
+	return filtered
+}
+
+func sortedRevisions(item AdminPost) []Revision {
+	revisions := cloneRevisions(item.Revisions)
+	if len(revisions) == 0 && item.Version > 0 {
+		revisions = append(revisions, snapshotRevision(item, item.UpdatedAt))
+	}
+
+	sort.SliceStable(revisions, func(i, j int) bool {
+		return revisions[i].Version > revisions[j].Version
+	})
+
+	return revisions
+}
+
+func findRevision(item AdminPost, revisionID string) (Revision, bool) {
+	for _, revision := range sortedRevisions(item) {
+		if revision.ID == revisionID {
+			return cloneRevision(revision), true
+		}
+	}
+
+	return Revision{}, false
+}
+
+func restoreFromRevision(item AdminPost, revision Revision) AdminPost {
+	item.Slug = defaultString(strings.TrimSpace(revision.Slug), item.Slug)
+	item.Title = revision.Title
+	item.Summary = revision.Summary
+	item.Content = revision.Content
+	item.Category = defaultString(strings.TrimSpace(revision.Category), item.Category)
+	item.Tags = normalizeTags(revision.Tags)
+	item.CoverImage = revision.CoverImage
+	item.SEOtitle = defaultString(strings.TrimSpace(revision.SEOtitle), revision.Title)
+	item.SEODescription = defaultString(strings.TrimSpace(revision.SEODescription), revision.Summary)
+	return item
+}
+
+func cloneRevisions(revisions []Revision) []Revision {
+	result := make([]Revision, 0, len(revisions))
+	for _, revision := range revisions {
+		result = append(result, cloneRevision(revision))
+	}
+
+	return result
+}
+
+func cloneRevision(revision Revision) Revision {
+	revision.Tags = append([]string{}, revision.Tags...)
+	return revision
 }
 
 func normalizeStatus(status string) string {
