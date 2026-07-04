@@ -136,7 +136,7 @@ async function runBackup() {
         <div class="settings-stack">
           <label class="setting-row"><div><strong>开启评论</strong><div class="meta-row"><span>文章默认允许评论</span></div></div><input v-model="settings.commentsEnabled" type="checkbox"></label>
           <label class="setting-row"><div><strong>仅登录用户评论</strong><div class="meta-row"><span>访客只读，降低垃圾评论</span></div></div><input v-model="settings.loginRequiredForComment" type="checkbox"></label>
-          <label class="setting-row"><div><strong>评论自动审核</strong><div class="meta-row"><span>新评论默认进入待审核</span></div></div><input v-model="settings.autoApproveComments" type="checkbox"></label>
+          <label class="setting-row"><div><strong>评论自动通过</strong><div class="meta-row"><span>开启后新评论直接展示，关闭后进入待审核</span></div></div><input v-model="settings.autoApproveComments" type="checkbox"></label>
           <div class="field"><label for="blocked-words">屏蔽关键词</label><textarea v-model="blockedWordsText" class="input" id="blocked-words"></textarea></div>
         </div>
       </section>
