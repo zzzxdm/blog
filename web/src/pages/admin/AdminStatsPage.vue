@@ -54,7 +54,7 @@ async function exportReport() {
 </script>
 
 <template>
-  <AdminLayout title="数据统计" description="查看访问趋势、热门内容、搜索词、来源渠道和评论互动。" mobile-title="数据统计" primary-action="导出">
+  <AdminLayout title="数据统计" description="查看内容趋势、热门内容、内容标签、来源和评论互动。" mobile-title="数据统计" primary-action="导出">
     <template #mobile-action>
       <button class="button" type="button" :disabled="exporting" @click="exportReport">{{ exporting ? "导出中..." : "导出" }}</button>
     </template>
@@ -106,12 +106,12 @@ async function exportReport() {
                   <th>阅读</th>
                   <th>收藏</th>
                   <th>评论</th>
-                  <th>RSS 访问</th>
+                  <th>互动率</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="post in stats.topPosts" :key="post.title">
-                  <td>{{ post.title }}</td><td>{{ post.views }}</td><td>{{ post.bookmarks }}</td><td>{{ post.comments }}</td><td>{{ post.rssRate }}</td>
+                  <td>{{ post.title }}</td><td>{{ post.views }}</td><td>{{ post.bookmarks }}</td><td>{{ post.comments }}</td><td>{{ post.engagementRate }}</td>
                 </tr>
               </tbody>
             </table>
@@ -120,7 +120,7 @@ async function exportReport() {
 
         <aside class="settings-stack">
           <section class="chart-card">
-            <h2>来源渠道</h2>
+            <h2>内容来源</h2>
             <div class="bar-chart">
               <div v-for="source in stats.sources" :key="source.label" class="bar-row">
                 <span>{{ source.label }}</span><span class="bar-track"><span class="bar-fill" :class="source.tone" :style="{ width: `${source.percent}%` }"></span></span><strong>{{ source.value }}</strong>
@@ -130,10 +130,10 @@ async function exportReport() {
 
           <section class="panel">
             <div class="panel-title">
-              <h2>热门搜索词</h2>
+              <h2>热门内容标签</h2>
             </div>
             <ol class="rank-list">
-              <li v-for="(term, index) in stats.searchTerms" :key="term.term"><span class="rank-number">{{ index + 1 }}</span><div><strong>{{ term.term }}</strong><span>{{ term.count }} 次搜索</span></div></li>
+              <li v-for="(term, index) in stats.searchTerms" :key="term.term"><span class="rank-number">{{ index + 1 }}</span><div><strong>{{ term.term }}</strong><span>{{ term.count }} 篇关联</span></div></li>
             </ol>
           </section>
 

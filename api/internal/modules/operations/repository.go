@@ -417,10 +417,10 @@ func seedStats() Stats {
 		Range:      "30d",
 		RangeLabel: "最近 30 天",
 		Metrics: []Metric{
-			{Label: "PV", Value: "86.4k", Delta: "较上期 +18%"},
-			{Label: "UV", Value: "24.7k", Delta: "较上期 +9%"},
-			{Label: "平均阅读", Value: "4:18", Delta: "提升 32 秒"},
-			{Label: "RSS 访问", Value: "418", Delta: "转化率 2.6%"},
+			{Label: "阅读量", Value: "86,400", Delta: "当前范围累计"},
+			{Label: "发布文章", Value: "18", Delta: "已公开"},
+			{Label: "平均阅读", Value: "4.3 分钟", Delta: "按阅读时长估算"},
+			{Label: "互动数", Value: "1,246", Delta: "评论、点赞和收藏"},
 		},
 		Trend: []BarPoint{
 			{Label: "周一", Value: "8.4k", Percent: 68},
@@ -431,15 +431,13 @@ func seedStats() Stats {
 			{Label: "周六", Value: "5.9k", Percent: 48},
 		},
 		TopPosts: []TopPost{
-			{Title: "Vue3 内容站的缓存与 SEO 边界", Views: "12,420", Bookmarks: 312, Comments: 48, RSSRate: "3.8%"},
-			{Title: "如何设计一个内容长期增长的博客系统", Views: "9,884", Bookmarks: 286, Comments: 34, RSSRate: "4.1%"},
-			{Title: "让旧文章继续被搜索引擎找到", Views: "7,209", Bookmarks: 190, Comments: 19, RSSRate: "2.4%"},
+			{Title: "Vue3 内容站的缓存与 SEO 边界", Views: "12,420", Bookmarks: 312, Comments: 48, EngagementRate: "3.8%"},
+			{Title: "如何设计一个内容长期增长的博客系统", Views: "9,884", Bookmarks: 286, Comments: 34, EngagementRate: "4.1%"},
+			{Title: "让旧文章继续被搜索引擎找到", Views: "7,209", Bookmarks: 190, Comments: 19, EngagementRate: "2.4%"},
 		},
 		Sources: []BarPoint{
-			{Label: "搜索", Value: "46%", Percent: 72},
-			{Label: "直接", Value: "22%", Percent: 34, Tone: "rust"},
-			{Label: "社交", Value: "18%", Percent: 28, Tone: "amber"},
-			{Label: "RSS", Value: "14%", Percent: 20},
+			{Label: "后台发布", Value: "72%", Percent: 72},
+			{Label: "用户投稿", Value: "28%", Percent: 28, Tone: "rust"},
 		},
 		SearchTerms: []SearchTerm{
 			{Term: "Vue3 SEO", Count: 1284},
@@ -459,10 +457,10 @@ func statsForRange(stats Stats, rangeKey string) Stats {
 		stats.Range = "7d"
 		stats.RangeLabel = "最近 7 天"
 		stats.Metrics = []Metric{
-			{Label: "PV", Value: "18.2k", Delta: "较上周 +6%"},
-			{Label: "UV", Value: "5.8k", Delta: "较上周 +4%"},
-			{Label: "平均阅读", Value: "4:02", Delta: "提升 18 秒"},
-			{Label: "RSS 访问", Value: "96", Delta: "转化率 2.1%"},
+			{Label: "阅读量", Value: "18,200", Delta: "当前范围累计"},
+			{Label: "发布文章", Value: "5", Delta: "已公开"},
+			{Label: "平均阅读", Value: "4.0 分钟", Delta: "按阅读时长估算"},
+			{Label: "互动数", Value: "318", Delta: "评论、点赞和收藏"},
 		}
 		stats.Trend = []BarPoint{
 			{Label: "周一", Value: "2.1k", Percent: 58},
@@ -486,10 +484,10 @@ func statsForRange(stats Stats, rangeKey string) Stats {
 		stats.Range = "ytd"
 		stats.RangeLabel = "今年"
 		stats.Metrics = []Metric{
-			{Label: "PV", Value: "642.8k", Delta: "同比 +31%"},
-			{Label: "UV", Value: "168.4k", Delta: "同比 +22%"},
-			{Label: "平均阅读", Value: "4:36", Delta: "提升 44 秒"},
-			{Label: "RSS 访问", Value: "3,284", Delta: "转化率 3.4%"},
+			{Label: "阅读量", Value: "642,800", Delta: "当前范围累计"},
+			{Label: "发布文章", Value: "96", Delta: "已公开"},
+			{Label: "平均阅读", Value: "4.6 分钟", Delta: "按阅读时长估算"},
+			{Label: "互动数", Value: "9,884", Delta: "评论、点赞和收藏"},
 		}
 		stats.Trend = []BarPoint{
 			{Label: "1月", Value: "62k", Percent: 54},
@@ -501,9 +499,9 @@ func statsForRange(stats Stats, rangeKey string) Stats {
 			{Label: "7月", Value: "86k", Percent: 75},
 		}
 		stats.TopPosts = []TopPost{
-			{Title: "如何设计一个内容长期增长的博客系统", Views: "48,210", Bookmarks: 1204, Comments: 184, RSSRate: "4.6%"},
-			{Title: "Vue3 内容站的缓存与 SEO 边界", Views: "41,884", Bookmarks: 986, Comments: 128, RSSRate: "3.9%"},
-			{Title: "Redis 和 PostgreSQL 在博客中的分工", Views: "33,406", Bookmarks: 712, Comments: 93, RSSRate: "3.1%"},
+			{Title: "如何设计一个内容长期增长的博客系统", Views: "48,210", Bookmarks: 1204, Comments: 184, EngagementRate: "4.6%"},
+			{Title: "Vue3 内容站的缓存与 SEO 边界", Views: "41,884", Bookmarks: 986, Comments: 128, EngagementRate: "3.9%"},
+			{Title: "Redis 和 PostgreSQL 在博客中的分工", Views: "33,406", Bookmarks: 712, Comments: 93, EngagementRate: "3.1%"},
 		}
 		stats.SearchTerms = []SearchTerm{
 			{Term: "博客系统设计", Count: 7294},

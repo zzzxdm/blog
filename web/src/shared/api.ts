@@ -399,7 +399,7 @@ export interface TopPostStat {
   views: string;
   bookmarks: number;
   comments: number;
-  rssRate: string;
+  engagementRate: string;
 }
 
 export interface SearchTermStat {

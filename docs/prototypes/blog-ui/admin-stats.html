@@ -40,7 +40,7 @@
         <header class="admin-topbar">
           <div>
             <h1>数据统计</h1>
-            <p>查看访问趋势、热门内容、搜索词、来源渠道和评论互动。</p>
+            <p>查看内容趋势、热门内容、内容标签、来源和评论互动。</p>
           </div>
           <div class="header-actions">
             <select class="input" aria-label="时间范围">
@@ -54,24 +54,24 @@
 
         <section class="stats-grid" aria-label="核心指标">
           <div class="stat-card">
-            <span>PV</span>
-            <strong>86.4k</strong>
-            <div class="meta-row"><span>较上期 +18%</span></div>
+            <span>阅读量</span>
+            <strong>86,400</strong>
+            <div class="meta-row"><span>当前范围累计</span></div>
           </div>
           <div class="stat-card">
-            <span>UV</span>
-            <strong>24.7k</strong>
-            <div class="meta-row"><span>较上期 +9%</span></div>
+            <span>发布文章</span>
+            <strong>18</strong>
+            <div class="meta-row"><span>已公开</span></div>
           </div>
           <div class="stat-card">
             <span>平均阅读</span>
-            <strong>4:18</strong>
-            <div class="meta-row"><span>提升 32 秒</span></div>
+            <strong>4.3 分钟</strong>
+            <div class="meta-row"><span>按阅读时长估算</span></div>
           </div>
           <div class="stat-card">
-            <span>RSS 访问</span>
-            <strong>418</strong>
-            <div class="meta-row"><span>转化率 2.6%</span></div>
+            <span>互动数</span>
+            <strong>1,246</strong>
+            <div class="meta-row"><span>评论、点赞和收藏</span></div>
           </div>
         </section>
 
@@ -80,7 +80,7 @@
             <section class="chart-card">
               <div class="panel-title">
                 <h2>访问趋势</h2>
-                <span class="tag">PV / UV</span>
+                <span class="tag">阅读量</span>
               </div>
               <div class="bar-chart">
                 <div class="bar-row">
@@ -128,7 +128,7 @@
                     <th>阅读</th>
                     <th>收藏</th>
                     <th>评论</th>
-                    <th>RSS 访问</th>
+                    <th>互动率</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -160,25 +160,25 @@
 
           <aside class="settings-stack">
             <section class="chart-card">
-              <h2>来源渠道</h2>
+              <h2>内容来源</h2>
               <div class="bar-chart">
                 <div class="bar-row">
-                  <span>搜索</span>
+                  <span>后台发布</span>
                   <span class="bar-track"><span class="bar-fill" style="width: 72%;"></span></span>
                   <strong>46%</strong>
                 </div>
                 <div class="bar-row">
-                  <span>直接</span>
+                  <span>用户投稿</span>
                   <span class="bar-track"><span class="bar-fill rust" style="width: 34%;"></span></span>
                   <strong>22%</strong>
                 </div>
                 <div class="bar-row">
-                  <span>社交</span>
+                  <span>导入内容</span>
                   <span class="bar-track"><span class="bar-fill amber" style="width: 28%;"></span></span>
                   <strong>18%</strong>
                 </div>
                 <div class="bar-row">
-                  <span>订阅</span>
+                  <span>其他来源</span>
                   <span class="bar-track"><span class="bar-fill" style="width: 20%;"></span></span>
                   <strong>14%</strong>
                 </div>
@@ -187,28 +187,28 @@
 
             <section class="panel">
               <div class="panel-title">
-                <h2>热门搜索词</h2>
+                <h2>热门内容标签</h2>
               </div>
               <ol class="rank-list">
                 <li>
                   <span class="rank-number">1</span>
                   <div>
                     <strong>Vue3 SEO</strong>
-                    <span>1,284 次搜索</span>
+                    <span>1,284 篇关联</span>
                   </div>
                 </li>
                 <li>
                   <span class="rank-number">2</span>
                   <div>
                     <strong>博客系统设计</strong>
-                    <span>936 次搜索</span>
+                    <span>936 篇关联</span>
                   </div>
                 </li>
                 <li>
                   <span class="rank-number">3</span>
                   <div>
                     <strong>Markdown 编辑器</strong>
-                    <span>642 次搜索</span>
+                    <span>642 篇关联</span>
                   </div>
                 </li>
               </ol>
@@ -220,7 +220,7 @@
               </div>
               <ul class="link-list">
                 <li>
-                  <strong>搜索词“评论审核”增长明显</strong>
+                  <strong>评论审核相关内容增长明显</strong>
                   <span>可以补一篇用户评论系统设计。</span>
                 </li>
                 <li>

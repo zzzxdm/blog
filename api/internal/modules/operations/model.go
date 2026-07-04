@@ -131,11 +131,11 @@ type BarPoint struct {
 }
 
 type TopPost struct {
-	Title     string `json:"title"`
-	Views     string `json:"views"`
-	Bookmarks int    `json:"bookmarks"`
-	Comments  int    `json:"comments"`
-	RSSRate   string `json:"rssRate"`
+	Title          string `json:"title"`
+	Views          string `json:"views"`
+	Bookmarks      int    `json:"bookmarks"`
+	Comments       int    `json:"comments"`
+	EngagementRate string `json:"engagementRate"`
 }
 
 type SearchTerm struct {

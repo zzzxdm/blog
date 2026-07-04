@@ -714,7 +714,7 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	}
 	statsRec := httptest.NewRecorder()
 	router.ServeHTTP(statsRec, statsReq)
-	if statsRec.Code != http.StatusOK || !strings.Contains(statsRec.Body.String(), `"label":"PV"`) {
+	if statsRec.Code != http.StatusOK || !strings.Contains(statsRec.Body.String(), `"label":"阅读量"`) {
 		t.Fatalf("expected stats response, got status=%d body=%q", statsRec.Code, statsRec.Body.String())
 	}
 
