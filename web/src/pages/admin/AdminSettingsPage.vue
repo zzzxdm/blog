@@ -70,7 +70,7 @@ async function testMail() {
     const result = await sendAdminTestMail();
     message.value = result.message;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "测试邮件发送失败";
+    error.value = err instanceof Error ? err.message : "测试邮件生成失败";
   } finally {
     testingMail.value = false;
   }
@@ -154,10 +154,10 @@ async function runBackup() {
       <section class="panel">
         <div class="panel-title"><h2>邮件与 RSS</h2></div>
         <div class="settings-stack">
-          <label class="setting-row"><div><strong>开启邮件推送</strong><div class="meta-row"><span>发布文章后可推送邮件</span></div></div><input v-model="settings.mailEnabled" type="checkbox"></label>
+          <label class="setting-row"><div><strong>邮件推送策略预留</strong><div class="meta-row"><span>发布推送接入后启用</span></div></div><input v-model="settings.mailEnabled" type="checkbox"></label>
           <div class="field"><label for="mail-provider">邮件服务</label><select v-model="settings.mailProvider" class="input" id="mail-provider"><option>Resend</option><option>SendGrid</option><option>SMTP</option></select></div>
           <div class="field"><label for="from-email">发件邮箱</label><input v-model="settings.fromEmail" class="input" id="from-email"></div>
-          <button class="button-secondary" type="button" :disabled="testingMail" @click="testMail">{{ testingMail ? "发送中..." : "发送测试邮件" }}</button>
+          <button class="button-secondary" type="button" :disabled="testingMail" @click="testMail">{{ testingMail ? "生成中..." : "生成测试邮件" }}</button>
         </div>
       </section>
 
@@ -173,9 +173,9 @@ async function runBackup() {
       <section class="panel">
         <div class="panel-title"><h2>备份</h2><span class="status published">正常</span></div>
         <div class="settings-stack">
-          <div class="field"><label for="backup-cycle">备份频率</label><select v-model="settings.backupCycle" class="input" id="backup-cycle"><option>每日全量备份</option><option>每周全量备份</option><option>手动备份</option></select></div>
+          <div class="field"><label for="backup-cycle">备份计划频率</label><select v-model="settings.backupCycle" class="input" id="backup-cycle"><option>每日全量备份</option><option>每周全量备份</option><option>手动备份</option></select></div>
           <div class="meta-row"><span>上次备份：{{ new Date(settings.lastBackupAt).toLocaleString("zh-CN") }}</span><span>保留 {{ settings.backupRetentionDays }} 天</span></div>
-          <button class="button-secondary" type="button" :disabled="runningBackup" @click="runBackup">{{ runningBackup ? "备份中..." : "立即备份" }}</button>
+          <button class="button-secondary" type="button" :disabled="runningBackup" @click="runBackup">{{ runningBackup ? "生成中..." : "生成备份记录" }}</button>
         </div>
       </section>
     </section>
