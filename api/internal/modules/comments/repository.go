@@ -330,6 +330,19 @@ func isValidStatus(status string) bool {
 	}
 }
 
+func approvedCommentDelta(previousStatus string, nextStatus string) int {
+	previousApproved := normalizeStatusFilter(previousStatus) == "approved"
+	nextApproved := normalizeStatusFilter(nextStatus) == "approved"
+	if previousApproved == nextApproved {
+		return 0
+	}
+	if nextApproved {
+		return 1
+	}
+
+	return -1
+}
+
 func sortComments(items []Comment) {
 	sort.SliceStable(items, func(i, j int) bool {
 		return items[i].CreatedAt.After(items[j].CreatedAt)

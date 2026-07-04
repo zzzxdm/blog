@@ -126,19 +126,58 @@ func (repo *SQLRepository) UpdateStatus(ctx context.Context, commentID string, s
 		return Comment{}, ErrInvalidStatus
 	}
 
+	tx, err := repo.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, fmt.Errorf("begin comment status transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
 	var id string
-	err := repo.db.QueryRowContext(ctx, `
-		UPDATE comments
-		SET status = $2
-		WHERE id = $1
-		RETURNING id
-	`, commentID, status).Scan(&id)
+	var postSlug string
+	var previousStatus string
+	err = tx.QueryRowContext(ctx, `
+		WITH current_comment AS (
+			SELECT id, post_slug, status AS previous_status
+			FROM comments
+			WHERE id = $1
+			FOR UPDATE
+		),
+		updated_comment AS (
+			UPDATE comments c
+			SET status = $2
+			FROM current_comment
+			WHERE c.id = current_comment.id
+			RETURNING c.id, current_comment.post_slug, current_comment.previous_status
+		)
+		SELECT id, post_slug, previous_status
+		FROM updated_comment
+	`, commentID, status).Scan(&id, &postSlug, &previousStatus)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Comment{}, ErrCommentNotFound
 		}
 		return Comment{}, fmt.Errorf("update comment status: %w", err)
 	}
+
+	if delta := approvedCommentDelta(previousStatus, status); delta != 0 {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE posts
+			SET comment_count = GREATEST(comment_count + $2, 0)
+			WHERE slug = $1
+		`, postSlug, delta); err != nil {
+			return Comment{}, fmt.Errorf("update post comment count: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Comment{}, fmt.Errorf("commit comment status transaction: %w", err)
+	}
+	committed = true
 
 	return repo.getByID(ctx, id)
 }
