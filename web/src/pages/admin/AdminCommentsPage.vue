@@ -16,6 +16,7 @@ const stats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0
 const status = ref("pending");
 const loading = ref(false);
 const exporting = ref(false);
+const bulkActing = ref(false);
 const actingId = ref("");
 const error = ref("");
 const message = ref("");
@@ -50,6 +51,7 @@ const visibleComments = computed(() => {
     return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
   });
 });
+const approvableComments = computed(() => visibleComments.value.filter((item) => item.status === "pending"));
 
 onMounted(load);
 
@@ -81,6 +83,28 @@ async function setStatus(item: Comment, nextStatus: Comment["status"]) {
     error.value = err instanceof Error ? err.message : "评论状态更新失败";
   } finally {
     actingId.value = "";
+  }
+}
+
+async function approveVisiblePending() {
+  if (!approvableComments.value.length) {
+    return;
+  }
+
+  bulkActing.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    for (const item of approvableComments.value) {
+      await updateCommentStatus(item.id, "approved");
+    }
+    message.value = `已通过 ${approvableComments.value.length} 条评论。`;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "批量审核失败";
+  } finally {
+    bulkActing.value = false;
   }
 }
 
@@ -143,6 +167,9 @@ function statusClass(value: Comment["status"]) {
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportComments">{{ exporting ? "导出中..." : "导出" }}</button>
+        <button class="button-secondary" type="button" :disabled="bulkActing || !approvableComments.length" @click="approveVisiblePending">
+          {{ bulkActing ? "处理中..." : `通过当前 ${approvableComments.length}` }}
+        </button>
         <button class="button" type="button" @click="load">刷新</button>
       </div>
     </template>
