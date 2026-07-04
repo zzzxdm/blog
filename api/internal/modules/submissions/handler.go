@@ -74,13 +74,18 @@ func (handler *Handler) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to submit posts"})
 		return
 	}
-	if !handler.requireSubmissionsEnabled(ctx) {
+	settings, ok := handler.requireSubmissionSettings(ctx)
+	if !ok {
 		return
 	}
 
 	var request SaveRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission payload"})
+		return
+	}
+	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
 		return
 	}
 
@@ -102,13 +107,18 @@ func (handler *Handler) Update(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to update submissions"})
 		return
 	}
-	if !handler.requireSubmissionsEnabled(ctx) {
+	settings, ok := handler.requireSubmissionSettings(ctx)
+	if !ok {
 		return
 	}
 
 	var request SaveRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission payload"})
+		return
+	}
+	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
 		return
 	}
 
@@ -130,7 +140,22 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to submit posts"})
 		return
 	}
-	if !handler.requireSubmissionsEnabled(ctx) {
+	settings, ok := handler.requireSubmissionSettings(ctx)
+	if !ok {
+		return
+	}
+
+	current, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+	if current.AuthorID != user.ID {
+		handler.writeSubmissionError(ctx, ErrForbidden)
+		return
+	}
+	if submissionContainsBlockedWord(current, settings.BlockedWords) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
 		return
 	}
 
@@ -143,22 +168,22 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, submission)
 }
 
-func (handler *Handler) requireSubmissionsEnabled(ctx *gin.Context) bool {
+func (handler *Handler) requireSubmissionSettings(ctx *gin.Context) (operations.Settings, bool) {
 	if handler.settings == nil {
-		return true
+		return operations.Settings{SubmissionsEnabled: true}, true
 	}
 
 	settings, err := handler.settings.GetSettings(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submission settings"})
-		return false
+		return operations.Settings{}, false
 	}
 	if !settings.SubmissionsEnabled {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submissions are disabled"})
-		return false
+		return operations.Settings{}, false
 	}
 
-	return true
+	return settings, true
 }
 
 func (handler *Handler) AdminList(ctx *gin.Context) {
@@ -312,4 +337,38 @@ func canSubmit(user auth.User) bool {
 
 func canReviewSubmission(status string) bool {
 	return status == StatusSubmitted || status == StatusReturned
+}
+
+func saveRequestContainsBlockedWord(request SaveRequest, blockedWords []string) bool {
+	return textContainsBlockedWord(strings.Join([]string{
+		request.Title,
+		request.Summary,
+		request.Content,
+		strings.Join(request.Tags, " "),
+	}, " "), blockedWords)
+}
+
+func submissionContainsBlockedWord(submission Submission, blockedWords []string) bool {
+	return textContainsBlockedWord(strings.Join([]string{
+		submission.Title,
+		submission.Summary,
+		submission.Content,
+		strings.Join(submission.Tags, " "),
+	}, " "), blockedWords)
+}
+
+func textContainsBlockedWord(value string, blockedWords []string) bool {
+	normalizedValue := strings.ToLower(strings.TrimSpace(value))
+	if normalizedValue == "" {
+		return false
+	}
+
+	for _, word := range blockedWords {
+		normalizedWord := strings.ToLower(strings.TrimSpace(word))
+		if normalizedWord != "" && strings.Contains(normalizedValue, normalizedWord) {
+			return true
+		}
+	}
+
+	return false
 }
