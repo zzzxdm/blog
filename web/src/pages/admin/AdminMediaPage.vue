@@ -17,14 +17,20 @@ const loading = ref(false);
 const uploading = ref(false);
 const savingMetadata = ref(false);
 const deleting = ref(false);
+const batchMode = ref(false);
+const batchDeleting = ref(false);
 const error = ref("");
 const uploadError = ref("");
 const notice = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 const editAlt = ref("");
 const editCategory = ref("");
+const selectedAssetIds = ref<string[]>([]);
 
 const selected = computed(() => assets.value.find((item) => item.id === selectedId.value) || assets.value[0]);
+const selectedBatchAssets = computed(() => assets.value.filter((item) => selectedAssetIds.value.includes(item.id)));
+const deletableBatchAssets = computed(() => selectedBatchAssets.value.filter((item) => item.usageCount === 0));
+const blockedBatchCount = computed(() => selectedBatchAssets.value.length - deletableBatchAssets.value.length);
 
 onMounted(load);
 watch(selected, (asset) => {
@@ -40,6 +46,7 @@ async function load() {
     const response = await getAdminMedia();
     assets.value = response.items;
     selectedId.value = assets.value[0]?.id || "";
+    selectedAssetIds.value = selectedAssetIds.value.filter((id) => assets.value.some((item) => item.id === id));
   } catch (err) {
     error.value = err instanceof Error ? err.message : "媒体库加载失败";
   } finally {
@@ -153,6 +160,62 @@ async function deleteSelected() {
   }
 }
 
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value;
+  selectedAssetIds.value = [];
+  notice.value = batchMode.value ? "已进入批量选择模式。" : "";
+  uploadError.value = "";
+}
+
+function isBatchSelected(id: string) {
+  return selectedAssetIds.value.includes(id);
+}
+
+function toggleBatchAsset(asset: MediaAsset) {
+  if (!batchMode.value) {
+    return;
+  }
+
+  if (isBatchSelected(asset.id)) {
+    selectedAssetIds.value = selectedAssetIds.value.filter((id) => id !== asset.id);
+    return;
+  }
+
+  selectedAssetIds.value = [...selectedAssetIds.value, asset.id];
+}
+
+async function deleteBatchSelected() {
+  if (!deletableBatchAssets.value.length) {
+    return;
+  }
+  if (!window.confirm(`确定删除 ${deletableBatchAssets.value.length} 个未使用资源？`)) {
+    return;
+  }
+
+  batchDeleting.value = true;
+  uploadError.value = "";
+  notice.value = "";
+
+  try {
+    for (const asset of deletableBatchAssets.value) {
+      await deleteAdminMedia(asset.id);
+    }
+    const deletedIds = new Set(deletableBatchAssets.value.map((item) => item.id));
+    assets.value = assets.value.filter((item) => !deletedIds.has(item.id));
+    selectedAssetIds.value = selectedAssetIds.value.filter((id) => !deletedIds.has(id));
+    if (!assets.value.some((item) => item.id === selectedId.value)) {
+      selectedId.value = assets.value[0]?.id || "";
+    }
+    notice.value = blockedBatchCount.value > 0
+      ? `已删除 ${deletedIds.size} 个未使用资源，${blockedBatchCount.value} 个资源仍被引用。`
+      : `已删除 ${deletedIds.size} 个资源。`;
+  } catch (err) {
+    uploadError.value = err instanceof Error ? err.message : "批量删除失败";
+  } finally {
+    batchDeleting.value = false;
+  }
+}
+
 async function copySelectedUrl() {
   if (!selected.value) {
     return;
@@ -179,7 +242,10 @@ function formatDate(value: string) {
   <AdminLayout title="媒体库" description="管理文章封面、正文图片、附件和图片替代文本。" mobile-title="媒体库" primary-action="上传">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">批量选择</button>
+        <button class="button-secondary" type="button" @click="toggleBatchMode">{{ batchMode ? "退出批量" : "批量选择" }}</button>
+        <button v-if="batchMode" class="button-secondary" type="button" :disabled="batchDeleting || !deletableBatchAssets.length" @click="deleteBatchSelected">
+          {{ batchDeleting ? "删除中..." : `删除选中 ${deletableBatchAssets.length}` }}
+        </button>
         <button class="button" type="button" :disabled="uploading" @click="openPicker">{{ uploading ? "上传中..." : "上传文件" }}</button>
         <input ref="fileInput" hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" multiple @change="handleInputChange">
       </div>
@@ -207,9 +273,15 @@ function formatDate(value: string) {
         <template v-else>
           <p v-if="uploadError" class="error">{{ uploadError }}</p>
           <p v-else-if="notice" class="muted">{{ notice }}</p>
+          <p v-if="batchMode && selectedBatchAssets.length" class="muted">
+            已选择 {{ selectedBatchAssets.length }} 个资源；{{ deletableBatchAssets.length }} 个可删除，{{ blockedBatchCount }} 个正在被引用。
+          </p>
 
           <section class="media-grid" aria-label="媒体资源">
-            <article v-for="asset in assets" :key="asset.id" class="media-card" @click="selectAsset(asset.id)">
+            <article v-for="asset in assets" :key="asset.id" class="media-card" :class="{ 'is-selected': isBatchSelected(asset.id) }" @click="batchMode ? toggleBatchAsset(asset) : selectAsset(asset.id)">
+              <label v-if="batchMode" class="media-card-checkbox" @click.stop>
+                <input type="checkbox" :checked="isBatchSelected(asset.id)" @change="toggleBatchAsset(asset)">
+              </label>
               <img v-if="asset.type === 'image'" :src="asset.url" :alt="asset.alt">
               <div v-else class="media-card-file">{{ typeLabel(asset.type) }}</div>
               <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>

@@ -1422,10 +1422,32 @@ textarea {
 }
 
 .media-card {
+  position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.media-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(41, 91, 75, 0.18), var(--shadow);
+}
+
+.media-card-checkbox {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
 }
 
