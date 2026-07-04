@@ -1,5 +1,39 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+
 import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  getAdminMedia,
+  type MediaAsset
+} from "../../shared/api";
+
+const assets = ref<MediaAsset[]>([]);
+const selectedId = ref("");
+const loading = ref(false);
+const error = ref("");
+
+const selected = computed(() => assets.value.find((item) => item.id === selectedId.value) || assets.value[0]);
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const response = await getAdminMedia();
+    assets.value = response.items;
+    selectedId.value = assets.value[0]?.id || "";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "媒体库加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("zh-CN");
+}
 </script>
 
 <template>
@@ -13,7 +47,7 @@ import AdminLayout from "../../components/AdminLayout.vue";
 
     <section class="admin-grid-2">
       <div>
-        <form class="media-toolbar">
+        <form class="media-toolbar" @submit.prevent="load">
           <input class="input" type="search" placeholder="搜索文件名、alt 文本、上传人" aria-label="搜索媒体">
           <select class="input" aria-label="文件类型">
             <option>全部类型</option>
@@ -28,30 +62,13 @@ import AdminLayout from "../../components/AdminLayout.vue";
           </select>
         </form>
 
-        <section class="media-grid" aria-label="媒体资源">
-          <article class="media-card">
-            <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=700&q=80" alt="代码编辑器封面图">
-            <div class="media-card-body"><strong>cover-code-desk.jpg</strong><div class="meta-row"><span>1.2 MB</span><span>已使用 8 次</span></div><span class="tag">封面图</span></div>
-          </article>
-          <article class="media-card">
-            <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=700&q=80" alt="服务器设备图片">
-            <div class="media-card-body"><strong>server-room.jpg</strong><div class="meta-row"><span>980 KB</span><span>已使用 3 次</span></div><span class="tag rust">架构</span></div>
-          </article>
-          <article class="media-card">
-            <img src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=700&q=80" alt="写作桌面图片">
-            <div class="media-card-body"><strong>writing-notes.jpg</strong><div class="meta-row"><span>860 KB</span><span>已使用 5 次</span></div><span class="tag amber">写作</span></div>
-          </article>
-          <article class="media-card">
-            <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=700&q=80" alt="产品分析界面">
-            <div class="media-card-body"><strong>product-dashboard.jpg</strong><div class="meta-row"><span>1.4 MB</span><span>已使用 2 次</span></div><span class="tag">产品设计</span></div>
-          </article>
-          <article class="media-card">
-            <img src="https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=700&q=80" alt="代码窗口">
-            <div class="media-card-body"><strong>javascript-editor.jpg</strong><div class="meta-row"><span>740 KB</span><span>已使用 4 次</span></div><span class="tag">Vue3</span></div>
-          </article>
-          <article class="media-card">
-            <img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=700&q=80" alt="自然光工作区">
-            <div class="media-card-body"><strong>quiet-workspace.jpg</strong><div class="meta-row"><span>690 KB</span><span>未使用</span></div><span class="tag amber">备用</span></div>
+        <p v-if="loading" class="muted">正在加载媒体资源...</p>
+        <p v-else-if="error" class="error">{{ error }}</p>
+
+        <section v-else class="media-grid" aria-label="媒体资源">
+          <article v-for="asset in assets" :key="asset.id" class="media-card" @click="selectedId = asset.id">
+            <img :src="asset.url" :alt="asset.alt">
+            <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>
           </article>
         </section>
       </div>
@@ -65,16 +82,16 @@ import AdminLayout from "../../components/AdminLayout.vue";
           </div>
         </section>
 
-        <section class="panel">
+        <section v-if="selected" class="panel">
           <div class="panel-title">
             <h2>选中资源</h2>
             <span class="tag">图片</span>
           </div>
           <div class="settings-stack">
-            <div class="field"><label for="filename">文件名</label><input class="input" id="filename" value="cover-code-desk.jpg"></div>
-            <div class="field"><label for="alt">Alt 文本</label><input class="input" id="alt" value="桌面上的代码编辑器和开发设备"></div>
-            <div class="field"><label for="asset-url">资源地址</label><input class="input" id="asset-url" value="https://cdn.example.com/cover-code-desk.jpg"></div>
-            <div class="meta-row"><span>尺寸 1400 x 930</span><span>上传于 2026-07-04</span></div>
+            <div class="field"><label for="filename">文件名</label><input class="input" id="filename" :value="selected.fileName" readonly></div>
+            <div class="field"><label for="alt">Alt 文本</label><input class="input" id="alt" :value="selected.alt" readonly></div>
+            <div class="field"><label for="asset-url">资源地址</label><input class="input" id="asset-url" :value="selected.url" readonly></div>
+            <div class="meta-row"><span>尺寸 {{ selected.width }} x {{ selected.height }}</span><span>上传于 {{ formatDate(selected.uploadedAt) }}</span></div>
             <button class="button-secondary" type="button">复制地址</button>
           </div>
         </section>

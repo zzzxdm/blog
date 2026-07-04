@@ -205,6 +205,121 @@ export interface BookmarkListResponse {
   total: number;
 }
 
+export interface OperationsSettings {
+  siteName: string;
+  siteDescription: string;
+  siteUrl: string;
+  beian: string;
+  themePrimary: string;
+  homepageLayout: string;
+  darkModeEnabled: boolean;
+  readingProgressEnabled: boolean;
+  commentsEnabled: boolean;
+  loginRequiredForComment: boolean;
+  autoApproveComments: boolean;
+  blockedWords: string[];
+  submissionsEnabled: boolean;
+  submissionManualReview: boolean;
+  submissionLimit: string;
+  submissionGuide: string;
+  mailEnabled: boolean;
+  mailProvider: string;
+  fromEmail: string;
+  adminTwoFactorRequired: boolean;
+  loginFailureLock: boolean;
+  sessionDays: number;
+  backupCycle: string;
+  lastBackupAt: string;
+  backupRetentionDays: number;
+  updatedAt: string;
+}
+
+export interface NavItem {
+  id: string;
+  label: string;
+  url: string;
+  order: number;
+}
+
+export interface RedirectRule {
+  from: string;
+  to: string;
+  code: number;
+}
+
+export interface OperationsNavigation {
+  topItems: NavItem[];
+  footerItems: NavItem[];
+  mobileCollapse: boolean;
+  externalLinksNewWindow: boolean;
+  showLoginEntry: boolean;
+  githubUrl: string;
+  contactEmail: string;
+  rssUrl: string;
+  redirects: RedirectRule[];
+  updatedAt: string;
+}
+
+export interface MediaAsset {
+  id: string;
+  fileName: string;
+  url: string;
+  alt: string;
+  type: string;
+  category: string;
+  sizeLabel: string;
+  width: number;
+  height: number;
+  usageCount: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface MediaListResponse {
+  items: MediaAsset[];
+  total: number;
+}
+
+export interface StatMetric {
+  label: string;
+  value: string;
+  delta: string;
+}
+
+export interface BarPoint {
+  label: string;
+  value: string;
+  percent: number;
+  tone?: string;
+}
+
+export interface TopPostStat {
+  title: string;
+  views: string;
+  bookmarks: number;
+  comments: number;
+  rssRate: string;
+}
+
+export interface SearchTermStat {
+  term: string;
+  count: number;
+}
+
+export interface ContentSuggestion {
+  title: string;
+  body: string;
+}
+
+export interface AdminStats {
+  metrics: StatMetric[];
+  trend: BarPoint[];
+  topPosts: TopPostStat[];
+  sources: BarPoint[];
+  searchTerms: SearchTermStat[];
+  suggestions: ContentSuggestion[];
+}
+
 export interface ListResponse<T> {
   items: T[];
   page: number;
@@ -387,6 +502,36 @@ export async function createAdminMessage(payload: {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export async function getAdminSettings(): Promise<OperationsSettings> {
+  return request<OperationsSettings>("/admin/settings");
+}
+
+export async function updateAdminSettings(payload: OperationsSettings): Promise<OperationsSettings> {
+  return request<OperationsSettings>("/admin/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getAdminNavigation(): Promise<OperationsNavigation> {
+  return request<OperationsNavigation>("/admin/navigation");
+}
+
+export async function updateAdminNavigation(payload: OperationsNavigation): Promise<OperationsNavigation> {
+  return request<OperationsNavigation>("/admin/navigation", {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getAdminMedia(): Promise<MediaListResponse> {
+  return request<MediaListResponse>("/admin/media");
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  return request<AdminStats>("/admin/stats");
 }
 
 export class ApiError extends Error {

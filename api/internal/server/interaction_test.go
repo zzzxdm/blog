@@ -272,6 +272,111 @@ func TestAccountCommentsBookmarksAndAdminModeration(t *testing.T) {
 	}
 }
 
+func TestAdminOperationsAPIs(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	anonReq := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
+	anonRec := httptest.NewRecorder()
+	router.ServeHTTP(anonRec, anonReq)
+	if anonRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected anonymous settings status 401, got %d", anonRec.Code)
+	}
+
+	userCookies := loginForTest(t, router, "linyi@example.com", "password")
+	userReq := httptest.NewRequest(http.MethodGet, "/api/admin/navigation", nil)
+	for _, cookie := range userCookies {
+		userReq.AddCookie(cookie)
+	}
+	userRec := httptest.NewRecorder()
+	router.ServeHTTP(userRec, userReq)
+	if userRec.Code != http.StatusForbidden {
+		t.Fatalf("expected user navigation status 403, got %d", userRec.Code)
+	}
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+
+	settingsReq := httptest.NewRequest(http.MethodPut, "/api/admin/settings", bytes.NewBufferString(`{
+		"siteName":"云间笔记 Pro",
+		"siteDescription":"更新后的站点描述",
+		"siteUrl":"https://blog.example.com",
+		"beian":"京ICP备00000000号",
+		"themePrimary":"#295b4b",
+		"homepageLayout":"专题优先",
+		"darkModeEnabled":true,
+		"readingProgressEnabled":true,
+		"commentsEnabled":true,
+		"loginRequiredForComment":true,
+		"autoApproveComments":false,
+		"blockedWords":["推广"],
+		"submissionsEnabled":true,
+		"submissionManualReview":true,
+		"submissionLimit":"每天最多 3 篇",
+		"submissionGuide":"保持原创。",
+		"mailEnabled":false,
+		"mailProvider":"Resend",
+		"fromEmail":"newsletter@example.com",
+		"adminTwoFactorRequired":true,
+		"loginFailureLock":true,
+		"sessionDays":7,
+		"backupCycle":"每日全量备份",
+		"backupRetentionDays":7
+	}`))
+	settingsReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		settingsReq.AddCookie(cookie)
+	}
+	settingsRec := httptest.NewRecorder()
+	router.ServeHTTP(settingsRec, settingsReq)
+	if settingsRec.Code != http.StatusOK || !strings.Contains(settingsRec.Body.String(), "云间笔记 Pro") {
+		t.Fatalf("expected settings updated, got status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
+	}
+
+	navigationReq := httptest.NewRequest(http.MethodPut, "/api/admin/navigation", bytes.NewBufferString(`{
+		"topItems":[{"id":"top_1","label":"首页","url":"/","order":1},{"id":"top_2","label":"归档","url":"/archive","order":2}],
+		"footerItems":[{"id":"footer_1","label":"RSS","url":"/rss.xml","order":1}],
+		"mobileCollapse":true,
+		"externalLinksNewWindow":true,
+		"showLoginEntry":true,
+		"githubUrl":"https://github.com/example",
+		"contactEmail":"hello@example.com",
+		"rssUrl":"/rss.xml",
+		"redirects":[{"from":"/old","to":"/new","code":301}]
+	}`))
+	navigationReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		navigationReq.AddCookie(cookie)
+	}
+	navigationRec := httptest.NewRecorder()
+	router.ServeHTTP(navigationRec, navigationReq)
+	if navigationRec.Code != http.StatusOK || !strings.Contains(navigationRec.Body.String(), `"label":"归档"`) {
+		t.Fatalf("expected navigation updated, got status=%d body=%q", navigationRec.Code, navigationRec.Body.String())
+	}
+
+	mediaReq := httptest.NewRequest(http.MethodGet, "/api/admin/media", nil)
+	for _, cookie := range adminCookies {
+		mediaReq.AddCookie(cookie)
+	}
+	mediaRec := httptest.NewRecorder()
+	router.ServeHTTP(mediaRec, mediaReq)
+	if mediaRec.Code != http.StatusOK || !strings.Contains(mediaRec.Body.String(), "cover-code-desk.jpg") {
+		t.Fatalf("expected media list, got status=%d body=%q", mediaRec.Code, mediaRec.Body.String())
+	}
+
+	statsReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
+	for _, cookie := range adminCookies {
+		statsReq.AddCookie(cookie)
+	}
+	statsRec := httptest.NewRecorder()
+	router.ServeHTTP(statsRec, statsReq)
+	if statsRec.Code != http.StatusOK || !strings.Contains(statsRec.Body.String(), `"label":"PV"`) {
+		t.Fatalf("expected stats response, got status=%d body=%q", statsRec.Code, statsRec.Body.String())
+	}
+}
+
 func loginForTest(t *testing.T, router http.Handler, email string, password string) []*http.Cookie {
 	t.Helper()
 
