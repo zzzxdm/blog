@@ -216,6 +216,10 @@ func (handler *Handler) Review(ctx *gin.Context) {
 			handler.writeSubmissionError(ctx, err)
 			return
 		}
+		if !canReviewSubmission(submission.Status) {
+			handler.writeSubmissionError(ctx, ErrInvalidReview)
+			return
+		}
 
 		if handler.publisher == nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post publisher is unavailable"})
@@ -304,4 +308,8 @@ func reviewMessage(submission Submission, action string) messages.CreateRequest 
 
 func canSubmit(user auth.User) bool {
 	return user.Status == "" || user.Status == "active"
+}
+
+func canReviewSubmission(status string) bool {
+	return status == StatusSubmitted || status == StatusReturned
 }
