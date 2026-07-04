@@ -76,7 +76,7 @@ function removeItem(target: "topItems" | "footerItems", item: NavItem) {
   <AdminLayout title="导航管理" description="配置前台顶部菜单、底部菜单、社交链接和常用重定向。" mobile-title="导航管理" primary-action="保存">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">预览站点</button>
+        <a class="button-secondary" href="/" target="_blank" rel="noreferrer">预览站点</a>
         <button class="button" type="button" :disabled="saving || !navigation" @click="save">{{ saving ? "保存中..." : "保存导航" }}</button>
       </div>
     </template>
