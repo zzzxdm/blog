@@ -22,18 +22,33 @@ type Repository interface {
 	ListByAuthor(ctx context.Context, userID string, query ListQuery) (ManageListResult, error)
 	AdminList(ctx context.Context, query ListQuery) (ManageListResult, error)
 	UpdateStatus(ctx context.Context, commentID string, status string) (Comment, error)
+	ToggleLike(ctx context.Context, commentID string, userID string) (Comment, error)
+	Report(ctx context.Context, commentID string, user auth.User, request ReportRequest) error
 }
 
 type MemoryRepository struct {
 	mu       sync.RWMutex
 	comments []Comment
+	likes    map[string]map[string]bool
+	reports  []CommentReport
 	nextID   int
 	now      func() time.Time
+}
+
+type CommentReport struct {
+	ID         string
+	CommentID  string
+	ReporterID string
+	Reason     string
+	Status     string
+	CreatedAt  time.Time
 }
 
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
 		comments: seedComments(),
+		likes:    map[string]map[string]bool{},
+		reports:  []CommentReport{},
 		nextID:   100,
 		now:      time.Now,
 	}
@@ -56,6 +71,7 @@ func (repo *MemoryRepository) List(_ context.Context, postSlug string, viewerID 
 		item := comment
 		item = repo.enrichLocked(item)
 		item.IsMine = viewerID != "" && comment.AuthorID == viewerID
+		item.Liked = repo.likedLocked(comment.ID, viewerID)
 		items = append(items, item)
 	}
 
@@ -162,6 +178,78 @@ func (repo *MemoryRepository) UpdateStatus(_ context.Context, commentID string, 
 	return Comment{}, ErrCommentNotFound
 }
 
+func (repo *MemoryRepository) ToggleLike(_ context.Context, commentID string, userID string) (Comment, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	for index := range repo.comments {
+		if repo.comments[index].ID != commentID {
+			continue
+		}
+
+		if repo.likes[commentID] == nil {
+			repo.likes[commentID] = map[string]bool{}
+		}
+
+		if repo.likes[commentID][userID] {
+			delete(repo.likes[commentID], userID)
+			if repo.comments[index].LikeCount > 0 {
+				repo.comments[index].LikeCount--
+			}
+		} else {
+			repo.likes[commentID][userID] = true
+			repo.comments[index].LikeCount++
+		}
+
+		comment := repo.enrichLocked(repo.comments[index])
+		comment.IsMine = comment.AuthorID == userID
+		comment.Liked = repo.likedLocked(commentID, userID)
+		return comment, nil
+	}
+
+	return Comment{}, ErrCommentNotFound
+}
+
+func (repo *MemoryRepository) Report(_ context.Context, commentID string, user auth.User, request ReportRequest) error {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	found := false
+	for _, comment := range repo.comments {
+		if comment.ID == commentID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ErrCommentNotFound
+	}
+
+	reason := strings.TrimSpace(request.Reason)
+	if reason == "" {
+		reason = "用户举报"
+	}
+
+	for index := range repo.reports {
+		if repo.reports[index].CommentID == commentID && repo.reports[index].ReporterID == user.ID {
+			repo.reports[index].Reason = reason
+			repo.reports[index].CreatedAt = repo.now()
+			return nil
+		}
+	}
+
+	repo.reports = append(repo.reports, CommentReport{
+		ID:         fmt.Sprintf("comment_report_%d", repo.now().UnixNano()),
+		CommentID:  commentID,
+		ReporterID: user.ID,
+		Reason:     reason,
+		Status:     "pending",
+		CreatedAt:  repo.now(),
+	})
+
+	return nil
+}
+
 func (repo *MemoryRepository) enrichLocked(comment Comment) Comment {
 	comment.PostTitle = titleForSlug(comment.PostSlug)
 	comment.RiskLevel = riskLevel(comment.Body)
@@ -173,6 +261,14 @@ func (repo *MemoryRepository) enrichLocked(comment Comment) Comment {
 	}
 
 	return comment
+}
+
+func (repo *MemoryRepository) likedLocked(commentID string, userID string) bool {
+	if userID == "" {
+		return false
+	}
+
+	return repo.likes[commentID] != nil && repo.likes[commentID][userID]
 }
 
 func (repo *MemoryRepository) statsByAuthorLocked(userID string) ManageStats {

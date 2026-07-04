@@ -17,6 +17,7 @@ type Comment struct {
 	RiskLevel  string    `json:"riskLevel,omitempty"`
 	IsMine     bool      `json:"isMine"`
 	IsAuthor   bool      `json:"isAuthor"`
+	Liked      bool      `json:"liked"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
@@ -53,4 +54,8 @@ type ManageListResult struct {
 
 type StatusRequest struct {
 	Status string `json:"status"`
+}
+
+type ReportRequest struct {
+	Reason string `json:"reason"`
 }

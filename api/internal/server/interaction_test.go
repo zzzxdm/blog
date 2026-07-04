@@ -226,6 +226,38 @@ func TestAccountCommentsBookmarksAndAdminModeration(t *testing.T) {
 		t.Fatalf("expected comment created, got status=%d body=%q", commentRec.Code, commentRec.Body.String())
 	}
 
+	replyReq := httptest.NewRequest(http.MethodPost, "/api/posts/blog-system-design/comments", bytes.NewBufferString(`{"body":"这是对首条评论的回复。","parentId":"comment_001"}`))
+	replyReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		replyReq.AddCookie(cookie)
+	}
+	replyRec := httptest.NewRecorder()
+	router.ServeHTTP(replyRec, replyReq)
+	if replyRec.Code != http.StatusCreated || !strings.Contains(replyRec.Body.String(), `"parentId":"comment_001"`) {
+		t.Fatalf("expected reply comment created, got status=%d body=%q", replyRec.Code, replyRec.Body.String())
+	}
+
+	likeCommentReq := httptest.NewRequest(http.MethodPut, "/api/comments/comment_001/like", nil)
+	for _, cookie := range userCookies {
+		likeCommentReq.AddCookie(cookie)
+	}
+	likeCommentRec := httptest.NewRecorder()
+	router.ServeHTTP(likeCommentRec, likeCommentReq)
+	if likeCommentRec.Code != http.StatusOK || !strings.Contains(likeCommentRec.Body.String(), `"liked":true`) {
+		t.Fatalf("expected liked comment, got status=%d body=%q", likeCommentRec.Code, likeCommentRec.Body.String())
+	}
+
+	reportReq := httptest.NewRequest(http.MethodPost, "/api/comments/comment_001/report", bytes.NewBufferString(`{"reason":"包含不准确信息"}`))
+	reportReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		reportReq.AddCookie(cookie)
+	}
+	reportRec := httptest.NewRecorder()
+	router.ServeHTTP(reportRec, reportReq)
+	if reportRec.Code != http.StatusOK || !strings.Contains(reportRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected comment report accepted, got status=%d body=%q", reportRec.Code, reportRec.Body.String())
+	}
+
 	var createdComment struct {
 		ID string `json:"id"`
 	}

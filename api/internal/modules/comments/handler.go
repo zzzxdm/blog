@@ -22,6 +22,8 @@ func RegisterRoutes(router gin.IRouter, repo Repository) {
 
 	router.GET("/posts/:slug/comments", handler.List)
 	router.POST("/posts/:slug/comments", handler.Create)
+	router.PUT("/comments/:id/like", handler.ToggleLike)
+	router.POST("/comments/:id/report", handler.Report)
 	router.GET("/comments/mine", handler.ListMine)
 	router.GET("/admin/comments", handler.AdminList)
 	router.PUT("/admin/comments/:id/status", handler.UpdateStatus)
@@ -63,6 +65,51 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, comment)
+}
+
+func (handler *Handler) ToggleLike(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	comment, err := handler.repo.ToggleLike(ctx.Request.Context(), ctx.Param("id"), user.ID)
+	if err != nil {
+		if errors.Is(err, ErrCommentNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update comment like"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, comment)
+}
+
+func (handler *Handler) Report(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	var request ReportRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid report payload"})
+		return
+	}
+
+	if err := handler.repo.Report(ctx.Request.Context(), ctx.Param("id"), user, request); err != nil {
+		if errors.Is(err, ErrCommentNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to report comment"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func (handler *Handler) ListMine(ctx *gin.Context) {

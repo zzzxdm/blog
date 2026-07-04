@@ -64,6 +64,7 @@ export interface Comment {
   riskLevel?: string;
   isMine: boolean;
   isAuthor: boolean;
+  liked: boolean;
   createdAt: string;
 }
 
@@ -487,6 +488,19 @@ export async function createComment(postSlug: string, body: string, parentId = "
   return request<Comment>(`/posts/${encodeURIComponent(postSlug)}/comments`, {
     method: "POST",
     body: JSON.stringify({ body, parentId })
+  });
+}
+
+export async function toggleCommentLike(id: string): Promise<Comment> {
+  return request<Comment>(`/comments/${encodeURIComponent(id)}/like`, {
+    method: "PUT"
+  });
+}
+
+export async function reportComment(id: string, reason: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/comments/${encodeURIComponent(id)}/report`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
   });
 }
 

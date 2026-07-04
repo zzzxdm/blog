@@ -36,6 +36,10 @@ func (repo *SQLRepository) List(ctx context.Context, postSlug string, viewerID s
 
 	for index := range items {
 		items[index].IsMine = viewerID != "" && items[index].AuthorID == viewerID
+		items[index].Liked, err = repo.likedByUser(ctx, items[index].ID, viewerID)
+		if err != nil {
+			return ListResult{}, err
+		}
 	}
 
 	return ListResult{
@@ -139,6 +143,88 @@ func (repo *SQLRepository) UpdateStatus(ctx context.Context, commentID string, s
 	return repo.getByID(ctx, id)
 }
 
+func (repo *SQLRepository) ToggleLike(ctx context.Context, commentID string, userID string) (Comment, error) {
+	tx, err := repo.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, fmt.Errorf("begin comment like transaction: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var exists bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM comments WHERE id = $1)", commentID).Scan(&exists); err != nil {
+		return Comment{}, fmt.Errorf("check comment exists: %w", err)
+	}
+	if !exists {
+		return Comment{}, ErrCommentNotFound
+	}
+
+	var liked bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM comment_likes WHERE comment_id = $1 AND user_id = $2)", commentID, userID).Scan(&liked); err != nil {
+		return Comment{}, fmt.Errorf("check comment like: %w", err)
+	}
+
+	if liked {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM comment_likes WHERE comment_id = $1 AND user_id = $2", commentID, userID); err != nil {
+			return Comment{}, fmt.Errorf("delete comment like: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "UPDATE comments SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1", commentID); err != nil {
+			return Comment{}, fmt.Errorf("decrement comment like count: %w", err)
+		}
+	} else {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO comment_likes (comment_id, user_id) VALUES ($1, $2)", commentID, userID); err != nil {
+			return Comment{}, fmt.Errorf("insert comment like: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "UPDATE comments SET like_count = like_count + 1 WHERE id = $1", commentID); err != nil {
+			return Comment{}, fmt.Errorf("increment comment like count: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Comment{}, fmt.Errorf("commit comment like transaction: %w", err)
+	}
+	tx = nil
+
+	comment, err := repo.getByID(ctx, commentID)
+	if err != nil {
+		return Comment{}, err
+	}
+	comment.IsMine = comment.AuthorID == userID
+	comment.Liked = !liked
+
+	return comment, nil
+}
+
+func (repo *SQLRepository) Report(ctx context.Context, commentID string, user auth.User, request ReportRequest) error {
+	var exists bool
+	if err := repo.db.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM comments WHERE id = $1)", commentID).Scan(&exists); err != nil {
+		return fmt.Errorf("check comment exists: %w", err)
+	}
+	if !exists {
+		return ErrCommentNotFound
+	}
+
+	reason := trimString(request.Reason)
+	if reason == "" {
+		reason = "用户举报"
+	}
+
+	id := fmt.Sprintf("comment_report_%d", time.Now().UnixNano())
+	if _, err := repo.db.ExecContext(ctx, `
+		INSERT INTO comment_reports (id, comment_id, reporter_id, reason, status)
+		VALUES ($1, $2, $3, $4, 'pending')
+		ON CONFLICT (comment_id, reporter_id)
+		DO UPDATE SET reason = EXCLUDED.reason, status = 'pending'
+	`, id, commentID, user.ID, reason); err != nil {
+		return fmt.Errorf("upsert comment report: %w", err)
+	}
+
+	return nil
+}
+
 func (repo *SQLRepository) getByID(ctx context.Context, id string) (Comment, error) {
 	items, err := repo.queryComments(ctx, `WHERE c.id = $1`, id)
 	if err != nil {
@@ -149,6 +235,25 @@ func (repo *SQLRepository) getByID(ctx context.Context, id string) (Comment, err
 	}
 
 	return items[0], nil
+}
+
+func (repo *SQLRepository) likedByUser(ctx context.Context, commentID string, userID string) (bool, error) {
+	if userID == "" {
+		return false, nil
+	}
+
+	var liked bool
+	if err := repo.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM comment_likes
+			WHERE comment_id = $1 AND user_id = $2
+		)
+	`, commentID, userID).Scan(&liked); err != nil {
+		return false, fmt.Errorf("check comment liked: %w", err)
+	}
+
+	return liked, nil
 }
 
 func (repo *SQLRepository) queryComments(ctx context.Context, whereAndOrder string, args ...any) ([]Comment, error) {

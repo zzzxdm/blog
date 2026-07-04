@@ -7,8 +7,10 @@ import {
   createComment,
   getComments,
   getReaction,
+  reportComment,
   setBookmark,
   setPostReaction,
+  toggleCommentLike,
   type Comment,
   type ReactionSummary
 } from "../shared/api";
@@ -28,6 +30,9 @@ const commentTotal = ref(0);
 const commentBody = ref("");
 const commentsLoading = ref(false);
 const commentError = ref("");
+const commentNotice = ref("");
+const commentActionId = ref("");
+const replyTo = ref<Comment | null>(null);
 const reaction = ref<ReactionSummary | null>(null);
 const reactionLoading = ref(false);
 const reactionError = ref("");
@@ -93,6 +98,16 @@ function statusClass(status: Comment["status"]) {
 
 function renderedComment(body: string) {
   return renderMarkdown(body);
+}
+
+function startReply(comment: Comment) {
+  replyTo.value = comment;
+  commentError.value = "";
+  commentNotice.value = "";
+}
+
+function cancelReply() {
+  replyTo.value = null;
 }
 
 async function loadComments(slug: string) {
@@ -175,12 +190,15 @@ async function submitComment() {
   }
 
   commentError.value = "";
+  commentNotice.value = "";
 
   try {
-    const created = await createComment(post.value.slug, commentBody.value);
-    comments.value = [created, ...comments.value];
+    const created = await createComment(post.value.slug, commentBody.value, replyTo.value?.id ?? "");
+    comments.value = insertComment(comments.value, created);
     commentTotal.value += 1;
     commentBody.value = "";
+    replyTo.value = null;
+    commentNotice.value = "评论已提交，等待审核。";
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       commentError.value = "登录状态已过期，请重新登录";
@@ -188,6 +206,61 @@ async function submitComment() {
     }
     commentError.value = error instanceof Error ? error.message : "评论提交失败";
   }
+}
+
+async function likeComment(comment: Comment) {
+  if (!auth.user) {
+    commentError.value = "请先登录后再点赞评论";
+    return;
+  }
+
+  commentActionId.value = comment.id;
+  commentError.value = "";
+  commentNotice.value = "";
+
+  try {
+    const updated = await toggleCommentLike(comment.id);
+    comments.value = comments.value.map((item) => (item.id === updated.id ? { ...item, ...updated } : item));
+  } catch (error) {
+    commentError.value = error instanceof Error ? error.message : "评论点赞失败";
+  } finally {
+    commentActionId.value = "";
+  }
+}
+
+async function reportCommentAction(comment: Comment) {
+  if (!auth.user) {
+    commentError.value = "请先登录后再举报评论";
+    return;
+  }
+
+  commentActionId.value = comment.id;
+  commentError.value = "";
+  commentNotice.value = "";
+
+  try {
+    await reportComment(comment.id, "读者举报");
+    commentNotice.value = "举报已提交，管理员会在后台审核。";
+  } catch (error) {
+    commentError.value = error instanceof Error ? error.message : "举报提交失败";
+  } finally {
+    commentActionId.value = "";
+  }
+}
+
+function insertComment(items: Comment[], created: Comment) {
+  if (!created.parentId) {
+    return [created, ...items];
+  }
+
+  const next = [...items];
+  const parentIndex = next.findIndex((item) => item.id === created.parentId);
+  if (parentIndex < 0) {
+    return [created, ...next];
+  }
+
+  next.splice(parentIndex + 1, 0, created);
+  return next;
 }
 
 onMounted(load);
@@ -335,13 +408,19 @@ interface Post {
                 </div>
               </div>
             </div>
+            <div v-if="replyTo" class="review-note">
+              <strong>回复 {{ replyTo.authorName }}</strong>
+              <p>{{ replyTo.body }}</p>
+              <button class="button-secondary" type="button" @click="cancelReply">取消回复</button>
+            </div>
             <textarea v-model="commentBody" placeholder="写下你的想法，支持 Markdown 基础语法"></textarea>
             <div class="meta-row">
-              <button class="button" type="button" :disabled="!commentBody.trim()" @click="submitComment">提交评论</button>
+              <button class="button" type="button" :disabled="!commentBody.trim()" @click="submitComment">{{ replyTo ? "提交回复" : "提交评论" }}</button>
               <span>评论提交后进入审核队列。</span>
               <RouterLink v-if="!auth.user" to="/login">去登录</RouterLink>
             </div>
             <p v-if="commentError" class="error">{{ commentError }}</p>
+            <p v-else-if="commentNotice" class="muted">{{ commentNotice }}</p>
           </div>
 
           <div class="comment-list">
@@ -369,10 +448,12 @@ interface Post {
                 </div>
                 <div class="comment-body" v-html="renderedComment(comment.body)"></div>
                 <div class="comment-actions">
-                  <button type="button">点赞 {{ comment.likeCount }}</button>
-                  <button type="button">回复</button>
+                  <button type="button" :disabled="commentActionId === comment.id" @click="likeComment(comment)">
+                    {{ comment.liked ? "已赞" : "点赞" }} {{ comment.likeCount }}
+                  </button>
+                  <button type="button" @click="startReply(comment)">回复{{ comment.replyCount ? ` ${comment.replyCount}` : "" }}</button>
                   <button v-if="comment.isMine" type="button">编辑</button>
-                  <button v-else type="button">举报</button>
+                  <button v-else type="button" :disabled="commentActionId === comment.id" @click="reportCommentAction(comment)">举报</button>
                 </div>
               </article>
             </template>
