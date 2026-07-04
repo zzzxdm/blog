@@ -445,6 +445,65 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 	}
 }
 
+func TestAdminPostSaveAndPublish(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/admin/posts", bytes.NewBufferString(`{
+		"title":"后台发布流程验证",
+		"summary":"验证管理员保存草稿后发布到前台。",
+		"content":"后台编辑器保存草稿后，发布动作应该调用公开文章发布能力。",
+		"status":"draft",
+		"category":"工程实践",
+		"tags":["后台","发布"],
+		"slug":"admin-publish-flow-check",
+		"coverImage":"https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1200&q=80",
+		"seoTitle":"后台发布流程验证",
+		"seoDescription":"验证管理员保存草稿后发布到前台。"
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		createReq.AddCookie(cookie)
+	}
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected admin post created, got status=%d body=%q", createRec.Code, createRec.Body.String())
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode admin post: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatalf("expected admin post id, got %q", createRec.Body.String())
+	}
+
+	publishReq := httptest.NewRequest(http.MethodPost, "/api/admin/posts/"+created.ID+"/publish", nil)
+	for _, cookie := range adminCookies {
+		publishReq.AddCookie(cookie)
+	}
+	publishRec := httptest.NewRecorder()
+	router.ServeHTTP(publishRec, publishReq)
+	if publishRec.Code != http.StatusOK || !strings.Contains(publishRec.Body.String(), `"status":"published"`) {
+		t.Fatalf("expected admin post published, got status=%d body=%q", publishRec.Code, publishRec.Body.String())
+	}
+
+	publicReq := httptest.NewRequest(http.MethodGet, "/api/posts/admin-publish-flow-check", nil)
+	publicRec := httptest.NewRecorder()
+	router.ServeHTTP(publicRec, publicReq)
+	if publicRec.Code != http.StatusOK || !strings.Contains(publicRec.Body.String(), "后台发布流程验证") {
+		t.Fatalf("expected public post after publish, got status=%d body=%q", publicRec.Code, publicRec.Body.String())
+	}
+}
+
 func loginForTest(t *testing.T, router http.Handler, email string, password string) []*http.Cookie {
 	t.Helper()
 

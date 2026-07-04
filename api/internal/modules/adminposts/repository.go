@@ -1,0 +1,341 @@
+package adminposts
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"blog/api/internal/modules/posts"
+)
+
+var (
+	ErrPostNotFound = errors.New("admin post not found")
+	ErrInvalidPost  = errors.New("invalid admin post")
+)
+
+type Repository interface {
+	List(ctx context.Context) (ListResult, error)
+	Get(ctx context.Context, id string) (AdminPost, error)
+	Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error)
+	Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error)
+}
+
+type MemoryRepository struct {
+	mu     sync.RWMutex
+	items  map[string]AdminPost
+	nextID int
+	now    func() time.Time
+}
+
+func NewMemoryRepository() *MemoryRepository {
+	items := seedAdminPosts()
+	return &MemoryRepository{
+		items:  items,
+		nextID: 100,
+		now:    time.Now,
+	}
+}
+
+func (repo *MemoryRepository) List(_ context.Context) (ListResult, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	items := make([]AdminPost, 0, len(repo.items))
+	for _, item := range repo.items {
+		items = append(items, item)
+	}
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+
+	return ListResult{
+		Items: items,
+		Total: len(items),
+		Stats: countStats(items),
+	}, nil
+}
+
+func (repo *MemoryRepository) Get(_ context.Context, id string) (AdminPost, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	item, ok := repo.items[id]
+	if !ok {
+		return AdminPost{}, ErrPostNotFound
+	}
+
+	return clonePost(item), nil
+}
+
+func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveRequest) (AdminPost, error) {
+	title := strings.TrimSpace(request.Title)
+	content := strings.TrimSpace(request.Content)
+	if title == "" {
+		return AdminPost{}, ErrInvalidPost
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	now := repo.now()
+	item, ok := repo.items[id]
+	if !ok {
+		item = AdminPost{
+			ID:         fmt.Sprintf("admin_post_%03d", repo.nextID),
+			AuthorName: "管理员",
+			Status:     StatusDraft,
+			Version:    0,
+			UpdatedAt:  now,
+		}
+		repo.nextID++
+	}
+
+	item.Slug = defaultString(slugify(request.Slug), slugify(title))
+	item.Title = title
+	item.Summary = strings.TrimSpace(request.Summary)
+	item.Content = content
+	item.Category = defaultString(strings.TrimSpace(request.Category), "工程实践")
+	item.Tags = normalizeTags(request.Tags)
+	item.CoverImage = defaultString(strings.TrimSpace(request.CoverImage), "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80")
+	item.SEOtitle = defaultString(strings.TrimSpace(request.SEOtitle), title)
+	item.SEODescription = defaultString(strings.TrimSpace(request.SEODescription), item.Summary)
+	item.ReadingTime = estimateReadingTime(content)
+	item.UpdatedAt = now
+	item.Version++
+	if request.Status != "" {
+		item.Status = normalizeStatus(request.Status)
+	}
+	if item.Status == "" {
+		item.Status = StatusDraft
+	}
+
+	repo.items[item.ID] = item
+	return clonePost(item), nil
+}
+
+func (repo *MemoryRepository) Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error) {
+	repo.mu.Lock()
+	item, ok := repo.items[id]
+	if !ok {
+		repo.mu.Unlock()
+		return AdminPost{}, ErrPostNotFound
+	}
+	if strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.Content) == "" {
+		repo.mu.Unlock()
+		return AdminPost{}, ErrInvalidPost
+	}
+	if item.Status == StatusPublished && item.PublishedPostSlug != "" {
+		repo.mu.Unlock()
+		return clonePost(item), nil
+	}
+	repo.mu.Unlock()
+
+	if publisher == nil {
+		return AdminPost{}, ErrInvalidPost
+	}
+
+	published, err := publisher.Publish(ctx, posts.PublishInput{
+		Slug:       item.Slug,
+		Title:      item.Title,
+		Summary:    item.Summary,
+		Content:    item.Content,
+		Category:   item.Category,
+		Tags:       item.Tags,
+		CoverImage: item.CoverImage,
+		AuthorName: item.AuthorName,
+	})
+	if err != nil {
+		return AdminPost{}, err
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	now := repo.now()
+	item.Status = StatusPublished
+	item.PublishedPostSlug = published.Slug
+	item.PublishedAt = &now
+	item.UpdatedAt = now
+	item.ViewCount = published.ViewCount
+	item.CommentCount = published.CommentCount
+	repo.items[item.ID] = item
+
+	return clonePost(item), nil
+}
+
+func countStats(items []AdminPost) Stats {
+	stats := Stats{Total: len(items), MonthlyViews: "16.8k"}
+	for _, item := range items {
+		switch item.Status {
+		case StatusPublished:
+			stats.Published++
+		case StatusDraft:
+			stats.Draft++
+		case StatusReview:
+			stats.Review++
+		}
+	}
+
+	return stats
+}
+
+func clonePost(item AdminPost) AdminPost {
+	item.Tags = append([]string{}, item.Tags...)
+	return item
+}
+
+func normalizeStatus(status string) string {
+	status = strings.ToLower(strings.TrimSpace(status))
+	switch status {
+	case StatusPublished, StatusReview, StatusScheduled, StatusArchived:
+		return status
+	default:
+		return StatusDraft
+	}
+}
+
+func normalizeTags(tags []string) []string {
+	result := make([]string, 0, len(tags))
+	seen := map[string]bool{}
+	for _, tag := range tags {
+		value := strings.TrimSpace(tag)
+		key := strings.ToLower(value)
+		if value == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, value)
+	}
+
+	return result
+}
+
+func slugify(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var builder strings.Builder
+	lastDash := false
+	for _, item := range value {
+		isLetter := item >= 'a' && item <= 'z'
+		isDigit := item >= '0' && item <= '9'
+		if isLetter || isDigit {
+			builder.WriteRune(item)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteRune('-')
+			lastDash = true
+		}
+	}
+
+	return strings.Trim(builder.String(), "-")
+}
+
+func estimateReadingTime(content string) int {
+	runes := len([]rune(strings.TrimSpace(content)))
+	if runes == 0 {
+		return 1
+	}
+	minutes := runes / 500
+	if runes%500 != 0 {
+		minutes++
+	}
+	if minutes < 1 {
+		return 1
+	}
+
+	return minutes
+}
+
+func defaultString(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+
+	return value
+}
+
+func seedAdminPosts() map[string]AdminPost {
+	now := time.Now()
+	publishedAt := now.Add(-2 * time.Hour)
+	scheduledAt := time.Date(2026, 7, 4, 20, 0, 0, 0, time.Local)
+	items := []AdminPost{
+		{
+			ID:                "admin_post_001",
+			Slug:              "blog-system-design",
+			Title:             "如何设计一个内容长期增长的博客系统",
+			Summary:           "博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。",
+			Content:           "一个现代化博客系统需要从内容资产的生命周期开始设计。",
+			Status:            StatusPublished,
+			Category:          "工程实践",
+			Tags:              []string{"博客系统", "架构", "内容治理"},
+			CoverImage:        "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80",
+			AuthorName:        "管理员",
+			ReadingTime:       12,
+			ViewCount:         2984,
+			CommentCount:      34,
+			SEOtitle:          "如何设计一个现代化博客系统",
+			SEODescription:    "从内容模型、发布流程、SEO、缓存和运营能力设计一个可长期维护的博客系统。",
+			Version:           4,
+			PublishedPostSlug: "blog-system-design",
+			PublishedAt:       &publishedAt,
+			UpdatedAt:         now.Add(-2 * time.Hour),
+		},
+		{
+			ID:          "admin_post_002",
+			Slug:        "vue3-content-site-cache-seo",
+			Title:       "Vue3 内容站的缓存与 SEO 边界",
+			Summary:     "客户端渲染、接口缓存和服务端 meta 需要明确边界。",
+			Content:     "Vue3 内容站可以保持前端开发效率，同时通过 Go 输出基础 HTML。",
+			Status:      StatusScheduled,
+			Category:    "Vue3",
+			Tags:        []string{"Vue3", "SEO", "缓存"},
+			CoverImage:  "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=1400&q=80",
+			AuthorName:  "管理员",
+			Version:     2,
+			ScheduledAt: &scheduledAt,
+			UpdatedAt:   now.Add(-8 * time.Hour),
+		},
+		{
+			ID:           "admin_post_003",
+			Slug:         "post-version-history",
+			Title:        "为什么博客后台需要文章版本历史",
+			Summary:      "版本记录不是复杂功能，而是内容资产的基本保险。",
+			Content:      "文章会被持续修订，后台需要记录版本历史、修改人、变更摘要和回滚能力。",
+			Status:       StatusReview,
+			Category:     "内容治理",
+			Tags:         []string{"版本历史", "内容治理"},
+			CoverImage:   "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80",
+			AuthorName:   "管理员",
+			ViewCount:    1988,
+			CommentCount: 12,
+			Version:      3,
+			UpdatedAt:    now.AddDate(0, 0, -1),
+		},
+		{
+			ID:         "admin_post_004",
+			Slug:       "markdown-writing-experience",
+			Title:      "把 Markdown 写作体验做到顺手",
+			Summary:    "编辑器、预览、封面和 SEO 字段要服务写作流程。",
+			Content:    "Markdown 编辑器需要稳定的草稿保存、预览、图片插入、代码块处理和 SEO 字段编辑。",
+			Status:     StatusDraft,
+			Category:   "编辑器",
+			Tags:       []string{"Markdown", "写作工作流"},
+			AuthorName: "管理员",
+			Version:    1,
+			UpdatedAt:  now.Add(-2 * time.Minute),
+		},
+	}
+
+	result := map[string]AdminPost{}
+	for _, item := range items {
+		result[item.ID] = item
+	}
+
+	return result
+}

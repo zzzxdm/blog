@@ -375,6 +375,58 @@ export interface AccountSettings {
   updatedAt: string;
 }
 
+export type AdminPostStatus = "draft" | "review" | "scheduled" | "published" | "archived";
+
+export interface AdminPost {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  content: string;
+  status: AdminPostStatus;
+  category: string;
+  tags: string[];
+  coverImage: string;
+  authorName: string;
+  readingTime: number;
+  viewCount: number;
+  commentCount: number;
+  seoTitle: string;
+  seoDescription: string;
+  version: number;
+  publishedPostSlug?: string;
+  scheduledAt?: string;
+  publishedAt?: string;
+  updatedAt: string;
+}
+
+export interface AdminPostStats {
+  published: number;
+  draft: number;
+  review: number;
+  monthlyViews: string;
+  total: number;
+}
+
+export interface AdminPostListResponse {
+  items: AdminPost[];
+  total: number;
+  stats: AdminPostStats;
+}
+
+export interface AdminPostPayload {
+  slug: string;
+  title: string;
+  summary: string;
+  content: string;
+  status: AdminPostStatus;
+  category: string;
+  tags: string[];
+  coverImage: string;
+  seoTitle: string;
+  seoDescription: string;
+}
+
 export interface ListResponse<T> {
   items: T[];
   page: number;
@@ -608,6 +660,34 @@ export async function updateAccountSettings(payload: AccountSettings): Promise<A
   return request<AccountSettings>("/account/settings", {
     method: "PUT",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function getAdminPosts(): Promise<AdminPostListResponse> {
+  return request<AdminPostListResponse>("/admin/posts");
+}
+
+export async function getAdminPost(id: string): Promise<AdminPost> {
+  return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}`);
+}
+
+export async function createAdminPost(payload: AdminPostPayload): Promise<AdminPost> {
+  return request<AdminPost>("/admin/posts", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateAdminPost(id: string, payload: AdminPostPayload): Promise<AdminPost> {
+  return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function publishAdminPost(id: string): Promise<AdminPost> {
+  return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/publish`, {
+    method: "POST"
   });
 }
 

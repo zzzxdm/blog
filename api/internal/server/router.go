@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"blog/api/internal/config"
+	"blog/api/internal/modules/adminposts"
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/comments"
 	"blog/api/internal/modules/messages"
@@ -34,6 +35,7 @@ type Repositories struct {
 	SubmissionRepo submissions.Repository
 	OperationsRepo operations.Repository
 	UserRepo       users.Repository
+	AdminPostRepo  adminposts.Repository
 }
 
 func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engine {
@@ -65,6 +67,9 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	if repos.UserRepo == nil {
 		repos.UserRepo = users.NewMemoryRepository()
 	}
+	if repos.AdminPostRepo == nil {
+		repos.AdminPostRepo = adminposts.NewMemoryRepository()
+	}
 
 	router := gin.New()
 	router.Use(gin.Logger())
@@ -95,6 +100,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	if item, ok := repos.PostRepo.(posts.Publisher); ok {
 		publisher = item
 	}
+	adminposts.RegisterRoutes(api, repos.AdminPostRepo, publisher)
 	submissions.RegisterRoutes(api, repos.SubmissionRepo, repos.MessageRepo, publisher)
 
 	return router
