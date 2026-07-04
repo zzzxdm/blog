@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 	router.PATCH("/admin/media/:id", handler.UpdateMedia)
 	router.DELETE("/admin/media/:id", handler.DeleteMedia)
 	router.GET("/admin/stats", handler.GetStats)
+	router.GET("/admin/audit-logs", handler.ListAuditLogs)
 }
 
 func (handler *Handler) GetSettings(ctx *gin.Context) {
@@ -301,6 +303,25 @@ func (handler *Handler) GetStats(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, stats)
 }
 
+func (handler *Handler) ListAuditLogs(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.ListAuditLogs(ctx.Request.Context(), AuditLogQuery{
+		Action:       ctx.Query("action"),
+		ResourceType: ctx.Query("resourceType"),
+		Page:         parsePositiveInt(ctx.Query("page")),
+		PageSize:     parsePositiveInt(ctx.Query("pageSize")),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load audit logs"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
 func (handler *Handler) writeMediaError(ctx *gin.Context, err error) {
 	if errors.Is(err, ErrMediaNotFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "media asset not found"})
@@ -464,4 +485,13 @@ func formatBytes(size int64) string {
 	}
 
 	return fmt.Sprintf("%.1f MB", kb/unit)
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 1 {
+		return 0
+	}
+
+	return parsed
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -161,6 +162,76 @@ func (repo *SQLRepository) GetStats(_ context.Context) (Stats, error) {
 	return cloneStats(seedStats()), nil
 }
 
+func (repo *SQLRepository) ListAuditLogs(ctx context.Context, query AuditLogQuery) (AuditLogListResult, error) {
+	query = normalizeAuditLogQuery(query)
+	where := []string{"1 = 1"}
+	args := make([]any, 0)
+
+	if query.Action != "" {
+		args = append(args, query.Action)
+		where = append(where, fmt.Sprintf("action = $%d", len(args)))
+	}
+	if query.ResourceType != "" {
+		args = append(args, query.ResourceType)
+		where = append(where, fmt.Sprintf("resource_type = $%d", len(args)))
+	}
+
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := repo.db.QueryRowContext(ctx, "SELECT count(*) FROM audit_logs WHERE "+whereSQL, args...).Scan(&total); err != nil {
+		return AuditLogListResult{}, fmt.Errorf("count audit logs: %w", err)
+	}
+
+	args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
+	rows, err := repo.db.QueryContext(ctx, `
+		SELECT id, actor_id, actor_name, action, resource_type, resource_id, resource_title, status, ip, user_agent, detail, created_at
+		FROM audit_logs
+		WHERE `+whereSQL+`
+		ORDER BY created_at DESC, id DESC
+		LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args))+`
+	`, args...)
+	if err != nil {
+		return AuditLogListResult{}, fmt.Errorf("query audit logs: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]AuditLog, 0)
+	for rows.Next() {
+		var item AuditLog
+		if err := rows.Scan(
+			&item.ID,
+			&item.ActorID,
+			&item.ActorName,
+			&item.Action,
+			&item.ResourceType,
+			&item.ResourceID,
+			&item.ResourceTitle,
+			&item.Status,
+			&item.IP,
+			&item.UserAgent,
+			&item.Detail,
+			&item.CreatedAt,
+		); err != nil {
+			return AuditLogListResult{}, fmt.Errorf("scan audit log: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return AuditLogListResult{}, fmt.Errorf("iterate audit logs: %w", err)
+	}
+
+	return AuditLogListResult{
+		Items:    items,
+		Page:     query.Page,
+		PageSize: query.PageSize,
+		Total:    total,
+	}, nil
+}
+
+func (repo *SQLRepository) RecordAuditLog(ctx context.Context, item AuditLog) error {
+	return repo.insertAuditLog(ctx, normalizeAuditLog(item, time.Now()), false)
+}
+
 func (repo *SQLRepository) ensureSeedData(ctx context.Context) error {
 	if err := repo.ensureDocument(ctx, settingsDocumentKey, seedSettings()); err != nil {
 		return err
@@ -171,6 +242,11 @@ func (repo *SQLRepository) ensureSeedData(ctx context.Context) error {
 
 	for _, asset := range seedMedia() {
 		if err := repo.insertMedia(ctx, asset, true); err != nil {
+			return err
+		}
+	}
+	for _, item := range seedAuditLogs() {
+		if err := repo.insertAuditLog(ctx, item, true); err != nil {
 			return err
 		}
 	}
@@ -255,6 +331,38 @@ func (repo *SQLRepository) insertMedia(ctx context.Context, asset MediaAsset, ig
 		asset.UploadedAt,
 	); err != nil {
 		return fmt.Errorf("insert media asset %s: %w", asset.ID, err)
+	}
+
+	return nil
+}
+
+func (repo *SQLRepository) insertAuditLog(ctx context.Context, item AuditLog, ignoreConflict bool) error {
+	query := `
+		INSERT INTO audit_logs (
+			id, actor_id, actor_name, action, resource_type, resource_id, resource_title,
+			status, ip, user_agent, detail, created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`
+	if ignoreConflict {
+		query += " ON CONFLICT (id) DO NOTHING"
+	}
+
+	if _, err := repo.db.ExecContext(ctx, query,
+		item.ID,
+		item.ActorID,
+		item.ActorName,
+		item.Action,
+		item.ResourceType,
+		item.ResourceID,
+		item.ResourceTitle,
+		item.Status,
+		item.IP,
+		item.UserAgent,
+		item.Detail,
+		item.CreatedAt,
+	); err != nil {
+		return fmt.Errorf("insert audit log %s: %w", item.ID, err)
 	}
 
 	return nil

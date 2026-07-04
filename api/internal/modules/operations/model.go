@@ -121,3 +121,32 @@ type Stats struct {
 	SearchTerms []SearchTerm        `json:"searchTerms"`
 	Suggestions []ContentSuggestion `json:"suggestions"`
 }
+
+type AuditLog struct {
+	ID            string    `json:"id"`
+	ActorID       string    `json:"actorId"`
+	ActorName     string    `json:"actorName"`
+	Action        string    `json:"action"`
+	ResourceType  string    `json:"resourceType"`
+	ResourceID    string    `json:"resourceId"`
+	ResourceTitle string    `json:"resourceTitle"`
+	Status        string    `json:"status"`
+	IP            string    `json:"ip"`
+	UserAgent     string    `json:"userAgent"`
+	Detail        string    `json:"detail"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type AuditLogQuery struct {
+	Action       string
+	ResourceType string
+	Page         int
+	PageSize     int
+}
+
+type AuditLogListResult struct {
+	Items    []AuditLog `json:"items"`
+	Page     int        `json:"page"`
+	PageSize int        `json:"pageSize"`
+	Total    int        `json:"total"`
+}

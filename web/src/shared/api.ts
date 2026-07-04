@@ -385,6 +385,35 @@ export interface AdminStats {
   suggestions: ContentSuggestion[];
 }
 
+export interface AuditLog {
+  id: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  resourceTitle: string;
+  status: "success" | "blocked" | "error";
+  ip: string;
+  userAgent: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLog[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface AuditLogParams {
+  page?: number;
+  pageSize?: number;
+  action?: string;
+  resourceType?: string;
+}
+
 export interface ManagedUser {
   id: string;
   email: string;
@@ -872,6 +901,11 @@ export async function deleteAdminMedia(id: string): Promise<{ ok: boolean; asset
 
 export async function getAdminStats(): Promise<AdminStats> {
   return request<AdminStats>("/admin/stats");
+}
+
+export async function getAdminAuditLogs(params: AuditLogParams = {}): Promise<AuditLogListResponse> {
+  const query = toQuery(params);
+  return request<AuditLogListResponse>(`/admin/audit-logs${query}`);
 }
 
 export async function getAdminUsers(): Promise<UserListResponse> {

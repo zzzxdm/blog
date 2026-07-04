@@ -6,6 +6,7 @@ import AccountCommentsPage from "../pages/account/AccountCommentsPage.vue";
 import AccountMessagesPage from "../pages/account/AccountMessagesPage.vue";
 import AccountSettingsPage from "../pages/account/AccountSettingsPage.vue";
 import AccountSubmissionsPage from "../pages/account/AccountSubmissionsPage.vue";
+import AdminAuditPage from "../pages/admin/AdminAuditPage.vue";
 import AdminCommentsPage from "../pages/admin/AdminCommentsPage.vue";
 import AdminEditorPage from "../pages/admin/AdminEditorPage.vue";
 import AdminHome from "../pages/admin/AdminHome.vue";
@@ -52,6 +53,7 @@ export const router = createRouter({
     { path: "/admin/media", name: "admin-media", component: AdminMediaPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/navigation", name: "admin-navigation", component: AdminNavigationPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/stats", name: "admin-stats", component: AdminStatsPage, meta: { hideChrome: true, requiresAdmin: true } },
+    { path: "/admin/audit", name: "admin-audit", component: AdminAuditPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/settings", name: "admin-settings", component: AdminSettingsPage, meta: { hideChrome: true, requiresAdmin: true } }
   ],
   scrollBehavior() {

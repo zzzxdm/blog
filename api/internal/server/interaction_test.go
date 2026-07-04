@@ -516,6 +516,43 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	if statsRec.Code != http.StatusOK || !strings.Contains(statsRec.Body.String(), `"label":"PV"`) {
 		t.Fatalf("expected stats response, got status=%d body=%q", statsRec.Code, statsRec.Body.String())
 	}
+
+	auditReq := httptest.NewRequest(http.MethodGet, "/api/admin/audit-logs?pageSize=20", nil)
+	for _, cookie := range adminCookies {
+		auditReq.AddCookie(cookie)
+	}
+	auditRec := httptest.NewRecorder()
+	router.ServeHTTP(auditRec, auditReq)
+	if auditRec.Code != http.StatusOK {
+		t.Fatalf("expected audit logs response, got status=%d body=%q", auditRec.Code, auditRec.Body.String())
+	}
+
+	var auditLogs struct {
+		Items []struct {
+			Action       string `json:"action"`
+			ActorName    string `json:"actorName"`
+			ResourceType string `json:"resourceType"`
+			Status       string `json:"status"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(auditRec.Body.Bytes(), &auditLogs); err != nil {
+		t.Fatalf("decode audit logs: %v", err)
+	}
+	if auditLogs.Total == 0 {
+		t.Fatalf("expected audit logs to be recorded, got %+v", auditLogs)
+	}
+
+	var foundSettingsUpdate bool
+	for _, item := range auditLogs.Items {
+		if item.Action == "settings.update" && item.ActorName == "管理员" && item.ResourceType == "settings" && item.Status == "success" {
+			foundSettingsUpdate = true
+			break
+		}
+	}
+	if !foundSettingsUpdate {
+		t.Fatalf("expected settings update audit log, got %+v", auditLogs)
+	}
 }
 
 func TestUsersAndAccountSettingsAPIs(t *testing.T) {

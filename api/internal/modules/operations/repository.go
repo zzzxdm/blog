@@ -3,6 +3,9 @@ package operations
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,6 +26,8 @@ type Repository interface {
 	UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error)
 	DeleteMedia(ctx context.Context, id string) (MediaAsset, error)
 	GetStats(ctx context.Context) (Stats, error)
+	ListAuditLogs(ctx context.Context, query AuditLogQuery) (AuditLogListResult, error)
+	RecordAuditLog(ctx context.Context, item AuditLog) error
 }
 
 type MemoryRepository struct {
@@ -31,6 +36,7 @@ type MemoryRepository struct {
 	navigation Navigation
 	media      []MediaAsset
 	stats      Stats
+	auditLogs  []AuditLog
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -39,6 +45,7 @@ func NewMemoryRepository() *MemoryRepository {
 		navigation: seedNavigation(),
 		media:      seedMedia(),
 		stats:      seedStats(),
+		auditLogs:  seedAuditLogs(),
 	}
 }
 
@@ -151,6 +158,54 @@ func (repo *MemoryRepository) GetStats(_ context.Context) (Stats, error) {
 	return cloneStats(repo.stats), nil
 }
 
+func (repo *MemoryRepository) ListAuditLogs(_ context.Context, query AuditLogQuery) (AuditLogListResult, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	query = normalizeAuditLogQuery(query)
+	filtered := make([]AuditLog, 0, len(repo.auditLogs))
+	for _, item := range repo.auditLogs {
+		if query.Action != "" && item.Action != query.Action {
+			continue
+		}
+		if query.ResourceType != "" && item.ResourceType != query.ResourceType {
+			continue
+		}
+
+		filtered = append(filtered, cloneAuditLog(item))
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].CreatedAt.After(filtered[j].CreatedAt)
+	})
+
+	total := len(filtered)
+	start := (query.Page - 1) * query.PageSize
+	if start > total {
+		start = total
+	}
+	end := start + query.PageSize
+	if end > total {
+		end = total
+	}
+
+	return AuditLogListResult{
+		Items:    filtered[start:end],
+		Page:     query.Page,
+		PageSize: query.PageSize,
+		Total:    total,
+	}, nil
+}
+
+func (repo *MemoryRepository) RecordAuditLog(_ context.Context, item AuditLog) error {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	item = normalizeAuditLog(item, time.Now())
+	repo.auditLogs = append([]AuditLog{item}, repo.auditLogs...)
+	return nil
+}
+
 func cloneSettings(settings Settings) Settings {
 	settings.BlockedWords = append([]string{}, settings.BlockedWords...)
 	return settings
@@ -171,6 +226,56 @@ func cloneStats(stats Stats) Stats {
 	stats.SearchTerms = append([]SearchTerm{}, stats.SearchTerms...)
 	stats.Suggestions = append([]ContentSuggestion{}, stats.Suggestions...)
 	return stats
+}
+
+func cloneAuditLog(item AuditLog) AuditLog {
+	return item
+}
+
+func normalizeAuditLogQuery(query AuditLogQuery) AuditLogQuery {
+	query.Action = strings.TrimSpace(query.Action)
+	query.ResourceType = strings.TrimSpace(query.ResourceType)
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize < 1 {
+		query.PageSize = 20
+	}
+	if query.PageSize > 100 {
+		query.PageSize = 100
+	}
+
+	return query
+}
+
+func normalizeAuditLog(item AuditLog, now time.Time) AuditLog {
+	if item.ID == "" {
+		item.ID = fmt.Sprintf("audit_%d", now.UnixNano())
+	}
+	item.ActorID = strings.TrimSpace(item.ActorID)
+	item.ActorName = defaultAuditString(item.ActorName, "匿名用户")
+	item.Action = defaultAuditString(item.Action, "admin.write")
+	item.ResourceType = defaultAuditString(item.ResourceType, "admin")
+	item.ResourceID = strings.TrimSpace(item.ResourceID)
+	item.ResourceTitle = strings.TrimSpace(item.ResourceTitle)
+	item.Status = defaultAuditString(item.Status, "success")
+	item.IP = strings.TrimSpace(item.IP)
+	item.UserAgent = strings.TrimSpace(item.UserAgent)
+	item.Detail = strings.TrimSpace(item.Detail)
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+
+	return item
+}
+
+func defaultAuditString(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+
+	return value
 }
 
 func seedSettings() Settings {
@@ -279,6 +384,53 @@ func seedStats() Stats {
 		Suggestions: []ContentSuggestion{
 			{Title: "搜索词“评论审核”增长明显", Body: "可以补一篇用户评论系统设计。"},
 			{Title: "专题页带来 18% 收藏", Body: "建议继续完善专题导航。"},
+		},
+	}
+}
+
+func seedAuditLogs() []AuditLog {
+	now := time.Now()
+	return []AuditLog{
+		{
+			ID:            "audit_001",
+			ActorID:       "user_admin",
+			ActorName:     "管理员",
+			Action:        "post.publish",
+			ResourceType:  "post",
+			ResourceID:    "admin_post_001",
+			ResourceTitle: "如何设计一个内容长期增长的博客系统",
+			Status:        "success",
+			IP:            "127.0.0.1",
+			UserAgent:     "seed",
+			Detail:        "发布文章到前台",
+			CreatedAt:     now.Add(-2 * time.Hour),
+		},
+		{
+			ID:            "audit_002",
+			ActorID:       "user_admin",
+			ActorName:     "管理员",
+			Action:        "comment.moderate",
+			ResourceType:  "comment",
+			ResourceID:    "comment_001",
+			ResourceTitle: "评论审核",
+			Status:        "success",
+			IP:            "127.0.0.1",
+			UserAgent:     "seed",
+			Detail:        "审核通过读者评论",
+			CreatedAt:     now.Add(-5 * time.Hour),
+		},
+		{
+			ID:            "audit_003",
+			ActorID:       "user_admin",
+			ActorName:     "管理员",
+			Action:        "settings.update",
+			ResourceType:  "settings",
+			ResourceTitle: "系统设置",
+			Status:        "success",
+			IP:            "127.0.0.1",
+			UserAgent:     "seed",
+			Detail:        "更新评论和投稿策略",
+			CreatedAt:     now.Add(-24 * time.Hour),
 		},
 	}
 }

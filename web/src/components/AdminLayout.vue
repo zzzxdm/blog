@@ -23,6 +23,7 @@ const navItems = [
   { label: "媒体库", to: "/admin/media" },
   { label: "导航", to: "/admin/navigation" },
   { label: "统计", to: "/admin/stats" },
+  { label: "日志", to: "/admin/audit" },
   { label: "设置", to: "/admin/settings" }
 ];
 
