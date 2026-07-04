@@ -6,6 +6,7 @@ defineProps<{
   description: string;
   mobileTitle?: string;
   primaryAction?: string;
+  primaryActionTo?: string;
 }>();
 
 const route = useRoute();
@@ -42,7 +43,7 @@ function isActive(to: string) {
       <span class="brand-mark">云</span>
       <span>{{ mobileTitle || title }}</span>
     </RouterLink>
-    <RouterLink v-if="primaryAction" class="button" to="/admin/editor">{{ primaryAction }}</RouterLink>
+    <RouterLink v-if="primaryAction && primaryActionTo" class="button" :to="primaryActionTo">{{ primaryAction }}</RouterLink>
   </div>
 
   <div class="admin-shell">

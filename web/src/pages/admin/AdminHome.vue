@@ -142,7 +142,7 @@ function healthSummary() {
 </script>
 
 <template>
-  <AdminLayout title="后台概览" description="查看待办、最近操作、内容状态和系统运行情况。" mobile-title="后台概览" primary-action="新建">
+  <AdminLayout title="后台概览" description="查看待办、最近操作、内容状态和系统运行情况。" mobile-title="后台概览" primary-action="新建" primary-action-to="/admin/editor">
     <template #actions>
       <div class="header-actions">
         <RouterLink class="button-secondary" to="/">查看站点</RouterLink>

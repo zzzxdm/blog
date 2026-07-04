@@ -218,7 +218,7 @@ function formatDate(value: string) {
 </script>
 
 <template>
-  <AdminLayout title="文章管理" description="管理草稿、审核、定时发布和已发布内容。" mobile-title="文章管理" primary-action="新建">
+  <AdminLayout title="文章管理" description="管理草稿、审核、定时发布和已发布内容。" mobile-title="文章管理" primary-action="新建" primary-action-to="/admin/editor">
     <template #actions>
       <div class="header-actions">
         <input ref="importInput" class="sr-only" type="file" accept=".md,.markdown,text/markdown,text/plain" @change="importMarkdown">

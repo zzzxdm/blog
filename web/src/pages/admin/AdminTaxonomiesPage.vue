@@ -194,7 +194,7 @@ function nextCategorySortOrder() {
 </script>
 
 <template>
-  <AdminLayout title="分类标签" description="管理文章分类、标签、排序和引用关系，保持内容结构稳定。" mobile-title="分类标签" primary-action="写作">
+  <AdminLayout title="分类标签" description="管理文章分类、标签、排序和引用关系，保持内容结构稳定。" mobile-title="分类标签" primary-action="写作" primary-action-to="/admin/editor">
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="loading" @click="load">刷新</button>
