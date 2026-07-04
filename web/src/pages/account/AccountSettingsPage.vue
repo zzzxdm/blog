@@ -285,8 +285,8 @@ function formatDate(value: string) {
             <div class="field"><label for="current-password">当前密码</label><input v-model="currentPassword" class="input" id="current-password" type="password" autocomplete="current-password"></div>
             <div class="field"><label for="new-password">新密码</label><input v-model="newPassword" class="input" id="new-password" type="password" autocomplete="new-password" placeholder="至少 6 位"></div>
             <button class="button-secondary" type="button" :disabled="passwordSaving || !currentPassword || !newPassword" @click="savePassword">{{ passwordSaving ? "更新中..." : "更新密码" }}</button>
-            <label class="setting-row"><div><strong>两步验证资料预留</strong><div class="meta-row"><span>登录验证码挑战接入后启用</span></div></div><input v-model="settings.twoFactor" type="checkbox"></label>
-            <label class="setting-row"><div><strong>异常登录提醒</strong><div class="meta-row"><span>新设备登录时发送站内信</span></div></div><input v-model="settings.loginAlert" type="checkbox"></label>
+            <label class="setting-row"><div><strong>两步验证资料预留</strong><div class="meta-row"><span>登录验证码挑战接入后启用</span></div></div><input v-model="settings.twoFactor" type="checkbox" disabled></label>
+            <label class="setting-row"><div><strong>异常登录提醒预留</strong><div class="meta-row"><span>新设备提醒接入后发送站内信</span></div></div><input v-model="settings.loginAlert" type="checkbox" disabled></label>
           </div>
         </section>
 
@@ -296,7 +296,7 @@ function formatDate(value: string) {
             <label class="setting-row"><div><strong>投稿审核结果</strong><div class="meta-row"><span>通过、退回、拒绝都会发送站内信</span></div></div><input v-model="settings.notifyReview" type="checkbox"></label>
             <label class="setting-row"><div><strong>评论回复</strong><div class="meta-row"><span>有人回复或点赞你的评论时提醒</span></div></div><input v-model="settings.notifyComment" type="checkbox"></label>
             <label class="setting-row"><div><strong>站点公告</strong><div class="meta-row"><span>接收维护、规则和功能更新</span></div></div><input v-model="settings.notifyAnnouncement" type="checkbox"></label>
-            <label class="setting-row"><div><strong>邮件提醒</strong><div class="meta-row"><span>重要账号事件同步发送邮件</span></div></div><input v-model="settings.emailNotification" type="checkbox"></label>
+            <label class="setting-row"><div><strong>邮件提醒偏好预留</strong><div class="meta-row"><span>邮件服务接入后同步重要账号事件</span></div></div><input v-model="settings.emailNotification" type="checkbox" disabled></label>
           </div>
         </section>
 

@@ -158,17 +158,14 @@ func (repo *MemoryRepository) GetAccount(_ context.Context, user auth.User) (Acc
 		repo.accounts[user.ID] = settings
 	}
 
-	return settings, nil
+	return normalizeAccountSettings(settings, user), nil
 }
 
 func (repo *MemoryRepository) UpdateAccount(_ context.Context, user auth.User, settings AccountSettings) (AccountSettings, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 
-	settings.Email = user.Email
-	settings.AvatarText = firstRune(settings.DisplayName)
-	settings.ProfileCompleteness = profileCompleteness(settings)
-	settings.SecurityLevel = securityLevel(settings)
+	settings = normalizeAccountSettings(settings, user)
 	settings.UpdatedAt = repo.now()
 	repo.accounts[user.ID] = settings
 
@@ -181,6 +178,18 @@ func (repo *MemoryRepository) UpdateAccount(_ context.Context, user auth.User, s
 	}
 
 	return settings, nil
+}
+
+func normalizeAccountSettings(settings AccountSettings, user auth.User) AccountSettings {
+	settings.Email = user.Email
+	settings.AvatarText = firstRune(settings.DisplayName)
+	settings.TwoFactor = false
+	settings.LoginAlert = false
+	settings.EmailNotification = false
+	settings.ProfileCompleteness = profileCompleteness(settings)
+	settings.SecurityLevel = securityLevel(settings)
+
+	return settings
 }
 
 func countStats(items []ManagedUser) UserStats {
@@ -220,8 +229,8 @@ func accountFromUser(user ManagedUser) AccountSettings {
 		Email:                    user.Email,
 		AvatarText:               user.AvatarText,
 		Bio:                      "关注内容产品、工程实践和长期写作。",
-		TwoFactor:                user.TwoFactor,
-		LoginAlert:               true,
+		TwoFactor:                false,
+		LoginAlert:               false,
 		NotifyReview:             true,
 		NotifyComment:            true,
 		NotifyAnnouncement:       true,
@@ -306,7 +315,7 @@ func seedUsers() map[string]ManagedUser {
 			Status:        "active",
 			AvatarText:    "管",
 			EmailVerified: true,
-			TwoFactor:     true,
+			TwoFactor:     false,
 			CommentCount:  128,
 			BookmarkCount: 6,
 			LastLoginAt:   now,

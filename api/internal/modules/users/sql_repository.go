@@ -76,10 +76,7 @@ func (repo *SQLRepository) GetAccount(ctx context.Context, user auth.User) (Acco
 }
 
 func (repo *SQLRepository) UpdateAccount(ctx context.Context, user auth.User, settings AccountSettings) (AccountSettings, error) {
-	settings.Email = user.Email
-	settings.AvatarText = firstRune(settings.DisplayName)
-	settings.ProfileCompleteness = profileCompleteness(settings)
-	settings.SecurityLevel = securityLevel(settings)
+	settings = normalizeAccountSettings(settings, user)
 	settings.UpdatedAt = time.Now()
 
 	if err := repo.saveAccountSettings(ctx, user.ID, settings); err != nil {
@@ -222,12 +219,7 @@ func (repo *SQLRepository) getAccountSettings(ctx context.Context, user auth.Use
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return AccountSettings{}, fmt.Errorf("decode account settings: %w", err)
 	}
-	settings.Email = user.Email
-	if settings.AvatarText == "" {
-		settings.AvatarText = firstRune(settings.DisplayName)
-	}
-	settings.ProfileCompleteness = profileCompleteness(settings)
-	settings.SecurityLevel = securityLevel(settings)
+	settings = normalizeAccountSettings(settings, user)
 
 	return settings, nil
 }
