@@ -47,8 +47,12 @@ func auditAdminWrites(repo operations.Repository) gin.HandlerFunc {
 
 func auditAction(method string, path string) string {
 	switch {
+	case strings.Contains(path, "/admin/settings/test-mail"):
+		return "settings.test_mail"
 	case strings.Contains(path, "/admin/settings"):
 		return "settings.update"
+	case strings.Contains(path, "/admin/backups"):
+		return "backup.create"
 	case strings.Contains(path, "/admin/navigation"):
 		return "navigation.update"
 	case strings.Contains(path, "/admin/media") && method == http.MethodPost:
@@ -89,6 +93,8 @@ func auditResource(path string) (string, string, string) {
 
 	resourceType := strings.TrimSuffix(parts[0], "s")
 	switch parts[0] {
+	case "backups":
+		return "backup", "", "数据备份"
 	case "settings":
 		return "settings", "", "系统设置"
 	case "navigation":

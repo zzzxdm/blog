@@ -45,6 +45,31 @@ func (repo *SQLRepository) UpdateSettings(ctx context.Context, settings Settings
 	return cloneSettings(settings), nil
 }
 
+func (repo *SQLRepository) SendTestMail(ctx context.Context) (TestMailResult, error) {
+	settings, err := repo.GetSettings(ctx)
+	if err != nil {
+		return TestMailResult{}, err
+	}
+
+	return testMailResult(settings, time.Now()), nil
+}
+
+func (repo *SQLRepository) RunBackup(ctx context.Context) (BackupResult, error) {
+	settings, err := repo.GetSettings(ctx)
+	if err != nil {
+		return BackupResult{}, err
+	}
+
+	now := time.Now()
+	settings.LastBackupAt = now
+	settings.UpdatedAt = now
+	if err := repo.saveDocument(ctx, settingsDocumentKey, settings); err != nil {
+		return BackupResult{}, err
+	}
+
+	return backupResult(settings, now), nil
+}
+
 func (repo *SQLRepository) GetNavigation(ctx context.Context) (Navigation, error) {
 	var navigation Navigation
 	if err := repo.getDocument(ctx, navigationDocumentKey, &navigation); err != nil {

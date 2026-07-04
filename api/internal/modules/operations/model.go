@@ -31,6 +31,26 @@ type Settings struct {
 	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
+type TestMailResult struct {
+	OK        bool      `json:"ok"`
+	Provider  string    `json:"provider"`
+	FromEmail string    `json:"fromEmail"`
+	Delivery  string    `json:"delivery"`
+	Message   string    `json:"message"`
+	TestedAt  time.Time `json:"testedAt"`
+}
+
+type BackupResult struct {
+	OK        bool      `json:"ok"`
+	ID        string    `json:"id"`
+	Status    string    `json:"status"`
+	FileName  string    `json:"fileName"`
+	SizeLabel string    `json:"sizeLabel"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
+	Settings  Settings  `json:"settings"`
+}
+
 type NavItem struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`

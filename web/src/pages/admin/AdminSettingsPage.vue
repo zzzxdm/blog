@@ -3,7 +3,9 @@ import { onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  createAdminBackup,
   getAdminSettings,
+  sendAdminTestMail,
   updateAdminSettings,
   type OperationsSettings
 } from "../../shared/api";
@@ -12,6 +14,8 @@ const settings = ref<OperationsSettings | null>(null);
 const blockedWordsText = ref("");
 const loading = ref(false);
 const saving = ref(false);
+const testingMail = ref(false);
+const runningBackup = ref(false);
 const error = ref("");
 const message = ref("");
 
@@ -54,6 +58,37 @@ async function save() {
     error.value = err instanceof Error ? err.message : "设置保存失败";
   } finally {
     saving.value = false;
+  }
+}
+
+async function testMail() {
+  testingMail.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const result = await sendAdminTestMail();
+    message.value = result.message;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "测试邮件发送失败";
+  } finally {
+    testingMail.value = false;
+  }
+}
+
+async function runBackup() {
+  runningBackup.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const result = await createAdminBackup();
+    settings.value = result.settings;
+    message.value = `${result.message} 文件：${result.fileName}`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "备份失败";
+  } finally {
+    runningBackup.value = false;
   }
 }
 </script>
@@ -118,7 +153,7 @@ async function save() {
           <label class="setting-row"><div><strong>开启邮件推送</strong><div class="meta-row"><span>发布文章后可推送邮件</span></div></div><input v-model="settings.mailEnabled" type="checkbox"></label>
           <div class="field"><label for="mail-provider">邮件服务</label><select v-model="settings.mailProvider" class="input" id="mail-provider"><option>Resend</option><option>SendGrid</option><option>SMTP</option></select></div>
           <div class="field"><label for="from-email">发件邮箱</label><input v-model="settings.fromEmail" class="input" id="from-email"></div>
-          <button class="button-secondary" type="button">发送测试邮件</button>
+          <button class="button-secondary" type="button" :disabled="testingMail" @click="testMail">{{ testingMail ? "发送中..." : "发送测试邮件" }}</button>
         </div>
       </section>
 
@@ -136,7 +171,7 @@ async function save() {
         <div class="settings-stack">
           <div class="field"><label for="backup-cycle">备份频率</label><select v-model="settings.backupCycle" class="input" id="backup-cycle"><option>每日全量备份</option><option>每周全量备份</option><option>手动备份</option></select></div>
           <div class="meta-row"><span>上次备份：{{ new Date(settings.lastBackupAt).toLocaleString("zh-CN") }}</span><span>保留 {{ settings.backupRetentionDays }} 天</span></div>
-          <button class="button-secondary" type="button">立即备份</button>
+          <button class="button-secondary" type="button" :disabled="runningBackup" @click="runBackup">{{ runningBackup ? "备份中..." : "立即备份" }}</button>
         </div>
       </section>
     </section>

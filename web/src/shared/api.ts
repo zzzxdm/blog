@@ -299,6 +299,26 @@ export interface OperationsSettings {
   updatedAt: string;
 }
 
+export interface TestMailResult {
+  ok: boolean;
+  provider: string;
+  fromEmail: string;
+  delivery: string;
+  message: string;
+  testedAt: string;
+}
+
+export interface BackupResult {
+  ok: boolean;
+  id: string;
+  status: string;
+  fileName: string;
+  sizeLabel: string;
+  message: string;
+  createdAt: string;
+  settings: OperationsSettings;
+}
+
 export interface NavItem {
   id: string;
   label: string;
@@ -839,6 +859,18 @@ export async function updateAdminSettings(payload: OperationsSettings): Promise<
   return request<OperationsSettings>("/admin/settings", {
     method: "PUT",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function sendAdminTestMail(): Promise<TestMailResult> {
+  return request<TestMailResult>("/admin/settings/test-mail", {
+    method: "POST"
+  });
+}
+
+export async function createAdminBackup(): Promise<BackupResult> {
+  return request<BackupResult>("/admin/backups", {
+    method: "POST"
   });
 }
 

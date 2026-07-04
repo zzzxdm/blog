@@ -67,6 +67,8 @@ async function prevPage() {
 function actionText(value: string) {
   const labels: Record<string, string> = {
     "settings.update": "更新设置",
+    "settings.test_mail": "发送测试邮件",
+    "backup.create": "创建备份",
     "navigation.update": "更新导航",
     "media.create": "上传媒体",
     "media.update": "更新媒体",
@@ -88,6 +90,7 @@ function actionText(value: string) {
 function resourceText(value: string) {
   const labels: Record<string, string> = {
     settings: "设置",
+    backup: "备份",
     navigation: "导航",
     media: "媒体",
     post: "文章",
@@ -130,6 +133,7 @@ function formatDate(value: string) {
         <select v-model="resourceType" class="input" aria-label="资源类型" @change="applyFilters">
           <option value="">全部资源</option>
           <option value="settings">设置</option>
+          <option value="backup">备份</option>
           <option value="navigation">导航</option>
           <option value="post">文章</option>
           <option value="submission">投稿</option>
@@ -142,6 +146,8 @@ function formatDate(value: string) {
         <select v-model="action" class="input" aria-label="动作类型" @change="applyFilters">
           <option value="">全部动作</option>
           <option value="settings.update">更新设置</option>
+          <option value="settings.test_mail">发送测试邮件</option>
+          <option value="backup.create">创建备份</option>
           <option value="post.publish">发布文章</option>
           <option value="post.restore">恢复版本</option>
           <option value="submission.review">审核投稿</option>

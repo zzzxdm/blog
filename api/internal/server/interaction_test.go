@@ -369,6 +369,40 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		t.Fatalf("expected settings updated, got status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
 	}
 
+	testMailReq := httptest.NewRequest(http.MethodPost, "/api/admin/settings/test-mail", nil)
+	for _, cookie := range adminCookies {
+		testMailReq.AddCookie(cookie)
+	}
+	testMailRec := httptest.NewRecorder()
+	router.ServeHTTP(testMailRec, testMailReq)
+	if testMailRec.Code != http.StatusOK || !strings.Contains(testMailRec.Body.String(), `"provider":"Resend"`) || !strings.Contains(testMailRec.Body.String(), `"delivery":"dev-response"`) {
+		t.Fatalf("expected test mail response, got status=%d body=%q", testMailRec.Code, testMailRec.Body.String())
+	}
+
+	backupReq := httptest.NewRequest(http.MethodPost, "/api/admin/backups", nil)
+	for _, cookie := range adminCookies {
+		backupReq.AddCookie(cookie)
+	}
+	backupRec := httptest.NewRecorder()
+	router.ServeHTTP(backupRec, backupReq)
+	if backupRec.Code != http.StatusOK || !strings.Contains(backupRec.Body.String(), `"status":"completed"`) {
+		t.Fatalf("expected backup response, got status=%d body=%q", backupRec.Code, backupRec.Body.String())
+	}
+
+	var backupResult struct {
+		ID       string `json:"id"`
+		FileName string `json:"fileName"`
+		Settings struct {
+			LastBackupAt string `json:"lastBackupAt"`
+		} `json:"settings"`
+	}
+	if err := json.Unmarshal(backupRec.Body.Bytes(), &backupResult); err != nil {
+		t.Fatalf("decode backup response: %v", err)
+	}
+	if backupResult.ID == "" || backupResult.FileName == "" || backupResult.Settings.LastBackupAt == "" {
+		t.Fatalf("expected backup metadata and updated settings, got %+v", backupResult)
+	}
+
 	navigationReq := httptest.NewRequest(http.MethodPut, "/api/admin/navigation", bytes.NewBufferString(`{
 		"topItems":[{"id":"top_1","label":"首页","url":"/","order":1},{"id":"top_2","label":"归档","url":"/archive","order":2}],
 		"footerItems":[{"id":"footer_1","label":"RSS","url":"/rss.xml","order":1}],

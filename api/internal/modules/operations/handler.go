@@ -41,6 +41,8 @@ func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 
 	router.GET("/admin/settings", handler.GetSettings)
 	router.PUT("/admin/settings", handler.UpdateSettings)
+	router.POST("/admin/settings/test-mail", handler.SendTestMail)
+	router.POST("/admin/backups", handler.RunBackup)
 	router.GET("/admin/navigation", handler.GetNavigation)
 	router.PUT("/admin/navigation", handler.UpdateNavigation)
 	router.GET("/admin/media", handler.ListMedia)
@@ -84,6 +86,34 @@ func (handler *Handler) UpdateSettings(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, settings)
+}
+
+func (handler *Handler) SendTestMail(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.SendTestMail(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send test mail"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) RunBackup(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.RunBackup(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to run backup"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
 }
 
 func (handler *Handler) GetNavigation(ctx *gin.Context) {

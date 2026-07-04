@@ -18,6 +18,8 @@ var (
 type Repository interface {
 	GetSettings(ctx context.Context) (Settings, error)
 	UpdateSettings(ctx context.Context, settings Settings) (Settings, error)
+	SendTestMail(ctx context.Context) (TestMailResult, error)
+	RunBackup(ctx context.Context) (BackupResult, error)
 	GetNavigation(ctx context.Context) (Navigation, error)
 	UpdateNavigation(ctx context.Context, navigation Navigation) (Navigation, error)
 	ListMedia(ctx context.Context) (MediaListResult, error)
@@ -64,6 +66,24 @@ func (repo *MemoryRepository) UpdateSettings(_ context.Context, settings Setting
 	repo.settings = cloneSettings(settings)
 
 	return cloneSettings(repo.settings), nil
+}
+
+func (repo *MemoryRepository) SendTestMail(_ context.Context) (TestMailResult, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	return testMailResult(repo.settings, time.Now()), nil
+}
+
+func (repo *MemoryRepository) RunBackup(_ context.Context) (BackupResult, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	now := time.Now()
+	repo.settings.LastBackupAt = now
+	repo.settings.UpdatedAt = now
+
+	return backupResult(repo.settings, now), nil
 }
 
 func (repo *MemoryRepository) GetNavigation(_ context.Context) (Navigation, error) {
@@ -253,12 +273,12 @@ func normalizeAuditLog(item AuditLog, now time.Time) AuditLog {
 		item.ID = fmt.Sprintf("audit_%d", now.UnixNano())
 	}
 	item.ActorID = strings.TrimSpace(item.ActorID)
-	item.ActorName = defaultAuditString(item.ActorName, "匿名用户")
-	item.Action = defaultAuditString(item.Action, "admin.write")
-	item.ResourceType = defaultAuditString(item.ResourceType, "admin")
+	item.ActorName = defaultString(item.ActorName, "匿名用户")
+	item.Action = defaultString(item.Action, "admin.write")
+	item.ResourceType = defaultString(item.ResourceType, "admin")
 	item.ResourceID = strings.TrimSpace(item.ResourceID)
 	item.ResourceTitle = strings.TrimSpace(item.ResourceTitle)
-	item.Status = defaultAuditString(item.Status, "success")
+	item.Status = defaultString(item.Status, "success")
 	item.IP = strings.TrimSpace(item.IP)
 	item.UserAgent = strings.TrimSpace(item.UserAgent)
 	item.Detail = strings.TrimSpace(item.Detail)
@@ -269,13 +289,39 @@ func normalizeAuditLog(item AuditLog, now time.Time) AuditLog {
 	return item
 }
 
-func defaultAuditString(value string, fallback string) string {
+func defaultString(value string, fallback string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return fallback
 	}
 
 	return value
+}
+
+func testMailResult(settings Settings, now time.Time) TestMailResult {
+	provider := defaultString(settings.MailProvider, "SMTP")
+	fromEmail := defaultString(settings.FromEmail, "newsletter@example.com")
+	return TestMailResult{
+		OK:        true,
+		Provider:  provider,
+		FromEmail: fromEmail,
+		Delivery:  "dev-response",
+		Message:   fmt.Sprintf("测试邮件已生成：%s -> %s", provider, fromEmail),
+		TestedAt:  now,
+	}
+}
+
+func backupResult(settings Settings, now time.Time) BackupResult {
+	return BackupResult{
+		OK:        true,
+		ID:        fmt.Sprintf("backup_%d", now.UnixNano()),
+		Status:    "completed",
+		FileName:  fmt.Sprintf("blog-backup-%s.zip", now.Format("20060102-150405")),
+		SizeLabel: "4.8 MB",
+		Message:   "备份已完成，生产环境可接入对象存储归档。",
+		CreatedAt: now,
+		Settings:  cloneSettings(settings),
+	}
 }
 
 func seedSettings() Settings {
