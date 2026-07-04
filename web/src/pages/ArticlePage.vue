@@ -8,13 +8,15 @@ import {
   getComments,
   getPosts,
   getReaction,
+  getSiteSettings,
   reportComment,
   setBookmark,
   setPostReaction,
   toggleCommentLike,
   type Comment,
   type Post,
-  type ReactionSummary
+  type ReactionSummary,
+  type SiteSettings
 } from "../shared/api";
 import { renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
@@ -38,6 +40,7 @@ const commentActionId = ref("");
 const replyTo = ref<Comment | null>(null);
 const relatedPosts = ref<Post[]>([]);
 const reaction = ref<ReactionSummary | null>(null);
+const siteSettings = ref<SiteSettings | null>(null);
 const reactionLoading = ref(false);
 const reactionError = ref("");
 const codeCopied = ref(false);
@@ -53,6 +56,7 @@ const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCo
 const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
 const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 34);
 const renderedPostContent = computed(() => renderMarkdown(post.value?.content ?? ""));
+const commentsEnabled = computed(() => siteSettings.value?.commentsEnabled ?? true);
 const visibleComments = computed(() => {
   return [...comments.value].sort((left, right) => {
     const leftTime = new Date(left.createdAt).getTime();
@@ -159,6 +163,14 @@ async function loadReaction(slug: string) {
   }
 }
 
+async function loadSiteSettings() {
+  try {
+    siteSettings.value = await getSiteSettings();
+  } catch {
+    siteSettings.value = null;
+  }
+}
+
 async function loadRelatedPosts(slug: string) {
   try {
     const response = await getPosts({ pageSize: 4 });
@@ -228,6 +240,10 @@ async function toggleBookmark() {
 
 async function submitComment() {
   if (!post.value) {
+    return;
+  }
+  if (!commentsEnabled.value) {
+    commentError.value = "评论已关闭";
     return;
   }
   if (!auth.user) {
@@ -309,7 +325,10 @@ function insertComment(items: Comment[], created: Comment) {
   return next;
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  void loadSiteSettings();
+});
 watch(() => route.params.slug, load);
 watch(() => auth.user?.id, () => {
   const slug = String(route.params.slug || "");
@@ -436,7 +455,7 @@ watch(() => auth.user?.id, () => {
             </div>
             <button class="button-secondary" type="button" @click="toggleCommentsSort">{{ commentsSort === "newest" ? "最新在前" : "最早在前" }}</button>
           </div>
-          <div class="comment-box">
+          <div v-if="commentsEnabled" class="comment-box">
             <div class="author-row">
               <span class="avatar">{{ auth.user?.avatarText || "访" }}</span>
               <div>
@@ -460,6 +479,10 @@ watch(() => auth.user?.id, () => {
             </div>
             <p v-if="commentError" class="error">{{ commentError }}</p>
             <p v-else-if="commentNotice" class="muted">{{ commentNotice }}</p>
+          </div>
+          <div v-else class="comment-box">
+            <strong>评论已关闭</strong>
+            <p class="muted">管理员暂时关闭了新评论，历史评论仍可阅读。</p>
           </div>
 
           <div class="comment-list">

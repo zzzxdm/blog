@@ -39,6 +39,7 @@ func NewHandler(repo Repository, uploadDir string) *Handler {
 func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 	handler := NewHandler(repo, uploadDir)
 
+	router.GET("/settings", handler.GetPublicSettings)
 	router.GET("/navigation", handler.GetPublicNavigation)
 	router.GET("/admin/settings", handler.GetSettings)
 	router.PUT("/admin/settings", handler.UpdateSettings)
@@ -68,6 +69,16 @@ func (handler *Handler) GetSettings(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, settings)
+}
+
+func (handler *Handler) GetPublicSettings(ctx *gin.Context) {
+	settings, err := handler.repo.GetSettings(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load settings"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, publicSettings(settings))
 }
 
 func (handler *Handler) UpdateSettings(ctx *gin.Context) {

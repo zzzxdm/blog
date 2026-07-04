@@ -31,6 +31,21 @@ type Settings struct {
 	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
+type PublicSettings struct {
+	SiteName                string    `json:"siteName"`
+	SiteDescription         string    `json:"siteDescription"`
+	SiteURL                 string    `json:"siteUrl"`
+	Beian                   string    `json:"beian"`
+	ThemePrimary            string    `json:"themePrimary"`
+	DarkModeEnabled         bool      `json:"darkModeEnabled"`
+	ReadingProgressEnabled  bool      `json:"readingProgressEnabled"`
+	CommentsEnabled         bool      `json:"commentsEnabled"`
+	LoginRequiredForComment bool      `json:"loginRequiredForComment"`
+	SubmissionsEnabled      bool      `json:"submissionsEnabled"`
+	SubmissionGuide         string    `json:"submissionGuide"`
+	UpdatedAt               time.Time `json:"updatedAt"`
+}
+
 type TestMailResult struct {
 	OK        bool      `json:"ok"`
 	Provider  string    `json:"provider"`

@@ -6,8 +6,12 @@ import type { NavItem, OperationsNavigation } from "../shared/api";
 
 const props = withDefaults(defineProps<{
   navigation?: OperationsNavigation | null;
+  siteName?: string;
+  beian?: string;
 }>(), {
-  navigation: null
+  navigation: null,
+  siteName: "云间笔记",
+  beian: ""
 });
 
 const siteStartDate = new Date(2020, 7, 21, 0, 0, 0);
@@ -94,8 +98,9 @@ onUnmounted(() => {
   <footer class="footbar">
     <div class="footbar-inner">
       <div class="footbar-copy">
-        <div>Copyright © {{ currentYear }} <strong>云间笔记</strong>.</div>
+        <div>Copyright © {{ currentYear }} <strong>{{ siteName }}</strong>.</div>
         <div>{{ runtimeText }}</div>
+        <div v-if="beian">{{ beian }}</div>
         <div>总访问量: 47087 人次 <span>|</span> 访客人数: 28294 人 <span>|</span> 字数统计: 46.8k 字</div>
       </div>
       <div class="footbar-tools">

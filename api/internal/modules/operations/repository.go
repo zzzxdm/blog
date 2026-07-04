@@ -232,6 +232,23 @@ func cloneSettings(settings Settings) Settings {
 	return settings
 }
 
+func publicSettings(settings Settings) PublicSettings {
+	return PublicSettings{
+		SiteName:                settings.SiteName,
+		SiteDescription:         settings.SiteDescription,
+		SiteURL:                 settings.SiteURL,
+		Beian:                   settings.Beian,
+		ThemePrimary:            settings.ThemePrimary,
+		DarkModeEnabled:         settings.DarkModeEnabled,
+		ReadingProgressEnabled:  settings.ReadingProgressEnabled,
+		CommentsEnabled:         settings.CommentsEnabled,
+		LoginRequiredForComment: settings.LoginRequiredForComment,
+		SubmissionsEnabled:      settings.SubmissionsEnabled,
+		SubmissionGuide:         settings.SubmissionGuide,
+		UpdatedAt:               settings.UpdatedAt,
+	}
+}
+
 func cloneNavigation(navigation Navigation) Navigation {
 	navigation.TopItems = append([]NavItem{}, navigation.TopItems...)
 	navigation.FooterItems = append([]NavItem{}, navigation.FooterItems...)

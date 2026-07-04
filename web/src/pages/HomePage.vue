@@ -1,20 +1,33 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { usePostsStore } from "../stores/posts";
-import type { Post } from "../shared/api";
+import { getSiteSettings, type Post, type SiteSettings } from "../shared/api";
 
 const posts = usePostsStore();
+const siteSettings = ref<SiteSettings | null>(null);
 
 const allPosts = computed(() => posts.list?.items ?? []);
 const featurePost = computed(() => allPosts.value[0] ?? null);
 const weeklyPosts = computed(() => allPosts.value.slice(1, 4));
 const latestPosts = computed(() => allPosts.value.slice(1, 5));
+const siteDescription = computed(() => siteSettings.value?.siteDescription || "技术、产品、工程实践和长期写作的沉淀。");
+const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
+const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交原创文章，审核通过后发布到站点。");
 
 onMounted(() => {
   void posts.loadList({ page: 1, pageSize: 6 });
+  void loadSiteSettings();
 });
+
+async function loadSiteSettings() {
+  try {
+    siteSettings.value = await getSiteSettings();
+  } catch {
+    siteSettings.value = null;
+  }
+}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("zh-CN");
@@ -42,7 +55,7 @@ function tagTone(post: Post, index = 0) {
     <section class="section-heading">
       <div>
         <h1>今天值得读</h1>
-        <p>技术、产品、工程实践和长期写作的沉淀。</p>
+        <p>{{ siteDescription }}</p>
       </div>
       <div class="meta-row">
         <span>{{ posts.list?.total ?? 0 }} 篇文章</span>
@@ -138,12 +151,12 @@ function tagTone(post: Post, index = 0) {
             </div>
           </section>
 
-          <section class="panel">
+          <section v-if="submissionsEnabled" class="panel">
             <div class="panel-title">
               <h2>开放投稿</h2>
               <span class="tag">审核制</span>
             </div>
-            <p style="margin: 0 0 14px; color: var(--muted);">登录用户可以提交原创文章，审核通过后发布到站点。</p>
+            <p style="margin: 0 0 14px; color: var(--muted);">{{ submissionGuide }}</p>
             <RouterLink class="button" to="/submit">开始投稿</RouterLink>
           </section>
 

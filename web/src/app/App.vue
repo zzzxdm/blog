@@ -5,7 +5,7 @@ import { RouterLink, RouterView, useRoute } from "vue-router";
 import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
 import SiteSearch from "../components/SiteSearch.vue";
-import { getCategories, getSiteNavigation, type Category, type NavItem, type OperationsNavigation } from "../shared/api";
+import { getCategories, getSiteNavigation, getSiteSettings, type Category, type NavItem, type OperationsNavigation, type SiteSettings } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
@@ -14,8 +14,12 @@ const searchOpen = ref(false);
 const themeMode = ref<"light" | "dark">("light");
 const categories = ref<Category[]>([]);
 const navigation = ref<OperationsNavigation | null>(null);
+const siteSettings = ref<SiteSettings | null>(null);
 const showChrome = computed(() => !route.meta.hideChrome);
 const navCategories = computed(() => categories.value.slice(0, 4));
+const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间笔记");
+const siteBeian = computed(() => siteSettings.value?.beian.trim() || "");
+const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
 const defaultTopItems: NavItem[] = [
   { id: "nav_default_home", label: "首页", url: "/", order: 1 },
   { id: "nav_default_archive", label: "归档", url: "/archive", order: 2 },
@@ -25,9 +29,11 @@ const defaultTopItems: NavItem[] = [
 const topNavItems = computed(() => orderedNavItems(navigation.value?.topItems ?? defaultTopItems));
 const showLoginEntry = computed(() => navigation.value?.showLoginEntry ?? true);
 const externalLinksNewWindow = computed(() => navigation.value?.externalLinksNewWindow ?? true);
+const darkModeEnabled = computed(() => siteSettings.value?.darkModeEnabled ?? true);
 
 onMounted(() => {
   initializeTheme();
+  void loadSiteSettings();
   void auth.loadMe();
   void loadCategories();
   void loadNavigation();
@@ -61,11 +67,30 @@ async function loadCategories() {
   }
 }
 
+async function loadSiteSettings() {
+  try {
+    const settings = await getSiteSettings();
+    siteSettings.value = settings;
+    applyPrimaryColor(settings.themePrimary);
+    if (!settings.darkModeEnabled) {
+      applyTheme("light");
+    }
+  } catch {
+    siteSettings.value = null;
+  }
+}
+
 async function loadNavigation() {
   try {
     navigation.value = await getSiteNavigation();
   } catch {
     navigation.value = null;
+  }
+}
+
+function applyPrimaryColor(color: string) {
+  if (/^#[0-9a-f]{6}$/i.test(color.trim())) {
+    document.documentElement.style.setProperty("--green", color.trim());
   }
 }
 
@@ -99,9 +124,9 @@ function isActiveNav(url: string) {
 <template>
   <header v-if="showChrome" class="site-header">
     <div class="nav">
-      <RouterLink class="brand" to="/" aria-label="云间笔记首页">
-        <span class="brand-mark">云</span>
-        <span>云间笔记</span>
+      <RouterLink class="brand" to="/" :aria-label="`${siteName}首页`">
+        <span class="brand-mark">{{ brandMark }}</span>
+        <span>{{ siteName }}</span>
       </RouterLink>
       <nav class="nav-links" aria-label="主导航">
         <template v-for="item in topNavItems" :key="item.id">
@@ -145,6 +170,7 @@ function isActiveNav(url: string) {
       <div class="header-actions">
         <button class="icon-button" type="button" aria-label="搜索" @click="searchOpen = true">⌕</button>
         <button
+          v-if="darkModeEnabled"
           class="icon-button"
           :class="{ active: themeMode === 'dark' }"
           type="button"
@@ -166,7 +192,7 @@ function isActiveNav(url: string) {
   </header>
 
   <RouterView />
-  <SiteFootbar v-if="showChrome" :navigation="navigation" />
+  <SiteFootbar v-if="showChrome" :navigation="navigation" :site-name="siteName" :beian="siteBeian" />
   <SiteSearch v-if="showChrome" v-model:open="searchOpen" />
   <SiteBacktop v-if="showChrome" />
 </template>

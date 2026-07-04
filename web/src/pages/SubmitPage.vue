@@ -6,9 +6,11 @@ import {
   createSubmission,
   getCategories,
   getMySubmissions,
+  getSiteSettings,
   getTags,
   updateSubmission,
   type Category,
+  type SiteSettings,
   type Submission,
   type SubmissionPayload,
   type Tag
@@ -26,6 +28,7 @@ const error = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const editorArea = ref<HTMLTextAreaElement | null>(null);
+const siteSettings = ref<SiteSettings | null>(null);
 
 const title = ref("用户评论系统应该怎么设计");
 const summary = ref("从登录用户评论、审核、举报、通知和禁言机制出发，设计一个可维护的评论系统。");
@@ -53,12 +56,23 @@ const content = ref(`# 用户评论系统应该怎么设计
 const tags = computed(() => tagsText.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean));
 const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
 const status = computed(() => current.value?.status || "draft");
-const canEdit = computed(() => !current.value || current.value.status === "draft" || current.value.status === "returned");
+const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
+const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交文章草稿，审核通过后会发布到站点。");
+const canEdit = computed(() => submissionsEnabled.value && (!current.value || current.value.status === "draft" || current.value.status === "returned"));
 
 onMounted(() => {
+  void loadSiteSettings();
   void loadTaxonomies();
   void loadSubmissionFromQuery();
 });
+
+async function loadSiteSettings() {
+  try {
+    siteSettings.value = await getSiteSettings();
+  } catch {
+    siteSettings.value = null;
+  }
+}
 
 async function loadTaxonomies() {
   try {
@@ -254,7 +268,7 @@ function statusClass(value: string) {
     <section class="section-heading">
       <div>
         <h1>投稿</h1>
-        <p>登录用户可以提交文章草稿，审核通过后会发布到站点。</p>
+        <p>{{ submissionGuide }}</p>
       </div>
       <div class="meta-row">
         <span>{{ loadingSubmission ? "正在加载投稿" : (current ? `版本 ${current.version}` : "新草稿") }}</span>
@@ -268,7 +282,13 @@ function statusClass(value: string) {
       <RouterLink class="button" to="/login">去登录</RouterLink>
     </section>
 
-    <section class="editor-layout">
+    <section v-if="!submissionsEnabled" class="panel">
+      <div class="panel-title"><h2>投稿暂未开放</h2></div>
+      <p class="muted">管理员已关闭用户投稿入口，已有投稿可在个人中心查看审核结果。</p>
+      <RouterLink class="button-secondary" to="/account/submissions">查看我的投稿</RouterLink>
+    </section>
+
+    <section v-else class="editor-layout">
       <div class="editor-panel">
         <div class="editor-toolbar">
           <div class="tool-group" aria-label="投稿编辑工具栏">

@@ -300,6 +300,21 @@ export interface OperationsSettings {
   updatedAt: string;
 }
 
+export interface SiteSettings {
+  siteName: string;
+  siteDescription: string;
+  siteUrl: string;
+  beian: string;
+  themePrimary: string;
+  darkModeEnabled: boolean;
+  readingProgressEnabled: boolean;
+  commentsEnabled: boolean;
+  loginRequiredForComment: boolean;
+  submissionsEnabled: boolean;
+  submissionGuide: string;
+  updatedAt: string;
+}
+
 export interface TestMailResult {
   ok: boolean;
   provider: string;
@@ -941,6 +956,10 @@ export async function createAdminBackup(): Promise<BackupResult> {
   return request<BackupResult>("/admin/backups", {
     method: "POST"
   });
+}
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  return request<SiteSettings>("/settings");
 }
 
 export async function getSiteNavigation(): Promise<OperationsNavigation> {

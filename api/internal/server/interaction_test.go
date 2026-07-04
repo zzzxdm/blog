@@ -448,6 +448,13 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		t.Fatalf("expected settings updated, got status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
 	}
 
+	publicSettingsReq := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	publicSettingsRec := httptest.NewRecorder()
+	router.ServeHTTP(publicSettingsRec, publicSettingsReq)
+	if publicSettingsRec.Code != http.StatusOK || !strings.Contains(publicSettingsRec.Body.String(), `"siteUrl":"https://blog.example.com"`) || strings.Contains(publicSettingsRec.Body.String(), "adminTwoFactorRequired") {
+		t.Fatalf("expected public settings without admin security fields, got status=%d body=%q", publicSettingsRec.Code, publicSettingsRec.Body.String())
+	}
+
 	testMailReq := httptest.NewRequest(http.MethodPost, "/api/admin/settings/test-mail", nil)
 	for _, cookie := range adminCookies {
 		testMailReq.AddCookie(cookie)
