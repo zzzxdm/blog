@@ -164,7 +164,7 @@ async function runBackup() {
       <section class="panel">
         <div class="panel-title"><h2>安全</h2></div>
         <div class="settings-stack">
-          <label class="setting-row"><div><strong>管理员双因素认证</strong><div class="meta-row"><span>后台账号必须绑定 2FA</span></div></div><input v-model="settings.adminTwoFactorRequired" type="checkbox"></label>
+          <label class="setting-row"><div><strong>管理员 2FA 策略预留</strong><div class="meta-row"><span>完整登录挑战接入后再强制启用</span></div></div><input v-model="settings.adminTwoFactorRequired" type="checkbox"></label>
           <label class="setting-row"><div><strong>登录失败锁定</strong><div class="meta-row"><span>连续失败后临时锁定账号</span></div></div><input v-model="settings.loginFailureLock" type="checkbox"></label>
           <div class="field"><label for="session-days">会话有效期</label><select v-model.number="settings.sessionDays" class="input" id="session-days"><option :value="7">7 天</option><option :value="14">14 天</option><option :value="30">30 天</option></select></div>
         </div>

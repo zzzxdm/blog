@@ -285,7 +285,7 @@ function formatDate(value: string) {
             <div class="field"><label for="current-password">当前密码</label><input v-model="currentPassword" class="input" id="current-password" type="password" autocomplete="current-password"></div>
             <div class="field"><label for="new-password">新密码</label><input v-model="newPassword" class="input" id="new-password" type="password" autocomplete="new-password" placeholder="至少 6 位"></div>
             <button class="button-secondary" type="button" :disabled="passwordSaving || !currentPassword || !newPassword" @click="savePassword">{{ passwordSaving ? "更新中..." : "更新密码" }}</button>
-            <label class="setting-row"><div><strong>两步验证</strong><div class="meta-row"><span>登录时需要邮箱验证码</span></div></div><input v-model="settings.twoFactor" type="checkbox"></label>
+            <label class="setting-row"><div><strong>两步验证资料预留</strong><div class="meta-row"><span>登录验证码挑战接入后启用</span></div></div><input v-model="settings.twoFactor" type="checkbox"></label>
             <label class="setting-row"><div><strong>异常登录提醒</strong><div class="meta-row"><span>新设备登录时发送站内信</span></div></div><input v-model="settings.loginAlert" type="checkbox"></label>
           </div>
         </section>
