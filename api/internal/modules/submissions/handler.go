@@ -1,6 +1,7 @@
 package submissions
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/messages"
+	"blog/api/internal/modules/operations"
 	"blog/api/internal/modules/posts"
 
 	"github.com/gin-gonic/gin"
@@ -17,18 +19,24 @@ type Handler struct {
 	repo      Repository
 	messages  messages.Repository
 	publisher posts.Publisher
+	settings  settingsReader
 }
 
-func NewHandler(repo Repository, messageRepo messages.Repository, publisher posts.Publisher) *Handler {
+type settingsReader interface {
+	GetSettings(ctx context.Context) (operations.Settings, error)
+}
+
+func NewHandler(repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader) *Handler {
 	return &Handler{
 		repo:      repo,
 		messages:  messageRepo,
 		publisher: publisher,
+		settings:  settings,
 	}
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.Publisher) {
-	handler := NewHandler(repo, messageRepo, publisher)
+func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader) {
+	handler := NewHandler(repo, messageRepo, publisher, settings)
 
 	router.GET("/submissions", handler.ListMine)
 	router.POST("/submissions", handler.Create)
@@ -66,6 +74,9 @@ func (handler *Handler) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to submit posts"})
 		return
 	}
+	if !handler.requireSubmissionsEnabled(ctx) {
+		return
+	}
 
 	var request SaveRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -89,6 +100,9 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	}
 	if !canSubmit(user) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to update submissions"})
+		return
+	}
+	if !handler.requireSubmissionsEnabled(ctx) {
 		return
 	}
 
@@ -116,6 +130,9 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to submit posts"})
 		return
 	}
+	if !handler.requireSubmissionsEnabled(ctx) {
+		return
+	}
 
 	submission, err := handler.repo.Submit(ctx.Request.Context(), ctx.Param("id"), user.ID)
 	if err != nil {
@@ -124,6 +141,24 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, submission)
+}
+
+func (handler *Handler) requireSubmissionsEnabled(ctx *gin.Context) bool {
+	if handler.settings == nil {
+		return true
+	}
+
+	settings, err := handler.settings.GetSettings(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submission settings"})
+		return false
+	}
+	if !settings.SubmissionsEnabled {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "submissions are disabled"})
+		return false
+	}
+
+	return true
 }
 
 func (handler *Handler) AdminList(ctx *gin.Context) {

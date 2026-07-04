@@ -95,6 +95,59 @@ func TestAuthCommentAndReactionFlow(t *testing.T) {
 	}
 }
 
+func TestInteractionSettingsDisableWrites(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+	settingsReq := httptest.NewRequest(http.MethodPut, "/api/admin/settings", bytes.NewBufferString(`{
+		"siteName":"Test Blog",
+		"siteDescription":"Settings write guard test",
+		"commentsEnabled":false,
+		"submissionsEnabled":false
+	}`))
+	settingsReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		settingsReq.AddCookie(cookie)
+	}
+	settingsRec := httptest.NewRecorder()
+	router.ServeHTTP(settingsRec, settingsReq)
+	if settingsRec.Code != http.StatusOK {
+		t.Fatalf("expected settings update, got status=%d body=%q", settingsRec.Code, settingsRec.Body.String())
+	}
+
+	userCookies := loginForTest(t, router, "linyi@example.com", "password")
+	commentReq := httptest.NewRequest(http.MethodPost, "/api/posts/blog-system-design/comments", bytes.NewBufferString(`{"body":"comment after disabled"}`))
+	commentReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		commentReq.AddCookie(cookie)
+	}
+	commentRec := httptest.NewRecorder()
+	router.ServeHTTP(commentRec, commentReq)
+	if commentRec.Code != http.StatusForbidden || !strings.Contains(commentRec.Body.String(), "comments are disabled") {
+		t.Fatalf("expected disabled comments status 403, got status=%d body=%q", commentRec.Code, commentRec.Body.String())
+	}
+
+	submissionReq := httptest.NewRequest(http.MethodPost, "/api/submissions", bytes.NewBufferString(`{
+		"title":"Disabled submission",
+		"content":"Submissions are disabled by settings.",
+		"slug":"disabled-submission",
+		"submit":true
+	}`))
+	submissionReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		submissionReq.AddCookie(cookie)
+	}
+	submissionRec := httptest.NewRecorder()
+	router.ServeHTTP(submissionRec, submissionReq)
+	if submissionRec.Code != http.StatusForbidden || !strings.Contains(submissionRec.Body.String(), "submissions are disabled") {
+		t.Fatalf("expected disabled submissions status 403, got status=%d body=%q", submissionRec.Code, submissionRec.Body.String())
+	}
+}
+
 func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
 	router := NewRouter(config.Config{
 		AppEnv:    "test",

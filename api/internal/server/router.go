@@ -104,7 +104,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	auth.RegisterRoutes(api, repos.AuthStore)
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
-	comments.RegisterRoutes(api, repos.CommentRepo)
+	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
 	operations.RegisterRoutes(api, repos.OperationsRepo, uploadDir(cfg.UploadDir))
@@ -115,7 +115,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		publisher = item
 	}
 	adminposts.RegisterRoutes(api, repos.AdminPostRepo, publisher)
-	submissions.RegisterRoutes(api, repos.SubmissionRepo, repos.MessageRepo, publisher)
+	submissions.RegisterRoutes(api, repos.SubmissionRepo, repos.MessageRepo, publisher, repos.OperationsRepo)
 
 	return router
 }

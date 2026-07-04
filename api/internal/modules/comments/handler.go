@@ -1,25 +1,32 @@
 package comments
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
 
 	"blog/api/internal/modules/auth"
+	"blog/api/internal/modules/operations"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	repo Repository
+	repo     Repository
+	settings settingsReader
 }
 
-func NewHandler(repo Repository) *Handler {
-	return &Handler{repo: repo}
+type settingsReader interface {
+	GetSettings(ctx context.Context) (operations.Settings, error)
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository) {
-	handler := NewHandler(repo)
+func NewHandler(repo Repository, settings settingsReader) *Handler {
+	return &Handler{repo: repo, settings: settings}
+}
+
+func RegisterRoutes(router gin.IRouter, repo Repository, settings settingsReader) {
+	handler := NewHandler(repo, settings)
 
 	router.GET("/posts/:slug/comments", handler.List)
 	router.POST("/posts/:slug/comments", handler.Create)
@@ -52,6 +59,10 @@ func (handler *Handler) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to comment"})
 		return
 	}
+	settings, ok := handler.requireCommentSettings(ctx)
+	if !ok {
+		return
+	}
 
 	var request CreateRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -69,8 +80,32 @@ func (handler *Handler) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create comment"})
 		return
 	}
+	if settings.AutoApproveComments {
+		approved, err := handler.repo.UpdateStatus(ctx.Request.Context(), comment.ID, "approved")
+		if err == nil {
+			comment = approved
+		}
+	}
 
 	ctx.JSON(http.StatusCreated, comment)
+}
+
+func (handler *Handler) requireCommentSettings(ctx *gin.Context) (operations.Settings, bool) {
+	if handler.settings == nil {
+		return operations.Settings{CommentsEnabled: true}, true
+	}
+
+	settings, err := handler.settings.GetSettings(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comment settings"})
+		return operations.Settings{}, false
+	}
+	if !settings.CommentsEnabled {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "comments are disabled"})
+		return operations.Settings{}, false
+	}
+
+	return settings, true
 }
 
 func (handler *Handler) ToggleLike(ctx *gin.Context) {
