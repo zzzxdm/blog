@@ -129,12 +129,12 @@ function tagTone(post: Post, index = 0) {
               <h2>专题</h2>
             </div>
             <div class="tag-cloud">
-              <RouterLink class="tag" to="/archive?tag=Vue3">Vue3</RouterLink>
-              <RouterLink class="tag rust" to="/archive?tag=架构">系统架构</RouterLink>
-              <RouterLink class="tag amber" to="/archive?tag=工作流">写作工作流</RouterLink>
+              <RouterLink class="tag" to="/topics?topic=vue3-content">Vue3</RouterLink>
+              <RouterLink class="tag rust" to="/topics?topic=blog-system">系统架构</RouterLink>
+              <RouterLink class="tag amber" to="/topics?topic=writing-workflow">写作工作流</RouterLink>
               <RouterLink class="tag" to="/archive?tag=SEO">SEO</RouterLink>
-              <RouterLink class="tag rust" to="/archive?tag=PostgreSQL">数据库</RouterLink>
-              <RouterLink class="tag amber" to="/archive?tag=运营">内容运营</RouterLink>
+              <RouterLink class="tag rust" to="/topics?topic=resource-list">数据库</RouterLink>
+              <RouterLink class="tag amber" to="/archive?category=运营">内容运营</RouterLink>
             </div>
           </section>
 

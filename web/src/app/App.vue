@@ -42,14 +42,14 @@ function logout() {
           </div>
         </div>
         <div class="nav-menu-item">
-          <RouterLink class="nav-parent" to="/archive?tag=博客系统">
+          <RouterLink :class="{ active: route.name === 'topics' }" class="nav-parent" to="/topics">
             专题 <span class="nav-caret">⌄</span>
           </RouterLink>
           <div class="nav-submenu">
-            <RouterLink to="/archive?tag=博客系统">博客系统</RouterLink>
-            <RouterLink to="/archive?tag=Vue3">Vue3 内容站</RouterLink>
-            <RouterLink to="/archive?tag=工作流">写作工作流</RouterLink>
-            <RouterLink to="/archive?tag=PostgreSQL">资源清单</RouterLink>
+            <RouterLink to="/topics?topic=blog-system">博客系统</RouterLink>
+            <RouterLink to="/topics?topic=vue3-content">Vue3 内容站</RouterLink>
+            <RouterLink to="/topics?topic=writing-workflow">写作工作流</RouterLink>
+            <RouterLink to="/topics?topic=resource-list">资源清单</RouterLink>
           </div>
         </div>
         <RouterLink :class="{ active: route.name === 'submit' }" to="/submit">投稿</RouterLink>

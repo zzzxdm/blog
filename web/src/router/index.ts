@@ -22,6 +22,7 @@ import ArticlePage from "../pages/ArticlePage.vue";
 import HomePage from "../pages/HomePage.vue";
 import LoginPage from "../pages/LoginPage.vue";
 import SubmitPage from "../pages/SubmitPage.vue";
+import TopicsPage from "../pages/TopicsPage.vue";
 import { useAuthStore } from "../stores/auth";
 
 export const router = createRouter({
@@ -29,6 +30,7 @@ export const router = createRouter({
   routes: [
     { path: "/", name: "home", component: HomePage },
     { path: "/archive", name: "archive", component: ArchivePage },
+    { path: "/topics", name: "topics", component: TopicsPage },
     { path: "/posts/:slug", name: "post", component: ArticlePage },
     { path: "/login", name: "login", component: LoginPage, meta: { hideChrome: true } },
     { path: "/submit", name: "submit", component: SubmitPage, meta: { requiresAuth: true } },
