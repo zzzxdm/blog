@@ -24,12 +24,14 @@ const total = computed(() => posts.list?.total ?? 0);
 const categoryCount = computed(() => categories.value.length || 4);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 const pageNumbers = computed(() => {
-  const pages = [1, 2, 3].filter((page) => page <= totalPages.value);
-  if (totalPages.value > 3) {
-    pages.push(totalPages.value);
+  if (totalPages.value <= 5) {
+    return Array.from({ length: totalPages.value }, (_, index) => index + 1);
   }
 
-  return [...new Set(pages)];
+  return [1, currentPage.value - 1, currentPage.value, currentPage.value + 1, totalPages.value]
+    .filter((page) => page >= 1 && page <= totalPages.value)
+    .filter((page, index, pages) => pages.indexOf(page) === index)
+    .sort((left, right) => left - right);
 });
 
 watch(
