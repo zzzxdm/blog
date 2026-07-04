@@ -23,6 +23,7 @@ import ArchivePage from "../pages/ArchivePage.vue";
 import ArticlePage from "../pages/ArticlePage.vue";
 import HomePage from "../pages/HomePage.vue";
 import LoginPage from "../pages/LoginPage.vue";
+import NotFoundPage from "../pages/NotFoundPage.vue";
 import SubmitPage from "../pages/SubmitPage.vue";
 import TopicsPage from "../pages/TopicsPage.vue";
 import { useAuthStore } from "../stores/auth";
@@ -54,7 +55,8 @@ export const router = createRouter({
     { path: "/admin/navigation", name: "admin-navigation", component: AdminNavigationPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/stats", name: "admin-stats", component: AdminStatsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/audit", name: "admin-audit", component: AdminAuditPage, meta: { hideChrome: true, requiresAdmin: true } },
-    { path: "/admin/settings", name: "admin-settings", component: AdminSettingsPage, meta: { hideChrome: true, requiresAdmin: true } }
+    { path: "/admin/settings", name: "admin-settings", component: AdminSettingsPage, meta: { hideChrome: true, requiresAdmin: true } },
+    { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundPage }
   ],
   scrollBehavior() {
     return { top: 0 };

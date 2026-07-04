@@ -252,6 +252,27 @@ textarea {
   padding: 28px 0 56px;
 }
 
+.empty-state {
+  display: grid;
+  min-height: 52vh;
+  align-content: center;
+  justify-items: start;
+  gap: 14px;
+  width: min(620px, 100%);
+}
+
+.empty-state h1 {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 58px);
+  line-height: 1.05;
+}
+
+.empty-state p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--muted);
+}
+
 .footbar {
   border-top: 1px solid rgba(17, 23, 20, 0.14);
   background: #213c34;
