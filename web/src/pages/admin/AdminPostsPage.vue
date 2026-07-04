@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  createAdminPost,
   getAdminPosts,
   type AdminPost,
+  type AdminPostPayload,
   type AdminPostStats
 } from "../../shared/api";
 
+const router = useRouter();
 const posts = ref<AdminPost[]>([]);
 const stats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, monthlyViews: "0", total: 0 });
 const loading = ref(false);
+const importing = ref(false);
 const error = ref("");
+const message = ref("");
+const importInput = ref<HTMLInputElement | null>(null);
 
 onMounted(load);
 
@@ -28,6 +35,112 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+function openImport() {
+  importInput.value?.click();
+}
+
+async function importMarkdown(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || importing.value) {
+    return;
+  }
+
+  importing.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const content = await file.text();
+    const payload = markdownPayload(content, file.name);
+    const post = await createAdminPost(payload);
+    message.value = `已导入草稿：${post.title}`;
+    await router.push(`/admin/editor?id=${post.id}`);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "Markdown 导入失败";
+  } finally {
+    importing.value = false;
+  }
+}
+
+function markdownPayload(markdown: string, fileName: string): AdminPostPayload {
+  const parsed = parseFrontMatter(markdown);
+  const body = parsed.body.trim();
+  const title = parsed.meta.title || firstHeading(body) || fileName.replace(/\.[^.]+$/, "");
+  const summary = parsed.meta.summary || parsed.meta.description || firstParagraph(body);
+  const tags = parseTags(parsed.meta.tags);
+
+  return {
+    title,
+    summary,
+    content: body || markdown.trim(),
+    slug: parsed.meta.slug || slugFrom(fileName) || slugFrom(title),
+    status: "draft",
+    category: parsed.meta.category || "工程实践",
+    tags,
+    coverImage: parsed.meta.coverImage || "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80",
+    seoTitle: parsed.meta.seoTitle || title,
+    seoDescription: parsed.meta.seoDescription || summary
+  };
+}
+
+function parseFrontMatter(markdown: string) {
+  const normalized = markdown.replace(/^\uFEFF/, "");
+  if (!normalized.startsWith("---")) {
+    return { meta: {} as Record<string, string>, body: normalized };
+  }
+
+  const end = normalized.indexOf("\n---", 3);
+  if (end < 0) {
+    return { meta: {} as Record<string, string>, body: normalized };
+  }
+
+  const raw = normalized.slice(3, end).trim();
+  const meta: Record<string, string> = {};
+  raw.split(/\r?\n/).forEach((line) => {
+    const index = line.indexOf(":");
+    if (index < 0) {
+      return;
+    }
+    const key = line.slice(0, index).trim();
+    const value = line.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+    if (key) {
+      meta[key] = value;
+    }
+  });
+
+  return { meta, body: normalized.slice(end + 4) };
+}
+
+function firstHeading(markdown: string) {
+  return markdown.split(/\r?\n/).map((line) => line.match(/^#\s+(.+)$/)?.[1]?.trim()).find(Boolean) || "";
+}
+
+function firstParagraph(markdown: string) {
+  return markdown
+    .split(/\r?\n\r?\n/)
+    .map((item) => item.replace(/^#+\s+/, "").trim())
+    .find((item) => item && !item.startsWith("```")) || "";
+}
+
+function parseTags(value = "") {
+  return value
+    .replace(/^\[|\]$/g, "")
+    .split(/[,，]/)
+    .map((item) => item.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
+function slugFrom(value: string) {
+  const slug = value
+    .toLowerCase()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || `import-${Date.now()}`;
 }
 
 function statusText(status: AdminPost["status"]) {
@@ -60,7 +173,8 @@ function formatDate(value: string) {
   <AdminLayout title="文章管理" description="管理草稿、审核、定时发布和已发布内容。" mobile-title="文章管理" primary-action="新建">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">导入</button>
+        <input ref="importInput" class="sr-only" type="file" accept=".md,.markdown,text/markdown,text/plain" @change="importMarkdown">
+        <button class="button-secondary" type="button" :disabled="importing" @click="openImport">{{ importing ? "导入中..." : "导入" }}</button>
         <RouterLink class="button" to="/admin/editor">新建文章</RouterLink>
       </div>
     </template>
@@ -71,6 +185,8 @@ function formatDate(value: string) {
       <div class="stat-card"><span>待审核</span><strong>{{ stats.review }}</strong></div>
       <div class="stat-card"><span>本月阅读</span><strong>{{ stats.monthlyViews }}</strong></div>
     </section>
+
+    <p v-if="message" class="muted">{{ message }}</p>
 
     <section class="table-panel" aria-label="文章列表">
       <form class="table-toolbar" @submit.prevent="load">
