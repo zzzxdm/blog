@@ -313,6 +313,7 @@ export interface SiteSettings {
   siteUrl: string;
   beian: string;
   themePrimary: string;
+  homepageLayout: string;
   darkModeEnabled: boolean;
   readingProgressEnabled: boolean;
   commentsEnabled: boolean;

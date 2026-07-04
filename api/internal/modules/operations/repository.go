@@ -319,6 +319,7 @@ func publicSettings(settings Settings) PublicSettings {
 		SiteURL:                 settings.SiteURL,
 		Beian:                   settings.Beian,
 		ThemePrimary:            settings.ThemePrimary,
+		HomepageLayout:          settings.HomepageLayout,
 		DarkModeEnabled:         settings.DarkModeEnabled,
 		ReadingProgressEnabled:  settings.ReadingProgressEnabled,
 		CommentsEnabled:         settings.CommentsEnabled,

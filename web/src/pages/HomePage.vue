@@ -34,6 +34,10 @@ const allPosts = computed(() => posts.list?.items ?? []);
 const featurePost = computed(() => allPosts.value[0] ?? null);
 const weeklyPosts = computed(() => allPosts.value.slice(1, 4));
 const latestPosts = computed(() => allPosts.value.slice(1, 5));
+const homepageLayout = computed(() => siteSettings.value?.homepageLayout || "精选文章 + 最新列表");
+const topicFirstLayout = computed(() => homepageLayout.value === "专题优先");
+const minimalLayout = computed(() => homepageLayout.value === "极简文章流");
+const streamPosts = computed(() => minimalLayout.value ? allPosts.value : latestPosts.value);
 const siteDescription = computed(() => siteSettings.value?.siteDescription || "技术、产品、工程实践和长期写作的沉淀。");
 const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
 const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交原创文章，审核通过后发布到站点。");
@@ -203,7 +207,30 @@ function topicTone(index: number): "" | "rust" | "amber" {
     <p v-else-if="posts.error" class="error">{{ posts.error }}</p>
 
     <template v-else>
-      <section v-if="featurePost" class="hero-grid" aria-label="精选内容">
+      <section v-if="topicFirstLayout && topicLinks.length" class="topic-strip" aria-label="专题导航">
+        <div class="section-heading">
+          <div>
+            <h2>专题导航</h2>
+            <p>先从主题进入，再选择具体文章。</p>
+          </div>
+          <RouterLink class="button-secondary" to="/topics">查看全部专题</RouterLink>
+        </div>
+
+        <div class="topic-strip-grid">
+          <RouterLink
+            v-for="topic in topicLinks"
+            :key="topic.key"
+            class="topic-strip-card"
+            :class="topic.tone"
+            :to="topic.to"
+          >
+            <strong>{{ topic.label }}</strong>
+            <span>{{ topic.count }} 篇内容</span>
+          </RouterLink>
+        </div>
+      </section>
+
+      <section v-if="!minimalLayout && featurePost" class="hero-grid" aria-label="精选内容">
         <article class="feature">
           <img :src="featurePost.coverImage" :alt="featurePost.title">
           <div class="feature-content">
@@ -239,18 +266,18 @@ function topicTone(index: number): "" | "rust" | "amber" {
         </aside>
       </section>
 
-      <section class="article-layout home-latest-layout" aria-label="最新文章">
+      <section class="article-layout home-latest-layout" :class="{ 'home-minimal-layout': minimalLayout }" :aria-label="minimalLayout ? '文章流' : '最新文章'">
         <div>
           <div class="section-heading">
             <div>
-              <h2>最新文章</h2>
-              <p>按发布时间排序，适合快速浏览最近更新。</p>
+              <h2>{{ minimalLayout ? "文章流" : "最新文章" }}</h2>
+              <p>{{ minimalLayout ? "保留最少干扰，按发布时间浏览全部文章。" : "按发布时间排序，适合快速浏览最近更新。" }}</p>
             </div>
             <RouterLink class="button-secondary" to="/archive">查看归档</RouterLink>
           </div>
 
           <div class="article-list">
-            <article v-for="(post, index) in latestPosts" :key="post.id" class="article-card">
+            <article v-for="(post, index) in streamPosts" :key="post.id" class="article-card">
               <img :src="post.coverImage" :alt="post.title">
               <div class="article-card-body">
                 <div class="meta-row">
@@ -271,8 +298,8 @@ function topicTone(index: number): "" | "rust" | "amber" {
           </div>
         </div>
 
-        <aside class="sidebar">
-          <section class="panel">
+        <aside v-if="!minimalLayout" class="sidebar">
+          <section v-if="!topicFirstLayout" class="panel">
             <div class="panel-title">
               <h2>专题</h2>
             </div>

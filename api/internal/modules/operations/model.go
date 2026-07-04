@@ -37,6 +37,7 @@ type PublicSettings struct {
 	SiteURL                 string    `json:"siteUrl"`
 	Beian                   string    `json:"beian"`
 	ThemePrimary            string    `json:"themePrimary"`
+	HomepageLayout          string    `json:"homepageLayout"`
 	DarkModeEnabled         bool      `json:"darkModeEnabled"`
 	ReadingProgressEnabled  bool      `json:"readingProgressEnabled"`
 	CommentsEnabled         bool      `json:"commentsEnabled"`
