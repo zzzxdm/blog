@@ -4,16 +4,19 @@ import { onMounted, ref } from "vue";
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
   createAdminMessage,
+  exportAdminMessages,
   getAdminMessages,
   type MessageStats,
   type MessageType,
   type StationMessage
 } from "../../shared/api";
+import { downloadJson, exportFileName } from "../../shared/download";
 
 const messages = ref<StationMessage[]>([]);
 const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
 const loading = ref(false);
 const sending = ref(false);
+const exporting = ref(false);
 const error = ref("");
 const message = ref("");
 
@@ -67,6 +70,21 @@ async function send() {
   }
 }
 
+async function exportMessages() {
+  exporting.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    downloadJson(exportFileName("messages"), await exportAdminMessages());
+    message.value = "站内信记录导出已生成。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "站内信导出失败";
+  } finally {
+    exporting.value = false;
+  }
+}
+
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
     month: "2-digit",
@@ -107,7 +125,7 @@ function typeClass(value: MessageType) {
   <AdminLayout title="站内信管理" description="向用户发送审核结果、站点公告和定向运营消息。" mobile-title="站内信管理" primary-action="发送">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">导出记录</button>
+        <button class="button-secondary" type="button" :disabled="exporting" @click="exportMessages">{{ exporting ? "导出中..." : "导出记录" }}</button>
         <button class="button" type="button" :disabled="sending" @click="send">新建消息</button>
       </div>
     </template>

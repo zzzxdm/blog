@@ -3,15 +3,18 @@ import { onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  exportAdminUsers,
   getAdminUsers,
   updateAdminUserStatus,
   type ManagedUser,
   type UserStats
 } from "../../shared/api";
+import { downloadJson, exportFileName } from "../../shared/download";
 
 const users = ref<ManagedUser[]>([]);
 const stats = ref<UserStats>({ total: 0, emailVerified: 0, authors: 0, muted: 0, banned: 0 });
 const loading = ref(false);
+const exporting = ref(false);
 const actingId = ref("");
 const error = ref("");
 const message = ref("");
@@ -49,6 +52,21 @@ async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
   }
 }
 
+async function exportUsers() {
+  exporting.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    downloadJson(exportFileName("users"), await exportAdminUsers());
+    message.value = "用户数据导出已生成。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户导出失败";
+  } finally {
+    exporting.value = false;
+  }
+}
+
 function roleText(role: string) {
   if (role === "admin") return "管理员";
   if (role === "editor") return "编辑";
@@ -83,7 +101,7 @@ function formatDate(value: string) {
   <AdminLayout title="用户管理" description="管理注册用户、作者账号、禁言状态和评论行为。" mobile-title="用户管理" primary-action="邀请作者">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">导出用户</button>
+        <button class="button-secondary" type="button" :disabled="exporting" @click="exportUsers">{{ exporting ? "导出中..." : "导出用户" }}</button>
         <button class="button" type="button">邀请作者</button>
       </div>
     </template>

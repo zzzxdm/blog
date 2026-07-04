@@ -405,6 +405,36 @@ export interface AdminStats {
   suggestions: ContentSuggestion[];
 }
 
+export interface AdminStatsExport {
+  scope: "stats";
+  exportedAt: string;
+  stats: AdminStats;
+}
+
+export interface AdminCommentsExport {
+  scope: "comments";
+  exportedAt: string;
+  items: Comment[];
+  total: number;
+  stats: CommentStats;
+}
+
+export interface AdminMessagesExport {
+  scope: "messages";
+  exportedAt: string;
+  items: StationMessage[];
+  total: number;
+  stats: MessageStats;
+}
+
+export interface AdminUsersExport {
+  scope: "users";
+  exportedAt: string;
+  items: ManagedUser[];
+  total: number;
+  stats: UserStats;
+}
+
 export interface AuditLog {
   id: string;
   actorId: string;
@@ -740,6 +770,11 @@ export async function getAdminComments(status = ""): Promise<CommentManageListRe
   return request<CommentManageListResponse>(`/admin/comments${query}`);
 }
 
+export async function exportAdminComments(status = ""): Promise<AdminCommentsExport> {
+  const query = toQuery({ status });
+  return request<AdminCommentsExport>(`/admin/comments/export${query}`);
+}
+
 export async function updateCommentStatus(id: string, status: Comment["status"]): Promise<Comment> {
   return request<Comment>(`/admin/comments/${encodeURIComponent(id)}/status`, {
     method: "PUT",
@@ -832,6 +867,11 @@ export async function archiveMessage(id: string): Promise<StationMessage> {
 export async function getAdminMessages(params: { status?: string; type?: string } = {}): Promise<MessageListResponse> {
   const query = toQuery(params);
   return request<MessageListResponse>(`/admin/messages${query}`);
+}
+
+export async function exportAdminMessages(params: { status?: string; type?: string } = {}): Promise<AdminMessagesExport> {
+  const query = toQuery(params);
+  return request<AdminMessagesExport>(`/admin/messages/export${query}`);
 }
 
 export async function createAdminMessage(payload: {
@@ -935,6 +975,10 @@ export async function getAdminStats(): Promise<AdminStats> {
   return request<AdminStats>("/admin/stats");
 }
 
+export async function exportAdminStats(): Promise<AdminStatsExport> {
+  return request<AdminStatsExport>("/admin/stats/export");
+}
+
 export async function getAdminAuditLogs(params: AuditLogParams = {}): Promise<AuditLogListResponse> {
   const query = toQuery(params);
   return request<AuditLogListResponse>(`/admin/audit-logs${query}`);
@@ -942,6 +986,10 @@ export async function getAdminAuditLogs(params: AuditLogParams = {}): Promise<Au
 
 export async function getAdminUsers(): Promise<UserListResponse> {
   return request<UserListResponse>("/admin/users");
+}
+
+export async function exportAdminUsers(): Promise<AdminUsersExport> {
+  return request<AdminUsersExport>("/admin/users/export");
 }
 
 export async function updateAdminUserStatus(id: string, status: ManagedUser["status"]): Promise<ManagedUser> {

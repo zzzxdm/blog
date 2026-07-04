@@ -3,6 +3,7 @@ package comments
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"blog/api/internal/modules/auth"
 
@@ -26,6 +27,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository) {
 	router.POST("/comments/:id/report", handler.Report)
 	router.GET("/comments/mine", handler.ListMine)
 	router.GET("/admin/comments", handler.AdminList)
+	router.GET("/admin/comments/export", handler.AdminExport)
 	router.PUT("/admin/comments/:id/status", handler.UpdateStatus)
 }
 
@@ -155,6 +157,28 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) AdminExport(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
+		Status: ctx.Query("status"),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export comments"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"scope":      "comments",
+		"exportedAt": time.Now(),
+		"items":      result.Items,
+		"total":      result.Total,
+		"stats":      result.Stats,
+	})
 }
 
 func (handler *Handler) UpdateStatus(ctx *gin.Context) {

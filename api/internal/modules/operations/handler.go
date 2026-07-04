@@ -51,6 +51,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 	router.PATCH("/admin/media/:id", handler.UpdateMedia)
 	router.DELETE("/admin/media/:id", handler.DeleteMedia)
 	router.GET("/admin/stats", handler.GetStats)
+	router.GET("/admin/stats/export", handler.ExportStats)
 	router.GET("/admin/audit-logs", handler.ListAuditLogs)
 }
 
@@ -331,6 +332,24 @@ func (handler *Handler) GetStats(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, stats)
+}
+
+func (handler *Handler) ExportStats(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	stats, err := handler.repo.GetStats(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export stats"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"scope":      "stats",
+		"exportedAt": time.Now(),
+		"stats":      stats,
+	})
 }
 
 func (handler *Handler) ListAuditLogs(ctx *gin.Context) {

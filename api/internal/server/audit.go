@@ -12,9 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func auditAdminWrites(repo operations.Repository) gin.HandlerFunc {
+func auditAdminOperations(repo operations.Repository) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if repo == nil || !isWriteMethod(ctx.Request.Method) || !strings.HasPrefix(ctx.Request.URL.Path, "/api/admin/") {
+		if repo == nil || !strings.HasPrefix(ctx.Request.URL.Path, "/api/admin/") || (!isWriteMethod(ctx.Request.Method) && !isAdminExportPath(ctx.Request.URL.Path)) {
 			ctx.Next()
 			return
 		}
@@ -47,6 +47,14 @@ func auditAdminWrites(repo operations.Repository) gin.HandlerFunc {
 
 func auditAction(method string, path string) string {
 	switch {
+	case strings.Contains(path, "/export") && strings.Contains(path, "/admin/stats"):
+		return "stats.export"
+	case strings.Contains(path, "/export") && strings.Contains(path, "/admin/comments"):
+		return "comments.export"
+	case strings.Contains(path, "/export") && strings.Contains(path, "/admin/messages"):
+		return "messages.export"
+	case strings.Contains(path, "/export") && strings.Contains(path, "/admin/users"):
+		return "users.export"
 	case strings.Contains(path, "/admin/settings/test-mail"):
 		return "settings.test_mail"
 	case strings.Contains(path, "/admin/settings"):
@@ -130,4 +138,8 @@ func auditRoute(ctx *gin.Context) string {
 	}
 
 	return ctx.Request.URL.Path
+}
+
+func isAdminExportPath(path string) bool {
+	return strings.Contains(path, "/export")
 }

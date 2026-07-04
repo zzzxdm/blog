@@ -3,9 +3,11 @@ import { onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  exportAdminStats,
   getAdminStats,
   type AdminStats
 } from "../../shared/api";
+import { downloadJson, exportFileName } from "../../shared/download";
 
 const stats = ref<AdminStats>({
   metrics: [],
@@ -16,6 +18,7 @@ const stats = ref<AdminStats>({
   suggestions: []
 });
 const loading = ref(false);
+const exporting = ref(false);
 const error = ref("");
 
 onMounted(load);
@@ -32,6 +35,19 @@ async function load() {
     loading.value = false;
   }
 }
+
+async function exportReport() {
+  exporting.value = true;
+  error.value = "";
+
+  try {
+    downloadJson(exportFileName("stats-report"), await exportAdminStats());
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "统计报表导出失败";
+  } finally {
+    exporting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -43,7 +59,7 @@ async function load() {
           <option>最近 7 天</option>
           <option>今年</option>
         </select>
-        <button class="button-secondary" type="button">导出报表</button>
+        <button class="button-secondary" type="button" :disabled="exporting" @click="exportReport">{{ exporting ? "导出中..." : "导出报表" }}</button>
       </div>
     </template>
 

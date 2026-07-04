@@ -3,16 +3,19 @@ import { onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  exportAdminComments,
   getAdminComments,
   updateCommentStatus,
   type Comment,
   type CommentStats
 } from "../../shared/api";
+import { downloadJson, exportFileName } from "../../shared/download";
 
 const comments = ref<Comment[]>([]);
 const stats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
 const status = ref("pending");
 const loading = ref(false);
+const exporting = ref(false);
 const actingId = ref("");
 const error = ref("");
 const message = ref("");
@@ -47,6 +50,21 @@ async function setStatus(item: Comment, nextStatus: Comment["status"]) {
     error.value = err instanceof Error ? err.message : "评论状态更新失败";
   } finally {
     actingId.value = "";
+  }
+}
+
+async function exportComments() {
+  exporting.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    downloadJson(exportFileName("comments"), await exportAdminComments(status.value));
+    message.value = "评论导出已生成。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "评论导出失败";
+  } finally {
+    exporting.value = false;
   }
 }
 
@@ -93,7 +111,7 @@ function statusClass(value: Comment["status"]) {
   <AdminLayout title="评论管理" description="审核用户评论、处理举报，并对异常用户进行禁言或封禁。" mobile-title="评论管理" primary-action="批量通过">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button">导出</button>
+        <button class="button-secondary" type="button" :disabled="exporting" @click="exportComments">{{ exporting ? "导出中..." : "导出" }}</button>
         <button class="button" type="button" @click="load">刷新</button>
       </div>
     </template>

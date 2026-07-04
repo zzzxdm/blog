@@ -183,6 +183,16 @@ func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
 	if messagesRec.Code != http.StatusOK || !strings.Contains(messagesRec.Body.String(), "你的投稿已通过并发布") {
 		t.Fatalf("expected review message, got status=%d body=%q", messagesRec.Code, messagesRec.Body.String())
 	}
+
+	adminMessagesExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/messages/export", nil)
+	for _, cookie := range adminCookies {
+		adminMessagesExportReq.AddCookie(cookie)
+	}
+	adminMessagesExportRec := httptest.NewRecorder()
+	router.ServeHTTP(adminMessagesExportRec, adminMessagesExportReq)
+	if adminMessagesExportRec.Code != http.StatusOK || !strings.Contains(adminMessagesExportRec.Body.String(), `"scope":"messages"`) || !strings.Contains(adminMessagesExportRec.Body.String(), "你的投稿已通过并发布") {
+		t.Fatalf("expected messages export, got status=%d body=%q", adminMessagesExportRec.Code, adminMessagesExportRec.Body.String())
+	}
 }
 
 func TestAccountCommentsBookmarksAndAdminModeration(t *testing.T) {
@@ -284,6 +294,16 @@ func TestAccountCommentsBookmarksAndAdminModeration(t *testing.T) {
 	router.ServeHTTP(adminRec, adminReq)
 	if adminRec.Code != http.StatusOK || !strings.Contains(adminRec.Body.String(), createdComment.ID) {
 		t.Fatalf("expected admin comments list, got status=%d body=%q", adminRec.Code, adminRec.Body.String())
+	}
+
+	exportCommentsReq := httptest.NewRequest(http.MethodGet, "/api/admin/comments/export?status=pending", nil)
+	for _, cookie := range adminCookies {
+		exportCommentsReq.AddCookie(cookie)
+	}
+	exportCommentsRec := httptest.NewRecorder()
+	router.ServeHTTP(exportCommentsRec, exportCommentsReq)
+	if exportCommentsRec.Code != http.StatusOK || !strings.Contains(exportCommentsRec.Body.String(), `"scope":"comments"`) || !strings.Contains(exportCommentsRec.Body.String(), createdComment.ID) {
+		t.Fatalf("expected comments export, got status=%d body=%q", exportCommentsRec.Code, exportCommentsRec.Body.String())
 	}
 
 	approveReq := httptest.NewRequest(http.MethodPut, "/api/admin/comments/"+createdComment.ID+"/status", bytes.NewBufferString(`{"status":"approved"}`))
@@ -551,6 +571,16 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		t.Fatalf("expected stats response, got status=%d body=%q", statsRec.Code, statsRec.Body.String())
 	}
 
+	statsExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats/export", nil)
+	for _, cookie := range adminCookies {
+		statsExportReq.AddCookie(cookie)
+	}
+	statsExportRec := httptest.NewRecorder()
+	router.ServeHTTP(statsExportRec, statsExportReq)
+	if statsExportRec.Code != http.StatusOK || !strings.Contains(statsExportRec.Body.String(), `"scope":"stats"`) || !strings.Contains(statsExportRec.Body.String(), `"label":"PV"`) {
+		t.Fatalf("expected stats export, got status=%d body=%q", statsExportRec.Code, statsExportRec.Body.String())
+	}
+
 	auditReq := httptest.NewRequest(http.MethodGet, "/api/admin/audit-logs?pageSize=20", nil)
 	for _, cookie := range adminCookies {
 		auditReq.AddCookie(cookie)
@@ -670,6 +700,16 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 	router.ServeHTTP(adminListRec, adminListReq)
 	if adminListRec.Code != http.StatusOK || !strings.Contains(adminListRec.Body.String(), "market_user") {
 		t.Fatalf("expected admin users list, got status=%d body=%q", adminListRec.Code, adminListRec.Body.String())
+	}
+
+	usersExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/users/export", nil)
+	for _, cookie := range adminCookies {
+		usersExportReq.AddCookie(cookie)
+	}
+	usersExportRec := httptest.NewRecorder()
+	router.ServeHTTP(usersExportRec, usersExportReq)
+	if usersExportRec.Code != http.StatusOK || !strings.Contains(usersExportRec.Body.String(), `"scope":"users"`) || !strings.Contains(usersExportRec.Body.String(), "market_user") {
+		t.Fatalf("expected users export, got status=%d body=%q", usersExportRec.Code, usersExportRec.Body.String())
 	}
 
 	muteReq := httptest.NewRequest(http.MethodPut, "/api/admin/users/user_linyi/status", bytes.NewBufferString(`{"status":"muted"}`))

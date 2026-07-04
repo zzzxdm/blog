@@ -69,6 +69,10 @@ function actionText(value: string) {
     "settings.update": "更新设置",
     "settings.test_mail": "发送测试邮件",
     "backup.create": "创建备份",
+    "stats.export": "导出统计",
+    "comments.export": "导出评论",
+    "messages.export": "导出站内信",
+    "users.export": "导出用户",
     "navigation.update": "更新导航",
     "media.create": "上传媒体",
     "media.update": "更新媒体",
@@ -91,6 +95,7 @@ function resourceText(value: string) {
   const labels: Record<string, string> = {
     settings: "设置",
     backup: "备份",
+    stat: "统计",
     navigation: "导航",
     media: "媒体",
     post: "文章",
@@ -134,6 +139,7 @@ function formatDate(value: string) {
           <option value="">全部资源</option>
           <option value="settings">设置</option>
           <option value="backup">备份</option>
+          <option value="stat">统计</option>
           <option value="navigation">导航</option>
           <option value="post">文章</option>
           <option value="submission">投稿</option>
@@ -148,6 +154,10 @@ function formatDate(value: string) {
           <option value="settings.update">更新设置</option>
           <option value="settings.test_mail">发送测试邮件</option>
           <option value="backup.create">创建备份</option>
+          <option value="stats.export">导出统计</option>
+          <option value="comments.export">导出评论</option>
+          <option value="messages.export">导出站内信</option>
+          <option value="users.export">导出用户</option>
           <option value="post.publish">发布文章</option>
           <option value="post.restore">恢复版本</option>
           <option value="submission.review">审核投稿</option>
