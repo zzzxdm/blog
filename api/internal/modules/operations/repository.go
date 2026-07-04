@@ -55,14 +55,14 @@ func (repo *MemoryRepository) GetSettings(_ context.Context) (Settings, error) {
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
-	return cloneSettings(repo.settings), nil
+	return normalizeSettings(repo.settings), nil
 }
 
 func (repo *MemoryRepository) UpdateSettings(_ context.Context, settings Settings) (Settings, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 
-	settings.UpdatedAt = time.Now()
+	settings = settingsForUpdate(settings, time.Now())
 	repo.settings = cloneSettings(settings)
 
 	return cloneSettings(repo.settings), nil
@@ -80,6 +80,7 @@ func (repo *MemoryRepository) RunBackup(_ context.Context) (BackupResult, error)
 	defer repo.mu.Unlock()
 
 	now := time.Now()
+	repo.settings = normalizeSettings(repo.settings)
 	repo.settings.LastBackupAt = now
 	repo.settings.UpdatedAt = now
 
@@ -232,7 +233,85 @@ func cloneSettings(settings Settings) Settings {
 	return settings
 }
 
+func settingsForUpdate(settings Settings, now time.Time) Settings {
+	settings = normalizeSettings(settings)
+	settings.UpdatedAt = now
+	return settings
+}
+
+func normalizeSettings(settings Settings) Settings {
+	defaults := seedSettings()
+
+	settings.SiteName = defaultString(settings.SiteName, defaults.SiteName)
+	settings.SiteDescription = strings.TrimSpace(settings.SiteDescription)
+	settings.SiteURL = defaultString(settings.SiteURL, defaults.SiteURL)
+	settings.Beian = strings.TrimSpace(settings.Beian)
+	settings.ThemePrimary = normalizeThemeColor(settings.ThemePrimary, defaults.ThemePrimary)
+	settings.HomepageLayout = defaultString(settings.HomepageLayout, defaults.HomepageLayout)
+	settings.BlockedWords = normalizeBlockedWords(settings.BlockedWords)
+	settings.SubmissionLimit = defaultString(settings.SubmissionLimit, defaults.SubmissionLimit)
+	settings.SubmissionGuide = strings.TrimSpace(settings.SubmissionGuide)
+	settings.MailProvider = defaultString(settings.MailProvider, defaults.MailProvider)
+	settings.FromEmail = defaultString(settings.FromEmail, defaults.FromEmail)
+	settings.SessionDays = clampInt(settings.SessionDays, 1, 90, defaults.SessionDays)
+	settings.BackupCycle = defaultString(settings.BackupCycle, defaults.BackupCycle)
+	settings.BackupRetentionDays = clampInt(settings.BackupRetentionDays, 1, 365, defaults.BackupRetentionDays)
+	if settings.LastBackupAt.IsZero() {
+		settings.LastBackupAt = defaults.LastBackupAt
+	}
+	if settings.UpdatedAt.IsZero() {
+		settings.UpdatedAt = defaults.UpdatedAt
+	}
+
+	return cloneSettings(settings)
+}
+
+func normalizeBlockedWords(words []string) []string {
+	result := make([]string, 0, len(words))
+	seen := map[string]bool{}
+	for _, item := range words {
+		value := strings.TrimSpace(item)
+		key := strings.ToLower(value)
+		if value == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, value)
+	}
+
+	return result
+}
+
+func normalizeThemeColor(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if len(value) != 7 || !strings.HasPrefix(value, "#") {
+		return fallback
+	}
+	for _, item := range value[1:] {
+		isDigit := item >= '0' && item <= '9'
+		isLowerHex := item >= 'a' && item <= 'f'
+		isUpperHex := item >= 'A' && item <= 'F'
+		if !isDigit && !isLowerHex && !isUpperHex {
+			return fallback
+		}
+	}
+
+	return strings.ToLower(value)
+}
+
+func clampInt(value int, minValue int, maxValue int, fallback int) int {
+	if value < minValue {
+		return fallback
+	}
+	if value > maxValue {
+		return maxValue
+	}
+
+	return value
+}
+
 func publicSettings(settings Settings) PublicSettings {
+	settings = normalizeSettings(settings)
 	return PublicSettings{
 		SiteName:                settings.SiteName,
 		SiteDescription:         settings.SiteDescription,

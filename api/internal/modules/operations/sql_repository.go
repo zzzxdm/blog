@@ -33,11 +33,11 @@ func (repo *SQLRepository) GetSettings(ctx context.Context) (Settings, error) {
 		return Settings{}, err
 	}
 
-	return cloneSettings(settings), nil
+	return normalizeSettings(settings), nil
 }
 
 func (repo *SQLRepository) UpdateSettings(ctx context.Context, settings Settings) (Settings, error) {
-	settings.UpdatedAt = time.Now()
+	settings = settingsForUpdate(settings, time.Now())
 	if err := repo.saveDocument(ctx, settingsDocumentKey, settings); err != nil {
 		return Settings{}, err
 	}
@@ -61,6 +61,7 @@ func (repo *SQLRepository) RunBackup(ctx context.Context) (BackupResult, error) 
 	}
 
 	now := time.Now()
+	settings = normalizeSettings(settings)
 	settings.LastBackupAt = now
 	settings.UpdatedAt = now
 	if err := repo.saveDocument(ctx, settingsDocumentKey, settings); err != nil {
