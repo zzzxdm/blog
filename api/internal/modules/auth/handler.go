@@ -32,6 +32,10 @@ func RegisterRoutes(router gin.IRouter, store Store) {
 	router.POST("/auth/forgot-password", handler.ForgotPassword)
 	router.POST("/auth/reset-password", handler.ResetPassword)
 	router.GET("/me", handler.Me)
+	router.GET("/me/sessions", handler.Sessions)
+	router.DELETE("/me/sessions/:id", handler.DeleteSession)
+	router.POST("/me/export", handler.ExportMe)
+	router.DELETE("/me", handler.DeleteMe)
 	router.PUT("/me/password", handler.ChangePassword)
 }
 
@@ -166,6 +170,78 @@ func (handler *Handler) Me(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"user": user})
 }
 
+func (handler *Handler) Sessions(ctx *gin.Context) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	sessions, err := handler.store.ListSessions(user.ID, currentSessionToken(ctx))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sessions"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"items": sessions,
+		"total": len(sessions),
+	})
+}
+
+func (handler *Handler) DeleteSession(ctx *gin.Context) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	sessionID := ctx.Param("id")
+	if err := handler.store.DeleteUserSession(user.ID, sessionID); err != nil {
+		if errors.Is(err, ErrInvalidSession) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete session"})
+		return
+	}
+
+	if sessionID == currentSessionToken(ctx) {
+		clearSessionCookie(ctx)
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+func (handler *Handler) ExportMe(ctx *gin.Context) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	data, err := handler.store.ExportUserData(user.ID, currentSessionToken(ctx))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export account data"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, data)
+}
+
+func (handler *Handler) DeleteMe(ctx *gin.Context) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	if err := handler.store.DeleteUser(user.ID); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete account"})
+		return
+	}
+
+	clearSessionCookie(ctx)
+	ctx.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func (handler *Handler) ChangePassword(ctx *gin.Context) {
 	user, ok := RequireUser(ctx)
 	if !ok {
@@ -289,4 +365,13 @@ func setSessionCookie(ctx *gin.Context, token string) {
 func clearSessionCookie(ctx *gin.Context) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie(SessionCookieName, "", -1, "/", "", false, true)
+}
+
+func currentSessionToken(ctx *gin.Context) string {
+	token, err := ctx.Cookie(SessionCookieName)
+	if err != nil {
+		return ""
+	}
+
+	return token
 }

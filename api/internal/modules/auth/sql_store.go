@@ -319,8 +319,131 @@ func (store *SQLStore) ResetPassword(token string, newPassword string) error {
 	return nil
 }
 
+func (store *SQLStore) ListSessions(userID string, currentToken string) ([]SessionInfo, error) {
+	return store.listSessions(context.Background(), userID, currentToken)
+}
+
+func (store *SQLStore) DeleteUserSession(userID string, sessionID string) error {
+	result, err := store.db.ExecContext(context.Background(), "DELETE FROM sessions WHERE user_id = $1 AND token = $2", userID, sessionID)
+	if err != nil {
+		return fmt.Errorf("delete user session: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete user session rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrInvalidSession
+	}
+
+	return nil
+}
+
+func (store *SQLStore) ExportUserData(userID string, currentToken string) (ExportData, error) {
+	user, err := store.userByID(context.Background(), userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ExportData{}, ErrInvalidSession
+		}
+		return ExportData{}, err
+	}
+
+	sessions, err := store.listSessions(context.Background(), userID, currentToken)
+	if err != nil {
+		return ExportData{}, err
+	}
+
+	var commentCount int
+	_ = store.db.QueryRowContext(context.Background(), "SELECT COUNT(*)::int FROM comments WHERE author_id = $1", userID).Scan(&commentCount)
+
+	var bookmarkCount int
+	_ = store.db.QueryRowContext(context.Background(), "SELECT COUNT(*)::int FROM post_bookmarks WHERE user_id = $1", userID).Scan(&bookmarkCount)
+
+	return ExportData{
+		User:          user,
+		Sessions:      sessions,
+		CommentCount:  commentCount,
+		BookmarkCount: bookmarkCount,
+		ExportedAt:    store.now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func (store *SQLStore) DeleteUser(userID string) error {
+	tx, err := store.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	result, err := tx.ExecContext(context.Background(), "UPDATE users SET status = 'deleted' WHERE id = $1", userID)
+	if err != nil {
+		return fmt.Errorf("delete account: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete account rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrInvalidSession
+	}
+
+	if _, err := tx.ExecContext(context.Background(), "DELETE FROM sessions WHERE user_id = $1", userID); err != nil {
+		return fmt.Errorf("delete account sessions: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+
+	return nil
+}
+
 func (store *SQLStore) DeleteSession(token string) {
 	_, _ = store.db.ExecContext(context.Background(), `DELETE FROM sessions WHERE token = $1`, token)
+}
+
+func (store *SQLStore) listSessions(ctx context.Context, userID string, currentToken string) ([]SessionInfo, error) {
+	rows, err := store.db.QueryContext(ctx, `
+		SELECT token, created_at, expires_at
+		FROM sessions
+		WHERE user_id = $1
+			AND expires_at > now()
+		ORDER BY created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query sessions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]SessionInfo, 0)
+	for rows.Next() {
+		var token string
+		var createdAt time.Time
+		var expiresAt time.Time
+		if err := rows.Scan(&token, &createdAt, &expiresAt); err != nil {
+			return nil, fmt.Errorf("scan session: %w", err)
+		}
+
+		items = append(items, SessionInfo{
+			ID:        token,
+			Device:    "Web 浏览器",
+			Current:   token == currentToken,
+			CreatedAt: createdAt.UTC().Format(time.RFC3339),
+			ExpiresAt: expiresAt.UTC().Format(time.RFC3339),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sessions: %w", err)
+	}
+
+	return items, nil
 }
 
 func (store *SQLStore) userByEmail(ctx context.Context, email string) (User, string, error) {
@@ -333,6 +456,17 @@ func (store *SQLStore) userByEmail(ctx context.Context, email string) (User, str
 	`, normalizeEmail(email)).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified, &hash)
 
 	return user, hash, err
+}
+
+func (store *SQLStore) userByID(ctx context.Context, id string) (User, error) {
+	var user User
+	err := store.db.QueryRowContext(ctx, `
+		SELECT id, email, display_name, role, status, avatar_text, email_verified
+		FROM users
+		WHERE id = $1
+	`, id).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified)
+
+	return user, err
 }
 
 func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {

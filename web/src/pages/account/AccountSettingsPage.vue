@@ -1,22 +1,33 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
 import AccountLayout from "../../components/AccountLayout.vue";
 import {
   changePassword,
+  deleteMyAccount,
+  deleteMySession,
+  exportMyData,
   getAccountSettings,
+  getMySessions,
   requestEmailVerification,
   updateAccountSettings,
   verifyEmail,
-  type AccountSettings
+  type AccountSettings,
+  type SessionInfo
 } from "../../shared/api";
 import { useAuthStore } from "../../stores/auth";
 
+const router = useRouter();
 const auth = useAuthStore();
 const settings = ref<AccountSettings | null>(null);
+const sessions = ref<SessionInfo[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const passwordSaving = ref(false);
+const sessionActingId = ref("");
+const exporting = ref(false);
+const deletingAccount = ref(false);
 const error = ref("");
 const message = ref("");
 const currentPassword = ref("");
@@ -31,7 +42,9 @@ async function load() {
   error.value = "";
 
   try {
-    settings.value = await getAccountSettings();
+    const [accountSettings, sessionResult] = await Promise.all([getAccountSettings(), getMySessions()]);
+    settings.value = accountSettings;
+    sessions.value = sessionResult.items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号设置加载失败";
   } finally {
@@ -122,6 +135,77 @@ async function confirmVerification() {
     verificationSaving.value = false;
   }
 }
+
+async function removeSession(session: SessionInfo) {
+  if (session.current || !window.confirm("移除这个登录设备？")) {
+    return;
+  }
+
+  sessionActingId.value = session.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await deleteMySession(session.id);
+    message.value = "登录设备已移除。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "登录设备移除失败";
+  } finally {
+    sessionActingId.value = "";
+  }
+}
+
+async function exportData() {
+  exporting.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const data = await exportMyData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `blog-account-export-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    message.value = "账号数据已导出。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "账号数据导出失败";
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function deleteAccount() {
+  if (!window.confirm("确认申请注销账号？该操作会退出当前账号。")) {
+    return;
+  }
+
+  deletingAccount.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await deleteMyAccount();
+    auth.user = null;
+    await router.push("/");
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "账号注销失败";
+  } finally {
+    deletingAccount.value = false;
+  }
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 </script>
 
 <template>
@@ -200,8 +284,19 @@ async function confirmVerification() {
         <section class="panel">
           <div class="panel-title"><h2>登录设备</h2></div>
           <div class="timeline">
-            <article class="timeline-item"><strong>Windows Chrome</strong><p>{{ settings.currentDeviceDescription }}</p><div class="meta-row"><span class="status published">已信任</span></div></article>
-            <article class="timeline-item"><strong>iPhone Safari</strong><p>{{ settings.lastDeviceDescription }}</p><div class="meta-row"><button class="button-secondary" type="button">移除设备</button></div></article>
+            <article v-for="session in sessions" :key="session.id" class="timeline-item">
+              <strong>{{ session.device }}</strong>
+              <p>{{ session.current ? settings.currentDeviceDescription : settings.lastDeviceDescription }}</p>
+              <div class="meta-row">
+                <span :class="['status', session.current ? 'published' : 'muted']">{{ session.current ? "当前设备" : "其他设备" }}</span>
+                <span>登录于 {{ formatDate(session.createdAt) }}</span>
+                <span>有效至 {{ formatDate(session.expiresAt) }}</span>
+                <button class="button-secondary" type="button" :disabled="session.current || sessionActingId === session.id" @click="removeSession(session)">
+                  {{ sessionActingId === session.id ? "移除中..." : "移除设备" }}
+                </button>
+              </div>
+            </article>
+            <p v-if="!sessions.length" class="muted">暂无有效登录设备。</p>
           </div>
         </section>
 
@@ -209,8 +304,8 @@ async function confirmVerification() {
           <div class="panel-title"><h2>账号数据</h2></div>
           <div class="settings-stack">
             <div class="review-note"><strong>注销前请先导出数据</strong><p>账号注销后，未发布草稿、收藏和个人设置将不可恢复；已发布内容会按站点规则保留署名记录。</p></div>
-            <button class="button-secondary" type="button">导出我的数据</button>
-            <button class="button-secondary" type="button">申请注销账号</button>
+            <button class="button-secondary" type="button" :disabled="exporting" @click="exportData">{{ exporting ? "导出中..." : "导出我的数据" }}</button>
+            <button class="button-secondary" type="button" :disabled="deletingAccount" @click="deleteAccount">{{ deletingAccount ? "处理中..." : "申请注销账号" }}</button>
           </div>
         </section>
       </section>

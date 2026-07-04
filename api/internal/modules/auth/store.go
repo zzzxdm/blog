@@ -20,6 +20,7 @@ var (
 
 type session struct {
 	UserID    string
+	CreatedAt time.Time
 	ExpiresAt time.Time
 }
 
@@ -37,6 +38,10 @@ type Store interface {
 	VerifyEmail(token string) (User, error)
 	RequestPasswordReset(email string) (string, error)
 	ResetPassword(token string, newPassword string) error
+	ListSessions(userID string, currentToken string) ([]SessionInfo, error)
+	DeleteUserSession(userID string, sessionID string) error
+	ExportUserData(userID string, currentToken string) (ExportData, error)
+	DeleteUser(userID string) error
 	DeleteSession(token string)
 }
 
@@ -94,7 +99,7 @@ func (store *MemoryStore) Authenticate(email string, password string) (User, str
 	user := store.usersByID[userID]
 	store.mu.RUnlock()
 
-	if !ok || bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
+	if !ok || user.Status == "banned" || user.Status == "deleted" || bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
 		return User{}, "", ErrInvalidCredentials
 	}
 
@@ -106,6 +111,7 @@ func (store *MemoryStore) Authenticate(email string, password string) (User, str
 	store.mu.Lock()
 	store.sessions[token] = session{
 		UserID:    user.ID,
+		CreatedAt: store.now(),
 		ExpiresAt: store.now().Add(7 * 24 * time.Hour),
 	}
 	store.mu.Unlock()
@@ -152,6 +158,7 @@ func (store *MemoryStore) Register(request RegisterRequest) (User, string, error
 	store.passwordHashes[user.ID] = hash
 	store.sessions[token] = session{
 		UserID:    user.ID,
+		CreatedAt: store.now(),
 		ExpiresAt: store.now().Add(7 * 24 * time.Hour),
 	}
 
@@ -287,6 +294,79 @@ func (store *MemoryStore) ResetPassword(token string, newPassword string) error 
 	return nil
 }
 
+func (store *MemoryStore) ListSessions(userID string, currentToken string) ([]SessionInfo, error) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	if _, ok := store.usersByID[userID]; !ok {
+		return nil, ErrInvalidSession
+	}
+
+	items := make([]SessionInfo, 0)
+	for token, session := range store.sessions {
+		if session.UserID != userID || session.ExpiresAt.Before(store.now()) {
+			continue
+		}
+
+		items = append(items, sessionInfo(token, session, token == currentToken))
+	}
+
+	return items, nil
+}
+
+func (store *MemoryStore) DeleteUserSession(userID string, sessionID string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	session, ok := store.sessions[sessionID]
+	if !ok || session.UserID != userID {
+		return ErrInvalidSession
+	}
+
+	delete(store.sessions, sessionID)
+	return nil
+}
+
+func (store *MemoryStore) ExportUserData(userID string, currentToken string) (ExportData, error) {
+	store.mu.RLock()
+	user, ok := store.usersByID[userID]
+	store.mu.RUnlock()
+	if !ok {
+		return ExportData{}, ErrInvalidSession
+	}
+
+	sessions, err := store.ListSessions(userID, currentToken)
+	if err != nil {
+		return ExportData{}, err
+	}
+
+	return ExportData{
+		User:       user,
+		Sessions:   sessions,
+		ExportedAt: store.now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func (store *MemoryStore) DeleteUser(userID string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	user, ok := store.usersByID[userID]
+	if !ok {
+		return ErrInvalidSession
+	}
+
+	user.Status = "deleted"
+	store.usersByID[userID] = user
+	for token, session := range store.sessions {
+		if session.UserID == userID {
+			delete(store.sessions, token)
+		}
+	}
+
+	return nil
+}
+
 func (store *MemoryStore) DeleteSession(token string) {
 	store.mu.Lock()
 	delete(store.sessions, token)
@@ -324,4 +404,14 @@ func firstRune(value string) string {
 	}
 
 	return "用"
+}
+
+func sessionInfo(token string, item session, current bool) SessionInfo {
+	return SessionInfo{
+		ID:        token,
+		Device:    "Web 浏览器",
+		Current:   current,
+		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339),
+		ExpiresAt: item.ExpiresAt.UTC().Format(time.RFC3339),
+	}
 }

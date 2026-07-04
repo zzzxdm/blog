@@ -689,6 +689,110 @@ func TestEmailVerificationAndPasswordReset(t *testing.T) {
 	}
 }
 
+func TestAccountSessionsExportAndDelete(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	firstCookies := loginForTest(t, router, "linyi@example.com", "password")
+	secondCookies := loginForTest(t, router, "linyi@example.com", "password")
+	currentToken := sessionCookieValue(t, secondCookies)
+
+	sessionsReq := httptest.NewRequest(http.MethodGet, "/api/me/sessions", nil)
+	for _, cookie := range secondCookies {
+		sessionsReq.AddCookie(cookie)
+	}
+	sessionsRec := httptest.NewRecorder()
+	router.ServeHTTP(sessionsRec, sessionsReq)
+	if sessionsRec.Code != http.StatusOK || !strings.Contains(sessionsRec.Body.String(), `"current":true`) {
+		t.Fatalf("expected session list, got status=%d body=%q", sessionsRec.Code, sessionsRec.Body.String())
+	}
+
+	var sessions struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Current bool   `json:"current"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(sessionsRec.Body.Bytes(), &sessions); err != nil {
+		t.Fatalf("decode sessions: %v", err)
+	}
+	if len(sessions.Items) < 2 {
+		t.Fatalf("expected at least two sessions, got %+v", sessions)
+	}
+
+	var oldSessionID string
+	for _, session := range sessions.Items {
+		if !session.Current {
+			oldSessionID = session.ID
+			break
+		}
+	}
+	if oldSessionID == "" || oldSessionID == currentToken {
+		t.Fatalf("expected non-current session id, got %+v current=%q", sessions, currentToken)
+	}
+
+	deleteSessionReq := httptest.NewRequest(http.MethodDelete, "/api/me/sessions/"+oldSessionID, nil)
+	for _, cookie := range secondCookies {
+		deleteSessionReq.AddCookie(cookie)
+	}
+	deleteSessionRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteSessionRec, deleteSessionReq)
+	if deleteSessionRec.Code != http.StatusOK || !strings.Contains(deleteSessionRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected session deleted, got status=%d body=%q", deleteSessionRec.Code, deleteSessionRec.Body.String())
+	}
+
+	oldMeReq := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	for _, cookie := range firstCookies {
+		oldMeReq.AddCookie(cookie)
+	}
+	oldMeRec := httptest.NewRecorder()
+	router.ServeHTTP(oldMeRec, oldMeReq)
+	if oldMeRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected removed session unauthorized, got status=%d body=%q", oldMeRec.Code, oldMeRec.Body.String())
+	}
+
+	exportReq := httptest.NewRequest(http.MethodPost, "/api/me/export", nil)
+	for _, cookie := range secondCookies {
+		exportReq.AddCookie(cookie)
+	}
+	exportRec := httptest.NewRecorder()
+	router.ServeHTTP(exportRec, exportReq)
+	if exportRec.Code != http.StatusOK || !strings.Contains(exportRec.Body.String(), `"email":"linyi@example.com"`) || !strings.Contains(exportRec.Body.String(), `"sessions"`) {
+		t.Fatalf("expected account export, got status=%d body=%q", exportRec.Code, exportRec.Body.String())
+	}
+
+	deleteAccountReq := httptest.NewRequest(http.MethodDelete, "/api/me", nil)
+	for _, cookie := range secondCookies {
+		deleteAccountReq.AddCookie(cookie)
+	}
+	deleteAccountRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteAccountRec, deleteAccountReq)
+	if deleteAccountRec.Code != http.StatusOK || !strings.Contains(deleteAccountRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected account deleted, got status=%d body=%q", deleteAccountRec.Code, deleteAccountRec.Body.String())
+	}
+
+	deletedMeReq := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	for _, cookie := range secondCookies {
+		deletedMeReq.AddCookie(cookie)
+	}
+	deletedMeRec := httptest.NewRecorder()
+	router.ServeHTTP(deletedMeRec, deletedMeReq)
+	if deletedMeRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected deleted account session invalid, got status=%d body=%q", deletedMeRec.Code, deletedMeRec.Body.String())
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"linyi@example.com","password":"password"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	router.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected deleted account login rejected, got status=%d body=%q", loginRec.Code, loginRec.Body.String())
+	}
+}
+
 func TestAdminPostSaveAndPublish(t *testing.T) {
 	router := NewRouter(config.Config{
 		AppEnv:    "test",
@@ -917,6 +1021,19 @@ func loginForTest(t *testing.T, router http.Handler, email string, password stri
 	}
 
 	return cookies
+}
+
+func sessionCookieValue(t *testing.T, cookies []*http.Cookie) string {
+	t.Helper()
+
+	for _, cookie := range cookies {
+		if cookie.Name == "blog_session" {
+			return cookie.Value
+		}
+	}
+
+	t.Fatalf("expected session cookie, got %+v", cookies)
+	return ""
 }
 
 func tinyPNG() []byte {

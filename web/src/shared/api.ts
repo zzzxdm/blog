@@ -92,6 +92,27 @@ export interface TokenResponse {
   delivery?: string;
 }
 
+export interface SessionInfo {
+  id: string;
+  device: string;
+  current: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface SessionListResponse {
+  items: SessionInfo[];
+  total: number;
+}
+
+export interface ExportData {
+  user: User;
+  sessions: SessionInfo[];
+  commentCount: number;
+  bookmarkCount: number;
+  exportedAt: string;
+}
+
 export interface Comment {
   id: string;
   postSlug: string;
@@ -594,6 +615,24 @@ export async function resetPassword(token: string, newPassword: string): Promise
 
 export async function getMe(): Promise<AuthResponse> {
   return request<AuthResponse>("/me");
+}
+
+export async function getMySessions(): Promise<SessionListResponse> {
+  return request<SessionListResponse>("/me/sessions");
+}
+
+export async function deleteMySession(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/me/sessions/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function exportMyData(): Promise<ExportData> {
+  return request<ExportData>("/me/export", { method: "POST" });
+}
+
+export async function deleteMyAccount(): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/me", { method: "DELETE" });
 }
 
 export async function getComments(postSlug: string): Promise<CommentListResponse> {

@@ -38,3 +38,19 @@ type ResetPasswordRequest struct {
 	Token       string `json:"token"`
 	NewPassword string `json:"newPassword"`
 }
+
+type SessionInfo struct {
+	ID        string `json:"id"`
+	Device    string `json:"device"`
+	Current   bool   `json:"current"`
+	CreatedAt string `json:"createdAt"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type ExportData struct {
+	User          User          `json:"user"`
+	Sessions      []SessionInfo `json:"sessions"`
+	CommentCount  int           `json:"commentCount"`
+	BookmarkCount int           `json:"bookmarkCount"`
+	ExportedAt    string        `json:"exportedAt"`
+}
