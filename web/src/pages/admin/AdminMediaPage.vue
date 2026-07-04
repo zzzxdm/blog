@@ -4,13 +4,18 @@ import { computed, onMounted, ref } from "vue";
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
   getAdminMedia,
+  uploadAdminMedia,
   type MediaAsset
 } from "../../shared/api";
 
 const assets = ref<MediaAsset[]>([]);
 const selectedId = ref("");
 const loading = ref(false);
+const uploading = ref(false);
 const error = ref("");
+const uploadError = ref("");
+const notice = ref("");
+const fileInput = ref<HTMLInputElement | null>(null);
 
 const selected = computed(() => assets.value.find((item) => item.id === selectedId.value) || assets.value[0]);
 
@@ -31,6 +36,68 @@ async function load() {
   }
 }
 
+function openPicker() {
+  fileInput.value?.click();
+}
+
+async function handleInputChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  await uploadFiles(input.files);
+  input.value = "";
+}
+
+async function handleDrop(event: DragEvent) {
+  await uploadFiles(event.dataTransfer?.files ?? null);
+}
+
+async function uploadFiles(fileList: FileList | null) {
+  const files = Array.from(fileList ?? []);
+  if (!files.length || uploading.value) {
+    return;
+  }
+
+  uploading.value = true;
+  uploadError.value = "";
+  notice.value = "";
+
+  try {
+    let lastUploaded: MediaAsset | null = null;
+    for (const file of files) {
+      lastUploaded = await uploadAdminMedia(file, {
+        alt: defaultAlt(file.name),
+        category: file.type === "application/pdf" ? "文档" : "上传"
+      });
+    }
+
+    await load();
+    if (lastUploaded) {
+      selectedId.value = lastUploaded.id;
+    }
+    notice.value = files.length > 1 ? `已上传 ${files.length} 个文件` : "文件已上传";
+  } catch (err) {
+    uploadError.value = err instanceof Error ? err.message : "上传失败";
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function copySelectedUrl() {
+  if (!selected.value) {
+    return;
+  }
+
+  await navigator.clipboard?.writeText(selected.value.url);
+  notice.value = "资源地址已复制";
+}
+
+function defaultAlt(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "");
+}
+
+function typeLabel(type: string) {
+  return type === "document" ? "文档" : "图片";
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("zh-CN");
 }
@@ -41,7 +108,8 @@ function formatDate(value: string) {
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button">批量选择</button>
-        <button class="button" type="button">上传文件</button>
+        <button class="button" type="button" :disabled="uploading" @click="openPicker">{{ uploading ? "上传中..." : "上传文件" }}</button>
+        <input ref="fileInput" hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" multiple @change="handleInputChange">
       </div>
     </template>
 
@@ -64,35 +132,40 @@ function formatDate(value: string) {
 
         <p v-if="loading" class="muted">正在加载媒体资源...</p>
         <p v-else-if="error" class="error">{{ error }}</p>
+        <template v-else>
+          <p v-if="uploadError" class="error">{{ uploadError }}</p>
+          <p v-else-if="notice" class="muted">{{ notice }}</p>
 
-        <section v-else class="media-grid" aria-label="媒体资源">
-          <article v-for="asset in assets" :key="asset.id" class="media-card" @click="selectedId = asset.id">
-            <img :src="asset.url" :alt="asset.alt">
-            <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>
-          </article>
-        </section>
+          <section class="media-grid" aria-label="媒体资源">
+            <article v-for="asset in assets" :key="asset.id" class="media-card" @click="selectedId = asset.id">
+              <img v-if="asset.type === 'image'" :src="asset.url" :alt="asset.alt">
+              <div v-else class="media-card-file">{{ typeLabel(asset.type) }}</div>
+              <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>
+            </article>
+          </section>
+        </template>
       </div>
 
       <aside class="settings-stack">
-        <section class="upload-zone">
+        <section class="upload-zone" :aria-busy="uploading" @dragover.prevent @drop.prevent="handleDrop">
           <div>
-            <strong>拖拽文件到这里上传</strong>
+            <strong>{{ uploading ? "正在上传文件" : "拖拽文件到这里上传" }}</strong>
             <p>支持 JPG、PNG、WebP、GIF 和 PDF。图片会自动生成响应式尺寸。</p>
-            <button class="button" type="button">选择文件</button>
+            <button class="button" type="button" :disabled="uploading" @click="openPicker">选择文件</button>
           </div>
         </section>
 
         <section v-if="selected" class="panel">
           <div class="panel-title">
             <h2>选中资源</h2>
-            <span class="tag">图片</span>
+            <span class="tag">{{ typeLabel(selected.type) }}</span>
           </div>
           <div class="settings-stack">
             <div class="field"><label for="filename">文件名</label><input class="input" id="filename" :value="selected.fileName" readonly></div>
             <div class="field"><label for="alt">Alt 文本</label><input class="input" id="alt" :value="selected.alt" readonly></div>
             <div class="field"><label for="asset-url">资源地址</label><input class="input" id="asset-url" :value="selected.url" readonly></div>
             <div class="meta-row"><span>尺寸 {{ selected.width }} x {{ selected.height }}</span><span>上传于 {{ formatDate(selected.uploadedAt) }}</span></div>
-            <button class="button-secondary" type="button">复制地址</button>
+            <button class="button-secondary" type="button" @click="copySelectedUrl">复制地址</button>
           </div>
         </section>
       </aside>

@@ -12,6 +12,7 @@ type Repository interface {
 	GetNavigation(ctx context.Context) (Navigation, error)
 	UpdateNavigation(ctx context.Context, navigation Navigation) (Navigation, error)
 	ListMedia(ctx context.Context) (MediaListResult, error)
+	CreateMedia(ctx context.Context, asset MediaAsset) (MediaAsset, error)
 	GetStats(ctx context.Context) (Stats, error)
 }
 
@@ -75,6 +76,14 @@ func (repo *MemoryRepository) ListMedia(_ context.Context) (MediaListResult, err
 		Items: items,
 		Total: len(items),
 	}, nil
+}
+
+func (repo *MemoryRepository) CreateMedia(_ context.Context, asset MediaAsset) (MediaAsset, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	repo.media = append([]MediaAsset{asset}, repo.media...)
+	return asset, nil
 }
 
 func (repo *MemoryRepository) GetStats(_ context.Context) (Stats, error) {

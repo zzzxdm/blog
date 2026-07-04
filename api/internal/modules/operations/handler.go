@@ -1,29 +1,49 @@
 package operations
 
 import (
+	"errors"
+	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"blog/api/internal/modules/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
+const maxMediaUploadBytes = 10 << 20
+
 type Handler struct {
-	repo Repository
+	repo      Repository
+	uploadDir string
 }
 
-func NewHandler(repo Repository) *Handler {
-	return &Handler{repo: repo}
+func NewHandler(repo Repository, uploadDir string) *Handler {
+	if uploadDir == "" {
+		uploadDir = "uploads"
+	}
+
+	return &Handler{repo: repo, uploadDir: uploadDir}
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository) {
-	handler := NewHandler(repo)
+func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
+	handler := NewHandler(repo, uploadDir)
 
 	router.GET("/admin/settings", handler.GetSettings)
 	router.PUT("/admin/settings", handler.UpdateSettings)
 	router.GET("/admin/navigation", handler.GetNavigation)
 	router.PUT("/admin/navigation", handler.UpdateNavigation)
 	router.GET("/admin/media", handler.ListMedia)
+	router.POST("/admin/media", handler.UploadMedia)
 	router.GET("/admin/stats", handler.GetStats)
 }
 
@@ -109,6 +129,106 @@ func (handler *Handler) ListMedia(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, result)
 }
 
+func (handler *Handler) UploadMedia(ctx *gin.Context) {
+	user, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, maxMediaUploadBytes+(1<<20))
+
+	fileHeader, err := ctx.FormFile("file")
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	if fileHeader.Size <= 0 || fileHeader.Size > maxMediaUploadBytes {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "file size must be between 1 byte and 10 MB"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read upload"})
+		return
+	}
+	defer file.Close()
+
+	contentType, extension, err := detectMediaType(file, fileHeader.Filename)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	width, height := mediaDimensions(file, contentType)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read upload"})
+		return
+	}
+
+	now := time.Now()
+	relativeDir := now.Format("2006/01")
+	originalName := safeOriginalName(fileHeader.Filename)
+	storedName := uniqueStoredName(originalName, extension, now)
+	targetDir := filepath.Join(handler.uploadDir, relativeDir)
+	targetPath := filepath.Join(targetDir, storedName)
+
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare upload directory"})
+		return
+	}
+
+	destination, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
+		return
+	}
+	if _, err := io.Copy(destination, file); err != nil {
+		_ = destination.Close()
+		_ = os.Remove(targetPath)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
+		return
+	}
+	if err := destination.Close(); err != nil {
+		_ = os.Remove(targetPath)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
+		return
+	}
+
+	alt := strings.TrimSpace(ctx.PostForm("alt"))
+	if alt == "" {
+		alt = strings.TrimSuffix(originalName, filepath.Ext(originalName))
+	}
+	category := strings.TrimSpace(ctx.PostForm("category"))
+	if category == "" {
+		category = "上传"
+	}
+
+	asset := MediaAsset{
+		ID:         fmt.Sprintf("media_%d", now.UnixNano()),
+		FileName:   originalName,
+		URL:        "/uploads/" + filepath.ToSlash(filepath.Join(relativeDir, storedName)),
+		Alt:        alt,
+		Type:       mediaKind(contentType),
+		Category:   category,
+		SizeLabel:  formatBytes(fileHeader.Size),
+		Width:      width,
+		Height:     height,
+		UsageCount: 0,
+		UploadedBy: user.DisplayName,
+		UploadedAt: now,
+	}
+
+	created, err := handler.repo.CreateMedia(ctx.Request.Context(), asset)
+	if err != nil {
+		_ = os.Remove(targetPath)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record media"})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, created)
+}
+
 func (handler *Handler) GetStats(ctx *gin.Context) {
 	if _, ok := auth.RequireAdmin(ctx); !ok {
 		return
@@ -121,4 +241,129 @@ func (handler *Handler) GetStats(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, stats)
+}
+
+func detectMediaType(file multipart.File, fileName string) (string, string, error) {
+	header := make([]byte, 512)
+	size, err := file.Read(header)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", "", errors.New("failed to inspect upload")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", "", errors.New("failed to inspect upload")
+	}
+
+	contentType := http.DetectContentType(header[:size])
+	if extension, ok := mediaContentTypes()[contentType]; ok {
+		return contentType, extension, nil
+	}
+
+	extension := strings.ToLower(filepath.Ext(fileName))
+	if contentType, ok := mediaExtensions()[extension]; ok {
+		return contentType, normalizedMediaExtension(extension), nil
+	}
+
+	return "", "", errors.New("unsupported media type")
+}
+
+func mediaDimensions(file multipart.File, contentType string) (int, int) {
+	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/gif" {
+		return 0, 0
+	}
+
+	config, _, err := image.DecodeConfig(file)
+	_, _ = file.Seek(0, io.SeekStart)
+	if err != nil {
+		return 0, 0
+	}
+
+	return config.Width, config.Height
+}
+
+func mediaContentTypes() map[string]string {
+	return map[string]string{
+		"image/jpeg":      ".jpg",
+		"image/png":       ".png",
+		"image/webp":      ".webp",
+		"image/gif":       ".gif",
+		"application/pdf": ".pdf",
+	}
+}
+
+func mediaExtensions() map[string]string {
+	return map[string]string{
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+		".webp": "image/webp",
+		".gif":  "image/gif",
+		".pdf":  "application/pdf",
+	}
+}
+
+func normalizedMediaExtension(extension string) string {
+	if extension == ".jpeg" {
+		return ".jpg"
+	}
+
+	return extension
+}
+
+func mediaKind(contentType string) string {
+	if contentType == "application/pdf" {
+		return "document"
+	}
+
+	return "image"
+}
+
+func safeOriginalName(name string) string {
+	fileName := strings.TrimSpace(filepath.Base(name))
+	if fileName == "" || fileName == "." {
+		return "upload"
+	}
+
+	return strings.NewReplacer("/", "-", "\\", "-", ":", "-").Replace(fileName)
+}
+
+func uniqueStoredName(originalName string, extension string, now time.Time) string {
+	base := strings.TrimSuffix(filepath.Base(originalName), filepath.Ext(originalName))
+	base = asciiSlug(base)
+	if base == "" {
+		base = "asset"
+	}
+
+	return fmt.Sprintf("%s-%d%s", base, now.UnixNano(), extension)
+}
+
+func asciiSlug(value string) string {
+	var builder strings.Builder
+	lastDash := false
+
+	for _, r := range strings.ToLower(value) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			builder.WriteRune(r)
+			lastDash = false
+		case !lastDash:
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+
+	return strings.Trim(builder.String(), "-")
+}
+
+func formatBytes(size int64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+
+	kb := float64(size) / unit
+	if kb < unit {
+		return fmt.Sprintf("%.1f KB", kb)
+	}
+
+	return fmt.Sprintf("%.1f MB", kb/unit)
 }

@@ -9,6 +9,7 @@ type Config struct {
 	PublicURL   string
 	DatabaseURL string
 	RedisAddr   string
+	UploadDir   string
 }
 
 func Load() Config {
@@ -19,6 +20,7 @@ func Load() Config {
 		PublicURL:   getenv("PUBLIC_URL", getenv("WEB_ORIGIN", "http://localhost:5173")),
 		DatabaseURL: getenv("DATABASE_URL", "postgres://blog:blog@localhost:5432/blog?sslmode=disable"),
 		RedisAddr:   getenv("REDIS_ADDR", "localhost:6379"),
+		UploadDir:   getenv("UPLOAD_DIR", "uploads"),
 	}
 }
 

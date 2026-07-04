@@ -76,6 +76,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(cors(cfg.WebOrigin))
+	router.Static("/uploads", uploadDir(cfg.UploadDir))
 
 	router.Use(auth.Middleware(repos.AuthStore))
 	feeds.RegisterRoutes(router, repos.PostRepo, cfg.PublicURL)
@@ -95,7 +96,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	comments.RegisterRoutes(api, repos.CommentRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
-	operations.RegisterRoutes(api, repos.OperationsRepo)
+	operations.RegisterRoutes(api, repos.OperationsRepo, uploadDir(cfg.UploadDir))
 	users.RegisterRoutes(api, repos.UserRepo)
 
 	var publisher posts.Publisher
@@ -106,6 +107,14 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	submissions.RegisterRoutes(api, repos.SubmissionRepo, repos.MessageRepo, publisher)
 
 	return router
+}
+
+func uploadDir(value string) string {
+	if value == "" {
+		return "uploads"
+	}
+
+	return value
 }
 
 func cors(origin string) gin.HandlerFunc {

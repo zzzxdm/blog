@@ -637,6 +637,31 @@ export async function getAdminMedia(): Promise<MediaListResponse> {
   return request<MediaListResponse>("/admin/media");
 }
 
+export async function uploadAdminMedia(file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
+  const form = new FormData();
+  form.set("file", file);
+
+  if (payload.alt) {
+    form.set("alt", payload.alt);
+  }
+  if (payload.category) {
+    form.set("category", payload.category);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/admin/media`, {
+    method: "POST",
+    credentials: "include",
+    body: form
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(response.status, error?.error || `Request failed: ${response.status}`);
+  }
+
+  return response.json() as Promise<MediaAsset>;
+}
+
 export async function getAdminStats(): Promise<AdminStats> {
   return request<AdminStats>("/admin/stats");
 }

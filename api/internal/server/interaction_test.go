@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -277,6 +278,7 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		AppEnv:    "test",
 		HTTPAddr:  ":0",
 		WebOrigin: "http://localhost:5173",
+		UploadDir: t.TempDir(),
 	})
 
 	anonReq := httptest.NewRequest(http.MethodGet, "/api/admin/settings", nil)
@@ -364,6 +366,65 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	router.ServeHTTP(mediaRec, mediaReq)
 	if mediaRec.Code != http.StatusOK || !strings.Contains(mediaRec.Body.String(), "cover-code-desk.jpg") {
 		t.Fatalf("expected media list, got status=%d body=%q", mediaRec.Code, mediaRec.Body.String())
+	}
+
+	var uploadBody bytes.Buffer
+	uploadWriter := multipart.NewWriter(&uploadBody)
+	uploadPart, err := uploadWriter.CreateFormFile("file", "tiny.png")
+	if err != nil {
+		t.Fatalf("create upload form file: %v", err)
+	}
+	if _, err := uploadPart.Write(tinyPNG()); err != nil {
+		t.Fatalf("write upload file: %v", err)
+	}
+	if err := uploadWriter.WriteField("alt", "测试上传图片"); err != nil {
+		t.Fatalf("write upload alt: %v", err)
+	}
+	if err := uploadWriter.WriteField("category", "测试上传"); err != nil {
+		t.Fatalf("write upload category: %v", err)
+	}
+	if err := uploadWriter.Close(); err != nil {
+		t.Fatalf("close upload writer: %v", err)
+	}
+
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/admin/media", &uploadBody)
+	uploadReq.Header.Set("Content-Type", uploadWriter.FormDataContentType())
+	for _, cookie := range adminCookies {
+		uploadReq.AddCookie(cookie)
+	}
+	uploadRec := httptest.NewRecorder()
+	router.ServeHTTP(uploadRec, uploadReq)
+	if uploadRec.Code != http.StatusCreated || !strings.Contains(uploadRec.Body.String(), `"category":"测试上传"`) {
+		t.Fatalf("expected media uploaded, got status=%d body=%q", uploadRec.Code, uploadRec.Body.String())
+	}
+
+	var uploaded struct {
+		URL    string `json:"url"`
+		Width  int    `json:"width"`
+		Height int    `json:"height"`
+	}
+	if err := json.Unmarshal(uploadRec.Body.Bytes(), &uploaded); err != nil {
+		t.Fatalf("decode uploaded media: %v", err)
+	}
+	if !strings.HasPrefix(uploaded.URL, "/uploads/") || uploaded.Width != 1 || uploaded.Height != 1 {
+		t.Fatalf("expected uploaded media metadata, got %+v", uploaded)
+	}
+
+	uploadedListReq := httptest.NewRequest(http.MethodGet, "/api/admin/media", nil)
+	for _, cookie := range adminCookies {
+		uploadedListReq.AddCookie(cookie)
+	}
+	uploadedListRec := httptest.NewRecorder()
+	router.ServeHTTP(uploadedListRec, uploadedListReq)
+	if uploadedListRec.Code != http.StatusOK || !strings.Contains(uploadedListRec.Body.String(), "tiny.png") {
+		t.Fatalf("expected uploaded media in list, got status=%d body=%q", uploadedListRec.Code, uploadedListRec.Body.String())
+	}
+
+	staticReq := httptest.NewRequest(http.MethodGet, uploaded.URL, nil)
+	staticRec := httptest.NewRecorder()
+	router.ServeHTTP(staticRec, staticReq)
+	if staticRec.Code != http.StatusOK {
+		t.Fatalf("expected uploaded file to be served, got status=%d", staticRec.Code)
 	}
 
 	statsReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)
@@ -522,4 +583,18 @@ func loginForTest(t *testing.T, router http.Handler, email string, password stri
 	}
 
 	return cookies
+}
+
+func tinyPNG() []byte {
+	return []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+		0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+		0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+		0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+		0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+		0x42, 0x60, 0x82,
+	}
 }
