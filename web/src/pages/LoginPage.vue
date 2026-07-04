@@ -126,7 +126,7 @@ function buttonText() {
           </div>
           <div v-if="mode === 'login' || mode === 'register'" class="field">
             <label for="password">密码</label>
-            <input v-model="password" class="input" id="password" type="password" autocomplete="current-password">
+            <input v-model="password" class="input" id="password" type="password" :autocomplete="mode === 'register' ? 'new-password' : 'current-password'">
           </div>
           <div v-if="mode === 'reset'" class="field">
             <label for="reset-token">重置 token</label>
