@@ -86,6 +86,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(rateLimit(120, time.Minute))
 	router.Static("/uploads", uploadDir(cfg.UploadDir))
 
+	router.Use(navigationRedirects(repos.OperationsRepo))
 	router.Use(auth.Middleware(repos.AuthStore))
 	router.Use(auditAdminOperations(repos.OperationsRepo))
 	feeds.RegisterRoutes(router, repos.PostRepo, repos.OperationsRepo, cfg.PublicURL)

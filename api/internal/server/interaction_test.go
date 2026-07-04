@@ -584,6 +584,13 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		t.Fatalf("expected public navigation, got status=%d body=%q", publicNavigationRec.Code, publicNavigationRec.Body.String())
 	}
 
+	redirectReq := httptest.NewRequest(http.MethodGet, "/old?ref=legacy", nil)
+	redirectRec := httptest.NewRecorder()
+	router.ServeHTTP(redirectRec, redirectReq)
+	if redirectRec.Code != http.StatusMovedPermanently || redirectRec.Header().Get("Location") != "/new?ref=legacy" {
+		t.Fatalf("expected navigation redirect, got status=%d location=%q", redirectRec.Code, redirectRec.Header().Get("Location"))
+	}
+
 	mediaReq := httptest.NewRequest(http.MethodGet, "/api/admin/media", nil)
 	for _, cookie := range adminCookies {
 		mediaReq.AddCookie(cookie)
