@@ -43,15 +43,16 @@ watch(
 
 watch(query, (value, _oldValue, onCleanup) => {
   const keyword = value.trim();
-  const timer = window.setTimeout(async () => {
-    const run = ++searchRun;
+  const run = ++searchRun;
 
-    if (!keyword) {
-      results.value = null;
-      error.value = null;
-      loading.value = false;
-      return;
-    }
+  if (!keyword) {
+    results.value = null;
+    error.value = null;
+    loading.value = false;
+    return;
+  }
+
+  const timer = window.setTimeout(async () => {
 
     loading.value = true;
     error.value = null;
