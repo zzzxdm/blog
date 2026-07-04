@@ -37,27 +37,15 @@ const editorArea = ref<HTMLTextAreaElement | null>(null);
 const previewArea = ref<HTMLElement | null>(null);
 const linkUrl = ref("https://");
 
-const title = ref("如何设计一个内容长期增长的博客系统");
-const summary = ref("博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。");
-const content = ref(`# 如何设计一个内容长期增长的博客系统
-
-博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。
-
-## 内容模型先于页面
-
-文章需要拥有稳定的 slug、分类、标签、SEO 元数据、封面图、摘要、阅读时长和发布时间。
-
-> 内容系统的核心不是页面，而是可被长期复用、迁移和分发的数据。
-
-## 发布流程需要留出空间
-
-成熟博客通常支持草稿、预览、审核、定时发布和版本历史。`);
-const slug = ref("blog-system-design");
+const title = ref("");
+const summary = ref("");
+const content = ref("");
+const slug = ref("");
 const category = ref("工程实践");
-const tagsText = ref("Vue3, SEO, 内容系统");
+const tagsText = ref("");
 const coverImage = ref("https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=700&q=80");
-const seoTitle = ref("如何设计一个现代化博客系统");
-const seoDescription = ref("从内容模型、发布流程、SEO、缓存和运营能力设计一个可长期维护的博客系统。");
+const seoTitle = ref("");
+const seoDescription = ref("");
 const status = ref<AdminPostStatus>("draft");
 const visibility = ref<AdminPostVisibility>("public");
 const scheduledAt = ref(nextScheduleValue());
@@ -156,6 +144,17 @@ async function saveDraft() {
 }
 
 async function save(nextStatus: AdminPostStatus) {
+  if (!title.value.trim()) {
+    error.value = "请输入标题后再保存";
+    message.value = "";
+    return;
+  }
+  if (nextStatus === "review" && !content.value.trim()) {
+    error.value = "请填写正文后再提交审核";
+    message.value = "";
+    return;
+  }
+
   saving.value = true;
   error.value = "";
   message.value = "";
@@ -177,6 +176,11 @@ async function save(nextStatus: AdminPostStatus) {
 async function publish() {
   if (visibility.value !== "public") {
     error.value = "非公开文章暂不支持发布到公开站点。";
+    message.value = "";
+    return;
+  }
+  if (!title.value.trim() || !content.value.trim()) {
+    error.value = "请填写标题和正文后再发布。";
     message.value = "";
     return;
   }
@@ -208,6 +212,11 @@ async function schedulePost() {
   }
   if (!scheduledAt.value) {
     error.value = "请选择发布时间。";
+    message.value = "";
+    return;
+  }
+  if (!title.value.trim() || !content.value.trim()) {
+    error.value = "请填写标题和正文后再定时发布。";
     message.value = "";
     return;
   }
