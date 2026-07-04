@@ -27,13 +27,13 @@ const selectedId = ref("");
 
 const messageScope = ref("single");
 const targetRole = ref("author");
-const recipientId = ref("user_linyi");
-const recipientName = ref("林一");
+const recipientId = ref("");
+const recipientName = ref("");
 const messageType = ref<MessageType>("admin");
 const priority = ref("normal");
-const title = ref("优质投稿用户邀请");
-const body = ref("你最近的投稿质量较高，欢迎继续提交工程实践和写作工作流相关内容。");
-const targetTitle = ref("投稿激励");
+const title = ref("");
+const body = ref("");
+const targetTitle = ref("");
 const scheduleOpen = ref(false);
 const scheduledAt = ref("");
 const searchQuery = ref("");
@@ -87,6 +87,11 @@ async function load() {
 }
 
 async function send() {
+  if (!title.value.trim() || !body.value.trim()) {
+    error.value = "请输入标题和正文";
+    return;
+  }
+
   if (scheduleOpen.value && !scheduledAt.value) {
     error.value = "请选择定时发送时间";
     return;

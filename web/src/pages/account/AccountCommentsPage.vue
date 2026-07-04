@@ -16,6 +16,7 @@ const error = ref("");
 const searchQuery = ref("");
 const sortMode = ref("created");
 
+const commentEntry = computed(() => comments.value[0] ? `/posts/${comments.value[0].postSlug}` : "/archive");
 const visibleComments = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase();
   const filtered = comments.value.filter((item) => {
@@ -100,7 +101,7 @@ function formatDate(value: string) {
 <template>
   <AccountLayout title="我的评论" description="查看评论审核状态、回复记录和已通过评论。">
     <template #actions>
-      <RouterLink class="button-secondary" to="/posts/blog-system-design">去评论</RouterLink>
+      <RouterLink class="button-secondary" :to="commentEntry">{{ comments.length ? "继续讨论" : "去阅读" }}</RouterLink>
     </template>
 
     <section class="stats-grid" aria-label="评论统计">

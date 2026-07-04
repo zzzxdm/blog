@@ -10,9 +10,9 @@ const route = useRoute();
 const auth = useAuthStore();
 
 const mode = ref<"login" | "register" | "forgot" | "reset">("login");
-const email = ref("linyi@example.com");
-const password = ref("password");
-const displayName = ref("林一");
+const email = ref("");
+const password = ref("");
+const displayName = ref("");
 const resetToken = ref("");
 const newPassword = ref("");
 const message = ref("");

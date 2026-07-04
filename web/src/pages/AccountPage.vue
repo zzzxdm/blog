@@ -31,6 +31,7 @@ const error = ref("");
 
 const commentTotal = computed(() => comments.value.length);
 const bookmarkTotal = computed(() => bookmarks.value.length);
+const commentEntry = computed(() => comments.value[0] ? `/posts/${comments.value[0].postSlug}` : "/archive");
 
 onMounted(load);
 
@@ -161,7 +162,7 @@ function formatTime(value?: string) {
         <section class="panel">
           <div class="panel-title">
             <h2>我的评论</h2>
-            <RouterLink class="button-secondary" to="/posts/blog-system-design">去评论</RouterLink>
+            <RouterLink class="button-secondary" :to="commentEntry">{{ comments.length ? "继续讨论" : "去阅读" }}</RouterLink>
           </div>
           <div class="timeline">
             <article v-for="item in comments" :key="item.id" class="timeline-item">

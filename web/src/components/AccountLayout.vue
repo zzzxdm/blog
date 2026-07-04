@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+
+import { useAuthStore } from "../stores/auth";
 
 defineProps<{
   title: string;
@@ -7,6 +10,16 @@ defineProps<{
 }>();
 
 const route = useRoute();
+const auth = useAuthStore();
+const displayName = computed(() => auth.user?.displayName || "用户");
+const avatarText = computed(() => auth.user?.avatarText || Array.from(displayName.value)[0] || "用");
+const emailStatus = computed(() => auth.user?.emailVerified ? "已验证邮箱" : "邮箱未验证");
+const roleText = computed(() => {
+  if (auth.user?.role === "admin") return "管理员";
+  if (auth.user?.role === "editor") return "编辑";
+  if (auth.user?.role === "author") return "作者";
+  return "注册用户";
+});
 
 const navItems = [
   { label: "概览", to: "/account" },
@@ -32,12 +45,12 @@ const navItems = [
       <aside class="panel">
         <div class="profile-card">
           <div class="profile-hero">
-            <span class="avatar">林</span>
+            <span class="avatar">{{ avatarText }}</span>
             <div>
-              <strong>林一</strong>
+              <strong>{{ displayName }}</strong>
               <div class="meta-row">
-                <span>已验证邮箱</span>
-                <span>普通注册用户</span>
+                <span>{{ emailStatus }}</span>
+                <span>{{ roleText }}</span>
               </div>
             </div>
           </div>
