@@ -563,6 +563,33 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 		t.Fatalf("expected account settings updated, got status=%d body=%q", accountRec.Code, accountRec.Body.String())
 	}
 
+	changePasswordReq := httptest.NewRequest(http.MethodPut, "/api/me/password", bytes.NewBufferString(`{"currentPassword":"password","newPassword":"new-password"}`))
+	changePasswordReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		changePasswordReq.AddCookie(cookie)
+	}
+	changePasswordRec := httptest.NewRecorder()
+	router.ServeHTTP(changePasswordRec, changePasswordReq)
+	if changePasswordRec.Code != http.StatusOK || !strings.Contains(changePasswordRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected password changed, got status=%d body=%q", changePasswordRec.Code, changePasswordRec.Body.String())
+	}
+
+	oldPasswordReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"linyi@example.com","password":"password"}`))
+	oldPasswordReq.Header.Set("Content-Type", "application/json")
+	oldPasswordRec := httptest.NewRecorder()
+	router.ServeHTTP(oldPasswordRec, oldPasswordReq)
+	if oldPasswordRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected old password rejected, got %d body=%q", oldPasswordRec.Code, oldPasswordRec.Body.String())
+	}
+
+	newPasswordReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"linyi@example.com","password":"new-password"}`))
+	newPasswordReq.Header.Set("Content-Type", "application/json")
+	newPasswordRec := httptest.NewRecorder()
+	router.ServeHTTP(newPasswordRec, newPasswordReq)
+	if newPasswordRec.Code != http.StatusOK {
+		t.Fatalf("expected new password accepted, got %d body=%q", newPasswordRec.Code, newPasswordRec.Body.String())
+	}
+
 	adminCookies := loginForTest(t, router, "admin@example.com", "password")
 	adminListReq := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
 	for _, cookie := range adminCookies {

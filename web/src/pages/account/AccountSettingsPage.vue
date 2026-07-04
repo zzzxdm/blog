@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 
 import AccountLayout from "../../components/AccountLayout.vue";
 import {
+  changePassword,
   getAccountSettings,
   updateAccountSettings,
   type AccountSettings
@@ -13,8 +14,11 @@ const auth = useAuthStore();
 const settings = ref<AccountSettings | null>(null);
 const loading = ref(false);
 const saving = ref(false);
+const passwordSaving = ref(false);
 const error = ref("");
 const message = ref("");
+const currentPassword = ref("");
+const newPassword = ref("");
 
 onMounted(load);
 
@@ -54,6 +58,28 @@ async function save() {
     saving.value = false;
   }
 }
+
+async function savePassword() {
+  if (!currentPassword.value || !newPassword.value) {
+    error.value = "请输入当前密码和新密码";
+    return;
+  }
+
+  passwordSaving.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await changePassword(currentPassword.value, newPassword.value);
+    currentPassword.value = "";
+    newPassword.value = "";
+    message.value = "密码已更新。";
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "密码修改失败";
+  } finally {
+    passwordSaving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -89,7 +115,9 @@ async function save() {
           <div class="panel-title"><h2>登录安全</h2></div>
           <div class="settings-stack">
             <div class="field"><label for="email">登录邮箱</label><input v-model="settings.email" class="input" id="email" readonly></div>
-            <div class="field"><label for="password">修改密码</label><input class="input" id="password" type="password" placeholder="输入新密码"></div>
+            <div class="field"><label for="current-password">当前密码</label><input v-model="currentPassword" class="input" id="current-password" type="password" autocomplete="current-password"></div>
+            <div class="field"><label for="new-password">新密码</label><input v-model="newPassword" class="input" id="new-password" type="password" autocomplete="new-password" placeholder="至少 6 位"></div>
+            <button class="button-secondary" type="button" :disabled="passwordSaving || !currentPassword || !newPassword" @click="savePassword">{{ passwordSaving ? "更新中..." : "更新密码" }}</button>
             <label class="setting-row"><div><strong>两步验证</strong><div class="meta-row"><span>登录时需要邮箱验证码</span></div></div><input v-model="settings.twoFactor" type="checkbox"></label>
             <label class="setting-row"><div><strong>异常登录提醒</strong><div class="meta-row"><span>新设备登录时发送站内信</span></div></div><input v-model="settings.loginAlert" type="checkbox"></label>
           </div>

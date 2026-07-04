@@ -143,6 +143,32 @@ func (store *SQLStore) UserBySession(token string) (User, error) {
 	return user, nil
 }
 
+func (store *SQLStore) ChangePassword(userID string, currentPassword string, newPassword string) error {
+	var hash string
+	err := store.db.QueryRowContext(context.Background(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidCredentials
+		}
+		return err
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(currentPassword)) != nil {
+		return ErrInvalidCredentials
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	if _, err := store.db.ExecContext(context.Background(), "UPDATE users SET password_hash = $2 WHERE id = $1", userID, string(newHash)); err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	return nil
+}
+
 func (store *SQLStore) DeleteSession(token string) {
 	_, _ = store.db.ExecContext(context.Background(), `DELETE FROM sessions WHERE token = $1`, token)
 }

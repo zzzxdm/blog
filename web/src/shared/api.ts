@@ -719,6 +719,13 @@ export async function updateAccountSettings(payload: AccountSettings): Promise<A
   });
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>("/me/password", {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+}
+
 export async function getAdminPosts(): Promise<AdminPostListResponse> {
   return request<AdminPostListResponse>("/admin/posts");
 }

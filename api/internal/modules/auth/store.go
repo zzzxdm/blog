@@ -26,6 +26,7 @@ type Store interface {
 	Authenticate(email string, password string) (User, string, error)
 	Register(request RegisterRequest) (User, string, error)
 	UserBySession(token string) (User, error)
+	ChangePassword(userID string, currentPassword string, newPassword string) error
 	DeleteSession(token string)
 }
 
@@ -151,6 +152,24 @@ func (store *MemoryStore) UserBySession(token string) (User, error) {
 	}
 
 	return user, nil
+}
+
+func (store *MemoryStore) ChangePassword(userID string, currentPassword string, newPassword string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	hash, ok := store.passwordHashes[userID]
+	if !ok || bcrypt.CompareHashAndPassword(hash, []byte(currentPassword)) != nil {
+		return ErrInvalidCredentials
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	store.passwordHashes[userID] = newHash
+	return nil
 }
 
 func (store *MemoryStore) DeleteSession(token string) {

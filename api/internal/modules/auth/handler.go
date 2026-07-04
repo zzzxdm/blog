@@ -28,6 +28,7 @@ func RegisterRoutes(router gin.IRouter, store Store) {
 	router.POST("/auth/register", handler.Register)
 	router.POST("/auth/logout", handler.Logout)
 	router.GET("/me", handler.Me)
+	router.PUT("/me/password", handler.ChangePassword)
 }
 
 func Middleware(store Store) gin.HandlerFunc {
@@ -148,6 +149,36 @@ func (handler *Handler) Me(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+func (handler *Handler) ChangePassword(ctx *gin.Context) {
+	user, ok := RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	var request PasswordChangeRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid password payload"})
+		return
+	}
+
+	if len(request.NewPassword) < 6 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "new password must be at least 6 characters"})
+		return
+	}
+
+	if err := handler.store.ChangePassword(user.ID, request.CurrentPassword, request.NewPassword); err != nil {
+		if errors.Is(err, ErrInvalidCredentials) {
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func setSessionCookie(ctx *gin.Context, token string) {
