@@ -35,6 +35,7 @@ type Store interface {
 	Register(request RegisterRequest) (User, string, error)
 	InviteUser(request InviteUserRequest) (User, string, error)
 	UpdateRole(userID string, role string) (User, error)
+	UpdateProfile(userID string, displayName string, avatarText string) (User, error)
 	UserBySession(token string) (User, error)
 	SetSessionExpiry(token string, expiresAt time.Time) error
 	ChangePassword(userID string, currentPassword string, newPassword string) error
@@ -265,6 +266,28 @@ func (store *MemoryStore) UpdateRole(userID string, role string) (User, error) {
 	}
 
 	user.Role = role
+	store.usersByID[userID] = user
+
+	return user, nil
+}
+
+func (store *MemoryStore) UpdateProfile(userID string, displayName string, avatarText string) (User, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	user, ok := store.usersByID[userID]
+	if !ok {
+		return User{}, ErrInvalidSession
+	}
+
+	user.DisplayName = strings.TrimSpace(displayName)
+	if user.DisplayName == "" {
+		user.DisplayName = strings.Split(user.Email, "@")[0]
+	}
+	user.AvatarText = strings.TrimSpace(avatarText)
+	if user.AvatarText == "" {
+		user.AvatarText = firstRune(user.DisplayName)
+	}
 	store.usersByID[userID] = user
 
 	return user, nil

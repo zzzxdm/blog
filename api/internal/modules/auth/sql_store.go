@@ -220,6 +220,43 @@ func (store *SQLStore) UpdateRole(userID string, role string) (User, error) {
 	return store.userByID(context.Background(), userID)
 }
 
+func (store *SQLStore) UpdateProfile(userID string, displayName string, avatarText string) (User, error) {
+	displayName = strings.TrimSpace(displayName)
+	avatarText = strings.TrimSpace(avatarText)
+	if displayName == "" {
+		user, err := store.userByID(context.Background(), userID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return User{}, ErrInvalidSession
+			}
+			return User{}, err
+		}
+		displayName = strings.Split(user.Email, "@")[0]
+	}
+	if avatarText == "" {
+		avatarText = firstRune(displayName)
+	}
+
+	result, err := store.db.ExecContext(context.Background(), `
+		UPDATE users
+		SET display_name = $2,
+			avatar_text = $3
+		WHERE id = $1
+	`, userID, displayName, avatarText)
+	if err != nil {
+		return User{}, fmt.Errorf("update user profile: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return User{}, fmt.Errorf("read user profile rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return User{}, ErrInvalidSession
+	}
+
+	return store.userByID(context.Background(), userID)
+}
+
 func (store *SQLStore) UserBySession(token string) (User, error) {
 	var user User
 	err := store.db.QueryRowContext(context.Background(), `

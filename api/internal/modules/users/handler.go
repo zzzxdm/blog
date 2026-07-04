@@ -245,6 +245,12 @@ func (handler *Handler) UpdateAccount(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update account settings"})
 		return
 	}
+	if handler.authStore != nil {
+		if _, err := handler.authStore.UpdateProfile(user.ID, settings.DisplayName, settings.AvatarText); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync account profile"})
+			return
+		}
+	}
 
 	ctx.JSON(http.StatusOK, settings)
 }
