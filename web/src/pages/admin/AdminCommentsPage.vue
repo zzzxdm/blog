@@ -1,5 +1,92 @@
 <script setup lang="ts">
+import { onMounted, ref } from "vue";
+
 import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  getAdminComments,
+  updateCommentStatus,
+  type Comment,
+  type CommentStats
+} from "../../shared/api";
+
+const comments = ref<Comment[]>([]);
+const stats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
+const status = ref("pending");
+const loading = ref(false);
+const actingId = ref("");
+const error = ref("");
+const message = ref("");
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const response = await getAdminComments(status.value);
+    comments.value = response.items;
+    stats.value = response.stats;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "评论列表加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function setStatus(item: Comment, nextStatus: Comment["status"]) {
+  actingId.value = item.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await updateCommentStatus(item.id, nextStatus);
+    message.value = "评论状态已更新。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "评论状态更新失败";
+  } finally {
+    actingId.value = "";
+  }
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function statusText(value: Comment["status"]) {
+  if (value === "approved") {
+    return "已通过";
+  }
+  if (value === "pending") {
+    return "待审核";
+  }
+  if (value === "rejected") {
+    return "已拒绝";
+  }
+  if (value === "spam") {
+    return "垃圾评论";
+  }
+  return "已删除";
+}
+
+function statusClass(value: Comment["status"]) {
+  if (value === "approved") {
+    return "published";
+  }
+  if (value === "spam" || value === "deleted") {
+    return "banned";
+  }
+  if (value === "rejected") {
+    return "rejected";
+  }
+  return "review";
+}
 </script>
 
 <template>
@@ -7,26 +94,30 @@ import AdminLayout from "../../components/AdminLayout.vue";
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button">导出</button>
-        <button class="button" type="button">批量通过</button>
+        <button class="button" type="button" @click="load">刷新</button>
       </div>
     </template>
 
     <section class="stats-grid" aria-label="评论统计">
-      <div class="stat-card"><span>待审核</span><strong>23</strong></div>
-      <div class="stat-card"><span>今日新增</span><strong>58</strong></div>
-      <div class="stat-card"><span>举报待处理</span><strong>6</strong></div>
-      <div class="stat-card"><span>拦截垃圾评论</span><strong>142</strong></div>
+      <div class="stat-card"><span>待审核</span><strong>{{ stats.pending }}</strong></div>
+      <div class="stat-card"><span>全部评论</span><strong>{{ stats.total }}</strong></div>
+      <div class="stat-card"><span>已拒绝</span><strong>{{ stats.rejected }}</strong></div>
+      <div class="stat-card"><span>垃圾评论</span><strong>{{ stats.spam }}</strong></div>
     </section>
 
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="message" class="muted">{{ message }}</p>
+
     <section class="table-panel" aria-label="评论列表">
-      <form class="table-toolbar">
+      <form class="table-toolbar" @submit.prevent="load">
         <input class="input" type="search" placeholder="搜索评论内容、用户、文章" aria-label="搜索评论">
-        <select class="input" aria-label="评论状态">
-          <option>全部状态</option>
-          <option>待审核</option>
-          <option>已通过</option>
-          <option>已拒绝</option>
-          <option>举报中</option>
+        <select v-model="status" class="input" aria-label="评论状态" @change="load">
+          <option value="">全部状态</option>
+          <option value="pending">待审核</option>
+          <option value="approved">已通过</option>
+          <option value="rejected">已拒绝</option>
+          <option value="spam">垃圾评论</option>
+          <option value="deleted">已删除</option>
         </select>
         <select class="input" aria-label="排序">
           <option>最新提交</option>
@@ -35,7 +126,8 @@ import AdminLayout from "../../components/AdminLayout.vue";
         </select>
       </form>
 
-      <table>
+      <p v-if="loading" class="muted">正在加载评论...</p>
+      <table v-else>
         <thead>
           <tr>
             <th>评论</th>
@@ -48,53 +140,23 @@ import AdminLayout from "../../components/AdminLayout.vue";
           </tr>
         </thead>
         <tbody>
-          <tr>
+          <tr v-for="item in comments" :key="item.id">
             <td>
-              <strong>如果后续支持站内信，审核结果是否会同步提醒到个人中心？</strong>
-              <div class="meta-row"><span>IP：192.168.1.24</span><span>回复主评论 #128</span></div>
+              <strong>{{ item.body }}</strong>
+              <div class="meta-row"><span>{{ item.likeCount }} 次点赞</span><span v-if="item.parentId">回复 {{ item.parentId }}</span></div>
             </td>
-            <td>林一<div class="meta-row"><span>已验证邮箱</span></div></td>
-            <td>如何设计一个内容长期增长的博客系统</td>
-            <td><span class="status review">待审核</span></td>
-            <td>低</td>
-            <td>刚刚</td>
-            <td><div class="header-actions"><button class="button-secondary" type="button">通过</button><button class="button-secondary" type="button">拒绝</button></div></td>
-          </tr>
-          <tr>
+            <td>{{ item.authorName }}<div class="meta-row"><span>{{ item.authorId }}</span></div></td>
+            <td>{{ item.postTitle || item.postSlug }}</td>
+            <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
+            <td>{{ item.riskLevel || "低" }}</td>
+            <td>{{ formatDate(item.createdAt) }}</td>
             <td>
-              <strong>这条评论包含推广链接，需要人工确认是否保留。</strong>
-              <div class="meta-row"><span>检测到外链</span><span>被举报 3 次</span></div>
+              <div class="header-actions">
+                <button class="button-secondary" type="button" :disabled="actingId === item.id" @click="setStatus(item, 'approved')">通过</button>
+                <button class="button-secondary" type="button" :disabled="actingId === item.id" @click="setStatus(item, 'rejected')">拒绝</button>
+                <button class="button-secondary" type="button" :disabled="actingId === item.id" @click="setStatus(item, 'deleted')">删除</button>
+              </div>
             </td>
-            <td>market_user<div class="meta-row"><span>新注册用户</span></div></td>
-            <td>让旧文章继续被搜索引擎找到</td>
-            <td><span class="status review">举报中</span></td>
-            <td>高</td>
-            <td>12 分钟前</td>
-            <td><div class="header-actions"><button class="button-secondary" type="button">删除</button><button class="button-secondary" type="button">禁言</button></div></td>
-          </tr>
-          <tr>
-            <td>
-              <strong>版本历史对于多人协作很重要，个人博客其实也需要。</strong>
-              <div class="meta-row"><span>18 次点赞</span></div>
-            </td>
-            <td>林一<div class="meta-row"><span>42 条评论</span></div></td>
-            <td>为什么博客后台需要文章版本历史</td>
-            <td><span class="status published">已通过</span></td>
-            <td>低</td>
-            <td>昨天</td>
-            <td><div class="header-actions"><button class="button-secondary" type="button">置顶</button><button class="button-secondary" type="button">删除</button></div></td>
-          </tr>
-          <tr>
-            <td>
-              <strong>重复刷屏内容，已被系统自动折叠。</strong>
-              <div class="meta-row"><span>同 IP 5 分钟内提交 8 次</span></div>
-            </td>
-            <td>noise_2048<div class="meta-row"><span>未验证邮箱</span></div></td>
-            <td>Redis 和 PostgreSQL 在博客中的分工</td>
-            <td><span class="status banned">垃圾评论</span></td>
-            <td>高</td>
-            <td>今天 09:18</td>
-            <td><div class="header-actions"><button class="button-secondary" type="button">封禁</button><button class="button-secondary" type="button">查看</button></div></td>
           </tr>
         </tbody>
       </table>

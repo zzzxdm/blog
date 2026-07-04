@@ -22,6 +22,9 @@ func RegisterRoutes(router gin.IRouter, repo Repository) {
 
 	router.GET("/posts/:slug/comments", handler.List)
 	router.POST("/posts/:slug/comments", handler.Create)
+	router.GET("/comments/mine", handler.ListMine)
+	router.GET("/admin/comments", handler.AdminList)
+	router.PUT("/admin/comments/:id/status", handler.UpdateStatus)
 }
 
 func (handler *Handler) List(ctx *gin.Context) {
@@ -60,4 +63,66 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, comment)
+}
+
+func (handler *Handler) ListMine(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	result, err := handler.repo.ListByAuthor(ctx.Request.Context(), user.ID, ListQuery{
+		Status: ctx.Query("status"),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) AdminList(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
+		Status: ctx.Query("status"),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) UpdateStatus(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request StatusRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment status payload"})
+		return
+	}
+
+	comment, err := handler.repo.UpdateStatus(ctx.Request.Context(), ctx.Param("id"), request.Status)
+	if err != nil {
+		if errors.Is(err, ErrCommentNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "comment not found"})
+			return
+		}
+		if errors.Is(err, ErrInvalidStatus) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment status"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update comment"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, comment)
 }

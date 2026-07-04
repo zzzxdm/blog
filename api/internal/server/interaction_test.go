@@ -184,6 +184,94 @@ func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
 	}
 }
 
+func TestAccountCommentsBookmarksAndAdminModeration(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	userCookies := loginForTest(t, router, "linyi@example.com", "password")
+
+	bookmarksReq := httptest.NewRequest(http.MethodGet, "/api/bookmarks/mine", nil)
+	for _, cookie := range userCookies {
+		bookmarksReq.AddCookie(cookie)
+	}
+	bookmarksRec := httptest.NewRecorder()
+	router.ServeHTTP(bookmarksRec, bookmarksReq)
+	if bookmarksRec.Code != http.StatusOK || !strings.Contains(bookmarksRec.Body.String(), "blog-system-design") {
+		t.Fatalf("expected bookmark list, got status=%d body=%q", bookmarksRec.Code, bookmarksRec.Body.String())
+	}
+
+	removeBookmarkReq := httptest.NewRequest(http.MethodPut, "/api/posts/blog-system-design/bookmark", bytes.NewBufferString(`{"bookmarked":false}`))
+	removeBookmarkReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		removeBookmarkReq.AddCookie(cookie)
+	}
+	removeBookmarkRec := httptest.NewRecorder()
+	router.ServeHTTP(removeBookmarkRec, removeBookmarkReq)
+	if removeBookmarkRec.Code != http.StatusOK || !strings.Contains(removeBookmarkRec.Body.String(), `"bookmarked":false`) {
+		t.Fatalf("expected bookmark removed, got status=%d body=%q", removeBookmarkRec.Code, removeBookmarkRec.Body.String())
+	}
+
+	commentReq := httptest.NewRequest(http.MethodPost, "/api/posts/blog-system-design/comments", bytes.NewBufferString(`{"body":"这条评论会进入后台审核。","parentId":""}`))
+	commentReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		commentReq.AddCookie(cookie)
+	}
+	commentRec := httptest.NewRecorder()
+	router.ServeHTTP(commentRec, commentReq)
+	if commentRec.Code != http.StatusCreated {
+		t.Fatalf("expected comment created, got status=%d body=%q", commentRec.Code, commentRec.Body.String())
+	}
+
+	var createdComment struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(commentRec.Body.Bytes(), &createdComment); err != nil {
+		t.Fatalf("decode created comment: %v", err)
+	}
+
+	mineReq := httptest.NewRequest(http.MethodGet, "/api/comments/mine", nil)
+	for _, cookie := range userCookies {
+		mineReq.AddCookie(cookie)
+	}
+	mineRec := httptest.NewRecorder()
+	router.ServeHTTP(mineRec, mineReq)
+	if mineRec.Code != http.StatusOK || !strings.Contains(mineRec.Body.String(), createdComment.ID) {
+		t.Fatalf("expected my comments list, got status=%d body=%q", mineRec.Code, mineRec.Body.String())
+	}
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+	adminReq := httptest.NewRequest(http.MethodGet, "/api/admin/comments?status=pending", nil)
+	for _, cookie := range adminCookies {
+		adminReq.AddCookie(cookie)
+	}
+	adminRec := httptest.NewRecorder()
+	router.ServeHTTP(adminRec, adminReq)
+	if adminRec.Code != http.StatusOK || !strings.Contains(adminRec.Body.String(), createdComment.ID) {
+		t.Fatalf("expected admin comments list, got status=%d body=%q", adminRec.Code, adminRec.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPut, "/api/admin/comments/"+createdComment.ID+"/status", bytes.NewBufferString(`{"status":"approved"}`))
+	approveReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		approveReq.AddCookie(cookie)
+	}
+	approveRec := httptest.NewRecorder()
+	router.ServeHTTP(approveRec, approveReq)
+	if approveRec.Code != http.StatusOK || !strings.Contains(approveRec.Body.String(), `"status":"approved"`) {
+		t.Fatalf("expected approved comment, got status=%d body=%q", approveRec.Code, approveRec.Body.String())
+	}
+
+	publicCommentsReq := httptest.NewRequest(http.MethodGet, "/api/posts/blog-system-design/comments", nil)
+	publicCommentsRec := httptest.NewRecorder()
+	router.ServeHTTP(publicCommentsRec, publicCommentsReq)
+	if publicCommentsRec.Code != http.StatusOK || !strings.Contains(publicCommentsRec.Body.String(), "这条评论会进入后台审核。") {
+		t.Fatalf("expected approved comment public, got status=%d body=%q", publicCommentsRec.Code, publicCommentsRec.Body.String())
+	}
+}
+
 func loginForTest(t *testing.T, router http.Handler, email string, password string) []*http.Cookie {
 	t.Helper()
 

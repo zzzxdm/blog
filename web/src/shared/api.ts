@@ -52,6 +52,7 @@ export interface AuthResponse {
 export interface Comment {
   id: string;
   postSlug: string;
+  postTitle?: string;
   parentId?: string;
   authorId: string;
   authorName: string;
@@ -59,6 +60,8 @@ export interface Comment {
   body: string;
   status: "approved" | "pending" | "rejected" | "spam" | "deleted";
   likeCount: number;
+  replyCount?: number;
+  riskLevel?: string;
   isMine: boolean;
   isAuthor: boolean;
   createdAt: string;
@@ -67,6 +70,23 @@ export interface Comment {
 export interface CommentListResponse {
   items: Comment[];
   total: number;
+}
+
+export interface CommentStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  spam: number;
+  deleted: number;
+  likes: number;
+  replies: number;
+}
+
+export interface CommentManageListResponse {
+  items: Comment[];
+  total: number;
+  stats: CommentStats;
 }
 
 export interface ReactionSummary {
@@ -176,6 +196,15 @@ export interface MessageListResponse {
   stats: MessageStats;
 }
 
+export type BookmarkItem = Post & {
+  bookmarkedAt: string;
+};
+
+export interface BookmarkListResponse {
+  items: BookmarkItem[];
+  total: number;
+}
+
 export interface ListResponse<T> {
   items: T[];
   page: number;
@@ -239,6 +268,23 @@ export async function createComment(postSlug: string, body: string, parentId = "
   });
 }
 
+export async function getMyComments(status = ""): Promise<CommentManageListResponse> {
+  const query = toQuery({ status });
+  return request<CommentManageListResponse>(`/comments/mine${query}`);
+}
+
+export async function getAdminComments(status = ""): Promise<CommentManageListResponse> {
+  const query = toQuery({ status });
+  return request<CommentManageListResponse>(`/admin/comments${query}`);
+}
+
+export async function updateCommentStatus(id: string, status: Comment["status"]): Promise<Comment> {
+  return request<Comment>(`/admin/comments/${encodeURIComponent(id)}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status })
+  });
+}
+
 export async function getReaction(postSlug: string): Promise<ReactionSummary> {
   return request<ReactionSummary>(`/posts/${encodeURIComponent(postSlug)}/reaction`);
 }
@@ -255,6 +301,10 @@ export async function setBookmark(postSlug: string, bookmarked: boolean): Promis
     method: "PUT",
     body: JSON.stringify({ bookmarked })
   });
+}
+
+export async function getMyBookmarks(): Promise<BookmarkListResponse> {
+  return request<BookmarkListResponse>("/bookmarks/mine");
 }
 
 export async function getMySubmissions(status = ""): Promise<SubmissionListResponse> {

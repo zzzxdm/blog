@@ -5,6 +5,7 @@ import "time"
 type Comment struct {
 	ID         string    `json:"id"`
 	PostSlug   string    `json:"postSlug"`
+	PostTitle  string    `json:"postTitle,omitempty"`
 	ParentID   string    `json:"parentId,omitempty"`
 	AuthorID   string    `json:"authorId"`
 	AuthorName string    `json:"authorName"`
@@ -12,6 +13,8 @@ type Comment struct {
 	Body       string    `json:"body"`
 	Status     string    `json:"status"`
 	LikeCount  int       `json:"likeCount"`
+	ReplyCount int       `json:"replyCount"`
+	RiskLevel  string    `json:"riskLevel,omitempty"`
 	IsMine     bool      `json:"isMine"`
 	IsAuthor   bool      `json:"isAuthor"`
 	CreatedAt  time.Time `json:"createdAt"`
@@ -25,4 +28,29 @@ type ListResult struct {
 type CreateRequest struct {
 	Body     string `json:"body"`
 	ParentID string `json:"parentId"`
+}
+
+type ListQuery struct {
+	Status string
+}
+
+type ManageStats struct {
+	Total    int `json:"total"`
+	Pending  int `json:"pending"`
+	Approved int `json:"approved"`
+	Rejected int `json:"rejected"`
+	Spam     int `json:"spam"`
+	Deleted  int `json:"deleted"`
+	Likes    int `json:"likes"`
+	Replies  int `json:"replies"`
+}
+
+type ManageListResult struct {
+	Items []Comment   `json:"items"`
+	Total int         `json:"total"`
+	Stats ManageStats `json:"stats"`
+}
+
+type StatusRequest struct {
+	Status string `json:"status"`
 }

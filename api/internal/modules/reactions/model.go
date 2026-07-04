@@ -1,5 +1,7 @@
 package reactions
 
+import "time"
+
 type Summary struct {
 	PostSlug      string `json:"postSlug"`
 	LikeCount     int    `json:"likeCount"`
@@ -15,4 +17,9 @@ type ReactionRequest struct {
 
 type BookmarkRequest struct {
 	Bookmarked bool `json:"bookmarked"`
+}
+
+type Bookmark struct {
+	PostSlug     string    `json:"postSlug"`
+	BookmarkedAt time.Time `json:"bookmarkedAt"`
 }

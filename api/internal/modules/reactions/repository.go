@@ -3,8 +3,10 @@ package reactions
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 var ErrInvalidReaction = errors.New("invalid reaction")
@@ -13,6 +15,7 @@ type Repository interface {
 	Get(ctx context.Context, postSlug string, userID string) (Summary, error)
 	SetReaction(ctx context.Context, postSlug string, userID string, reaction string) (Summary, error)
 	SetBookmark(ctx context.Context, postSlug string, userID string, bookmarked bool) (Summary, error)
+	ListBookmarks(ctx context.Context, userID string) ([]Bookmark, error)
 }
 
 type postState struct {
@@ -20,7 +23,7 @@ type postState struct {
 	DislikeCount  int
 	BookmarkCount int
 	Reactions     map[string]string
-	Bookmarks     map[string]bool
+	Bookmarks     map[string]time.Time
 }
 
 type MemoryRepository struct {
@@ -36,21 +39,21 @@ func NewMemoryRepository() *MemoryRepository {
 				DislikeCount:  7,
 				BookmarkCount: 34,
 				Reactions:     map[string]string{"user_linyi": "like"},
-				Bookmarks:     map[string]bool{"user_linyi": true},
+				Bookmarks:     map[string]time.Time{"user_linyi": time.Now().Add(-2 * time.Hour)},
 			},
 			"vue3-content-site-cache-seo": {
 				LikeCount:     96,
 				DislikeCount:  3,
 				BookmarkCount: 18,
 				Reactions:     map[string]string{},
-				Bookmarks:     map[string]bool{},
+				Bookmarks:     map[string]time.Time{"user_linyi": time.Now().Add(-26 * time.Hour)},
 			},
 			"postgres-redis-blog-boundary": {
 				LikeCount:     84,
 				DislikeCount:  4,
 				BookmarkCount: 25,
 				Reactions:     map[string]string{},
-				Bookmarks:     map[string]bool{},
+				Bookmarks:     map[string]time.Time{},
 			},
 		},
 	}
@@ -107,11 +110,11 @@ func (repo *MemoryRepository) SetBookmark(_ context.Context, postSlug string, us
 	defer repo.mu.Unlock()
 
 	state := repo.ensure(postSlug)
-	previous := state.Bookmarks[userID]
+	_, previous := state.Bookmarks[userID]
 
 	if bookmarked && !previous {
 		state.BookmarkCount++
-		state.Bookmarks[userID] = true
+		state.Bookmarks[userID] = time.Now()
 	}
 	if !bookmarked && previous {
 		state.BookmarkCount--
@@ -119,6 +122,30 @@ func (repo *MemoryRepository) SetBookmark(_ context.Context, postSlug string, us
 	}
 
 	return repo.summaryLocked(postSlug, userID, state), nil
+}
+
+func (repo *MemoryRepository) ListBookmarks(_ context.Context, userID string) ([]Bookmark, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	items := make([]Bookmark, 0)
+	for postSlug, state := range repo.state {
+		bookmarkedAt, ok := state.Bookmarks[userID]
+		if !ok {
+			continue
+		}
+
+		items = append(items, Bookmark{
+			PostSlug:     postSlug,
+			BookmarkedAt: bookmarkedAt,
+		})
+	}
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].BookmarkedAt.After(items[j].BookmarkedAt)
+	})
+
+	return items, nil
 }
 
 func (repo *MemoryRepository) ensure(postSlug string) *postState {
@@ -129,7 +156,7 @@ func (repo *MemoryRepository) ensure(postSlug string) *postState {
 
 	state = &postState{
 		Reactions: map[string]string{},
-		Bookmarks: map[string]bool{},
+		Bookmarks: map[string]time.Time{},
 	}
 	repo.state[postSlug] = state
 	return state
@@ -151,7 +178,7 @@ func (repo *MemoryRepository) summaryLocked(postSlug string, userID string, stat
 		DislikeCount:  maxInt(0, state.DislikeCount),
 		BookmarkCount: maxInt(0, state.BookmarkCount),
 		MyReaction:    state.Reactions[userID],
-		Bookmarked:    state.Bookmarks[userID],
+		Bookmarked:    !state.Bookmarks[userID].IsZero(),
 	}
 }
 

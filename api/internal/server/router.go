@@ -45,7 +45,7 @@ func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) 
 	auth.RegisterRoutes(api, authStore)
 	posts.RegisterPublicRoutes(api, postRepo)
 	comments.RegisterRoutes(api, comments.NewMemoryRepository())
-	reactions.RegisterRoutes(api, reactions.NewMemoryRepository())
+	reactions.RegisterRoutes(api, reactions.NewMemoryRepository(), postRepo)
 
 	messageRepo := messages.NewMemoryRepository()
 	messages.RegisterRoutes(api, messageRepo)
