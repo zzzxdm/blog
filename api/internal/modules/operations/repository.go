@@ -250,6 +250,7 @@ func normalizeSettings(settings Settings) Settings {
 	settings.ThemePrimary = normalizeThemeColor(settings.ThemePrimary, defaults.ThemePrimary)
 	settings.HomepageLayout = defaultString(settings.HomepageLayout, defaults.HomepageLayout)
 	settings.BlockedWords = normalizeBlockedWords(settings.BlockedWords)
+	settings.SubmissionManualReview = true
 	settings.SubmissionLimit = defaultString(settings.SubmissionLimit, defaults.SubmissionLimit)
 	settings.SubmissionGuide = strings.TrimSpace(settings.SubmissionGuide)
 	settings.MailProvider = defaultString(settings.MailProvider, defaults.MailProvider)

@@ -45,6 +45,9 @@ func TestUpdateSettingsNormalizesInput(t *testing.T) {
 	if got := settings.BlockedWords; len(got) != 2 || got[0] != "推广" || got[1] != "Spam" {
 		t.Fatalf("BlockedWords = %#v, want trimmed case-insensitive unique values", got)
 	}
+	if !settings.SubmissionManualReview {
+		t.Fatal("SubmissionManualReview should stay enabled for the fixed review workflow")
+	}
 	if settings.SubmissionLimit != "每天最多 3 篇" {
 		t.Fatalf("SubmissionLimit = %q, want default", settings.SubmissionLimit)
 	}
