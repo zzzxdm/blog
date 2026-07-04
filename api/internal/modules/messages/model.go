@@ -41,11 +41,12 @@ type ListQuery struct {
 }
 
 type Stats struct {
-	Unread   int `json:"unread"`
-	Review   int `json:"review"`
-	Admin    int `json:"admin"`
-	Archived int `json:"archived"`
-	Total    int `json:"total"`
+	Unread    int `json:"unread"`
+	Review    int `json:"review"`
+	Admin     int `json:"admin"`
+	Archived  int `json:"archived"`
+	Scheduled int `json:"scheduled"`
+	Total     int `json:"total"`
 }
 
 type ListResult struct {

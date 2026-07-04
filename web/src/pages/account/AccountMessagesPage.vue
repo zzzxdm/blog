@@ -13,7 +13,7 @@ import {
 } from "../../shared/api";
 
 const messages = ref<StationMessage[]>([]);
-const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
+const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });
 const selectedId = ref("");
 const filterStatus = ref("");
 const filterType = ref("");

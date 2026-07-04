@@ -25,7 +25,7 @@ const submissionStats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned:
 const comments = ref<Comment[]>([]);
 const bookmarks = ref<BookmarkItem[]>([]);
 const messages = ref<StationMessage[]>([]);
-const messageStats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
+const messageStats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });
 const loading = ref(false);
 const error = ref("");
 

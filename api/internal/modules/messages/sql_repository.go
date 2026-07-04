@@ -253,6 +253,9 @@ func countMessageStats(items []Message) Stats {
 		if item.Status == StatusArchived {
 			stats.Archived++
 		}
+		if item.Status == StatusScheduled {
+			stats.Scheduled++
+		}
 		if item.Type == TypeReview {
 			stats.Review++
 		}

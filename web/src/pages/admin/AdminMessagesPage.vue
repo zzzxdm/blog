@@ -16,7 +16,7 @@ import { downloadJson, exportFileName } from "../../shared/download";
 
 const messages = ref<StationMessage[]>([]);
 const users = ref<ManagedUser[]>([]);
-const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
+const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });
 const loading = ref(false);
 const usersLoading = ref(false);
 const sending = ref(false);
@@ -287,7 +287,7 @@ function nextScheduleValue() {
       <div class="stat-card"><span>总发送</span><strong>{{ stats.total }}</strong></div>
       <div class="stat-card"><span>当前未读</span><strong>{{ stats.unread }}</strong></div>
       <div class="stat-card"><span>审核消息</span><strong>{{ stats.review }}</strong></div>
-      <div class="stat-card"><span>管理员消息</span><strong>{{ stats.admin }}</strong></div>
+      <div class="stat-card"><span>定时中</span><strong>{{ stats.scheduled }}</strong></div>
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>

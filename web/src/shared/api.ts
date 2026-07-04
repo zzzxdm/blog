@@ -253,6 +253,7 @@ export interface MessageStats {
   review: number;
   admin: number;
   archived: number;
+  scheduled: number;
   total: number;
 }
 
