@@ -31,28 +31,13 @@ const editorArea = ref<HTMLTextAreaElement | null>(null);
 const siteSettings = ref<SiteSettings | null>(null);
 const linkUrl = ref("https://");
 
-const title = ref("用户评论系统应该怎么设计");
-const summary = ref("从登录用户评论、审核、举报、通知和禁言机制出发，设计一个可维护的评论系统。");
+const title = ref("");
+const summary = ref("");
 const category = ref("工程实践");
-const tagsText = ref("评论, 用户系统, 审核");
-const slug = ref("user-comment-system-design");
+const tagsText = ref("");
+const slug = ref("");
 const coverImage = ref("https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=700&q=80");
-const content = ref(`# 用户评论系统应该怎么设计
-
-登录用户评论、审核、举报、通知和禁言机制，是开放内容站点的基础能力。
-
-## 评论不是简单留言
-
-评论需要和用户系统、通知系统、反垃圾策略一起设计。
-
-## 审核状态
-
-- 待审核
-- 已通过
-- 已拒绝
-- 垃圾评论
-
-> 好的评论区应该帮助内容继续生长，而不是成为后台负担。`);
+const content = ref("");
 
 const tags = computed(() => tagsText.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean));
 const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
@@ -153,6 +138,16 @@ async function persist(submit: boolean) {
   }
   if (!canEdit.value) {
     error.value = "当前投稿状态不能修改";
+    return;
+  }
+  if (!title.value.trim()) {
+    error.value = "请输入标题后再保存";
+    message.value = "";
+    return;
+  }
+  if (submit && !content.value.trim()) {
+    error.value = "请填写正文后再提交审核";
+    message.value = "";
     return;
   }
 
