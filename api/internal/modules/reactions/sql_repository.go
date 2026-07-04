@@ -221,10 +221,21 @@ func (repo *SQLRepository) ListBookmarks(ctx context.Context, userID string) ([]
 func (repo *SQLRepository) ensureStats(ctx context.Context, postSlug string) error {
 	_, err := repo.db.ExecContext(ctx, `
 		INSERT INTO post_interaction_stats (post_slug, like_count, dislike_count, bookmark_count)
-		SELECT slug, like_count, dislike_count, 0
+		SELECT
+			slug,
+			like_count,
+			dislike_count,
+			(
+				SELECT count(*)::int
+				FROM post_bookmarks bookmark
+				WHERE bookmark.post_slug = posts.slug
+			)
 		FROM posts
 		WHERE slug = $1
-		ON CONFLICT (post_slug) DO NOTHING
+		ON CONFLICT (post_slug) DO UPDATE SET
+			like_count = EXCLUDED.like_count,
+			dislike_count = EXCLUDED.dislike_count,
+			bookmark_count = EXCLUDED.bookmark_count
 	`, postSlug)
 	if err != nil {
 		return fmt.Errorf("ensure interaction stats: %w", err)
@@ -236,10 +247,21 @@ func (repo *SQLRepository) ensureStats(ctx context.Context, postSlug string) err
 func ensureStatsTx(ctx context.Context, tx *sql.Tx, postSlug string) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO post_interaction_stats (post_slug, like_count, dislike_count, bookmark_count)
-		SELECT slug, like_count, dislike_count, 0
+		SELECT
+			slug,
+			like_count,
+			dislike_count,
+			(
+				SELECT count(*)::int
+				FROM post_bookmarks bookmark
+				WHERE bookmark.post_slug = posts.slug
+			)
 		FROM posts
 		WHERE slug = $1
-		ON CONFLICT (post_slug) DO NOTHING
+		ON CONFLICT (post_slug) DO UPDATE SET
+			like_count = EXCLUDED.like_count,
+			dislike_count = EXCLUDED.dislike_count,
+			bookmark_count = EXCLUDED.bookmark_count
 	`, postSlug)
 	if err != nil {
 		return fmt.Errorf("ensure interaction stats: %w", err)
