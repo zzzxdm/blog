@@ -2,6 +2,7 @@ package adminposts
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -192,6 +193,22 @@ func TestCountStatsIncludesScheduled(t *testing.T) {
 	}
 	if stats.MonthlyViews != "16.8k" {
 		t.Fatalf("MonthlyViews = %q, want 16.8k", stats.MonthlyViews)
+	}
+}
+
+func TestApplyPublicPostStatsOverridesListCounts(t *testing.T) {
+	item := applyPublicPostStats(AdminPost{
+		ViewCount:    12,
+		CommentCount: 3,
+	}, sql.NullInt64{Int64: 42, Valid: true}, sql.NullInt64{Int64: 7, Valid: true})
+
+	if item.ViewCount != 42 || item.CommentCount != 7 {
+		t.Fatalf("applyPublicPostStats = views %d comments %d, want 42/7", item.ViewCount, item.CommentCount)
+	}
+
+	item = applyPublicPostStats(item, sql.NullInt64{}, sql.NullInt64{})
+	if item.ViewCount != 42 || item.CommentCount != 7 {
+		t.Fatalf("applyPublicPostStats should preserve counts without public post, got %+v", item)
 	}
 }
 

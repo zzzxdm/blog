@@ -29,7 +29,17 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 }
 
 func (repo *SQLRepository) List(ctx context.Context) (ListResult, error) {
-	rows, err := repo.db.QueryContext(ctx, "SELECT data FROM admin_posts ORDER BY updated_at DESC, id DESC")
+	rows, err := repo.db.QueryContext(ctx, `
+		SELECT
+			admin_posts.data,
+			posts.view_count,
+			posts.comment_count
+		FROM admin_posts
+		LEFT JOIN posts
+			ON posts.slug = COALESCE(NULLIF(admin_posts.data->>'publishedPostSlug', ''), admin_posts.slug)
+			AND posts.status = 'published'
+		ORDER BY admin_posts.updated_at DESC, admin_posts.id DESC
+	`)
 	if err != nil {
 		return ListResult{}, fmt.Errorf("query admin posts: %w", err)
 	}
@@ -37,7 +47,7 @@ func (repo *SQLRepository) List(ctx context.Context) (ListResult, error) {
 
 	items := make([]AdminPost, 0)
 	for rows.Next() {
-		item, err := scanAdminPost(rows)
+		item, err := scanAdminPostListItem(rows)
 		if err != nil {
 			return ListResult{}, err
 		}
@@ -136,6 +146,33 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	}
 
 	return clonePost(item), nil
+}
+
+func scanAdminPostListItem(scanner interface{ Scan(dest ...any) error }) (AdminPost, error) {
+	var data []byte
+	var viewCount sql.NullInt64
+	var commentCount sql.NullInt64
+	if err := scanner.Scan(&data, &viewCount, &commentCount); err != nil {
+		return AdminPost{}, fmt.Errorf("scan admin post: %w", err)
+	}
+
+	item, err := decodeAdminPost(data)
+	if err != nil {
+		return AdminPost{}, err
+	}
+
+	return applyPublicPostStats(item, viewCount, commentCount), nil
+}
+
+func applyPublicPostStats(item AdminPost, viewCount sql.NullInt64, commentCount sql.NullInt64) AdminPost {
+	if viewCount.Valid {
+		item.ViewCount = int(viewCount.Int64)
+	}
+	if commentCount.Valid {
+		item.CommentCount = int(commentCount.Int64)
+	}
+
+	return item
 }
 
 func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error) {
