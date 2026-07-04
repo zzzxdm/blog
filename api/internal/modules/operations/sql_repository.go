@@ -77,11 +77,11 @@ func (repo *SQLRepository) GetNavigation(ctx context.Context) (Navigation, error
 		return Navigation{}, err
 	}
 
-	return cloneNavigation(navigation), nil
+	return normalizeNavigation(navigation), nil
 }
 
 func (repo *SQLRepository) UpdateNavigation(ctx context.Context, navigation Navigation) (Navigation, error) {
-	navigation.UpdatedAt = time.Now()
+	navigation = navigationForUpdate(navigation, time.Now())
 	if err := repo.saveDocument(ctx, navigationDocumentKey, navigation); err != nil {
 		return Navigation{}, err
 	}

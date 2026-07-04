@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -91,14 +92,14 @@ func (repo *MemoryRepository) GetNavigation(_ context.Context) (Navigation, erro
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
-	return cloneNavigation(repo.navigation), nil
+	return normalizeNavigation(repo.navigation), nil
 }
 
 func (repo *MemoryRepository) UpdateNavigation(_ context.Context, navigation Navigation) (Navigation, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 
-	navigation.UpdatedAt = time.Now()
+	navigation = navigationForUpdate(navigation, time.Now())
 	repo.navigation = cloneNavigation(navigation)
 
 	return cloneNavigation(repo.navigation), nil
@@ -333,6 +334,77 @@ func cloneNavigation(navigation Navigation) Navigation {
 	navigation.FooterItems = append([]NavItem{}, navigation.FooterItems...)
 	navigation.Redirects = append([]RedirectRule{}, navigation.Redirects...)
 	return navigation
+}
+
+func navigationForUpdate(navigation Navigation, now time.Time) Navigation {
+	navigation = normalizeNavigation(navigation)
+	navigation.UpdatedAt = now
+	return navigation
+}
+
+func normalizeNavigation(navigation Navigation) Navigation {
+	defaults := seedNavigation()
+	navigation.TopItems = normalizeNavItems(navigation.TopItems, defaults.TopItems, "nav_top")
+	navigation.FooterItems = normalizeNavItems(navigation.FooterItems, defaults.FooterItems, "nav_footer")
+	navigation.GitHubURL = strings.TrimSpace(navigation.GitHubURL)
+	navigation.ContactEmail = strings.TrimSpace(navigation.ContactEmail)
+	navigation.RSSURL = strings.TrimSpace(navigation.RSSURL)
+	navigation.Redirects = normalizeRedirects(navigation.Redirects)
+	if navigation.UpdatedAt.IsZero() {
+		navigation.UpdatedAt = defaults.UpdatedAt
+	}
+
+	return cloneNavigation(navigation)
+}
+
+func normalizeNavItems(items []NavItem, fallback []NavItem, prefix string) []NavItem {
+	result := make([]NavItem, 0, len(items))
+	for _, item := range items {
+		label := strings.TrimSpace(item.Label)
+		url := strings.TrimSpace(item.URL)
+		if label == "" || url == "" {
+			continue
+		}
+
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
+			id = fmt.Sprintf("%s_%d", prefix, len(result)+1)
+		}
+		result = append(result, NavItem{
+			ID:    id,
+			Label: label,
+			URL:   url,
+			Order: len(result) + 1,
+		})
+	}
+	if len(result) == 0 {
+		return append([]NavItem{}, fallback...)
+	}
+
+	return result
+}
+
+func normalizeRedirects(rules []RedirectRule) []RedirectRule {
+	result := make([]RedirectRule, 0, len(rules))
+	for _, rule := range rules {
+		from := strings.TrimSpace(rule.From)
+		to := strings.TrimSpace(rule.To)
+		if from == "" || to == "" || from == to {
+			continue
+		}
+		code := rule.Code
+		if code != http.StatusMovedPermanently && code != http.StatusFound {
+			code = http.StatusMovedPermanently
+		}
+
+		result = append(result, RedirectRule{
+			From: from,
+			To:   to,
+			Code: code,
+		})
+	}
+
+	return result
 }
 
 func cloneStats(stats Stats) Stats {

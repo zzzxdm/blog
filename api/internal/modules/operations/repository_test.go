@@ -70,3 +70,58 @@ func TestNormalizeThemeColorKeepsValidHex(t *testing.T) {
 		t.Fatalf("normalizeThemeColor returned %q, want #a0b1c2", got)
 	}
 }
+
+func TestUpdateNavigationNormalizesInput(t *testing.T) {
+	repo := NewMemoryRepository()
+
+	navigation, err := repo.UpdateNavigation(context.Background(), Navigation{
+		TopItems: []NavItem{
+			{ID: " custom ", Label: " 首页 ", URL: " / "},
+			{Label: " ", URL: "/empty"},
+			{Label: "归档", URL: " /archive "},
+		},
+		FooterItems: []NavItem{
+			{Label: "", URL: ""},
+		},
+		GitHubURL:    " https://github.com/example ",
+		ContactEmail: " hello@example.com ",
+		RSSURL:       " /rss.xml ",
+		Redirects: []RedirectRule{
+			{From: " /old ", To: " /new ", Code: 302},
+			{From: "/same", To: "/same", Code: 301},
+			{From: "/legacy", To: "/posts/new", Code: 308},
+			{From: " ", To: "/missing", Code: 301},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateNavigation returned error: %v", err)
+	}
+
+	if len(navigation.TopItems) != 2 {
+		t.Fatalf("TopItems = %#v, want two valid items", navigation.TopItems)
+	}
+	if navigation.TopItems[0].ID != "custom" || navigation.TopItems[0].Label != "首页" || navigation.TopItems[0].URL != "/" || navigation.TopItems[0].Order != 1 {
+		t.Fatalf("first top item = %+v, want trimmed order 1", navigation.TopItems[0])
+	}
+	if navigation.TopItems[1].ID != "nav_top_2" || navigation.TopItems[1].Order != 2 {
+		t.Fatalf("second top item = %+v, want generated id and order 2", navigation.TopItems[1])
+	}
+	if len(navigation.FooterItems) != 3 {
+		t.Fatalf("FooterItems = %#v, want defaults when all provided items are invalid", navigation.FooterItems)
+	}
+	if navigation.GitHubURL != "https://github.com/example" || navigation.ContactEmail != "hello@example.com" || navigation.RSSURL != "/rss.xml" {
+		t.Fatalf("link settings not trimmed: %+v", navigation)
+	}
+	if len(navigation.Redirects) != 2 {
+		t.Fatalf("Redirects = %#v, want two valid rules", navigation.Redirects)
+	}
+	if navigation.Redirects[0].From != "/old" || navigation.Redirects[0].To != "/new" || navigation.Redirects[0].Code != 302 {
+		t.Fatalf("first redirect = %+v, want trimmed 302 rule", navigation.Redirects[0])
+	}
+	if navigation.Redirects[1].From != "/legacy" || navigation.Redirects[1].Code != 301 {
+		t.Fatalf("second redirect = %+v, want invalid code normalized to 301", navigation.Redirects[1])
+	}
+	if navigation.UpdatedAt.IsZero() {
+		t.Fatal("UpdatedAt should be populated")
+	}
+}
