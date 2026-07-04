@@ -8,9 +8,12 @@ import {
   getAdminPosts,
   getAdminStats,
   getAdminSubmissions,
+  getHealth,
   type AdminPostStats,
   type AdminStats,
   type Comment,
+  type CommentStats,
+  type HealthResponse,
   type MessageStats,
   type StationMessage,
   type Submission,
@@ -29,7 +32,9 @@ interface TodoItem {
 
 const postStats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, monthlyViews: "0", total: 0 });
 const submissionStats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const commentStats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
 const messageStats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
+const health = ref<HealthResponse | null>(null);
 const stats = ref<AdminStats | null>(null);
 const submissions = ref<Submission[]>([]);
 const comments = ref<Comment[]>([]);
@@ -80,6 +85,8 @@ const todos = computed<TodoItem[]>(() => {
   return items;
 });
 
+const healthOk = computed(() => health.value?.status === "ok");
+
 onMounted(load);
 
 async function load() {
@@ -87,7 +94,8 @@ async function load() {
   error.value = "";
 
   try {
-    const [postsResponse, submissionsResponse, commentsResponse, messagesResponse, statsResponse] = await Promise.all([
+    const [healthResponse, postsResponse, submissionsResponse, commentsResponse, messagesResponse, statsResponse] = await Promise.all([
+      getHealth(),
       getAdminPosts(),
       getAdminSubmissions("submitted"),
       getAdminComments("pending"),
@@ -95,8 +103,10 @@ async function load() {
       getAdminStats()
     ]);
 
+    health.value = healthResponse;
     postStats.value = postsResponse.stats;
     submissionStats.value = submissionsResponse.stats;
+    commentStats.value = commentsResponse.stats;
     submissions.value = submissionsResponse.items.slice(0, 1);
     comments.value = commentsResponse.items.slice(0, 1);
     messages.value = messagesResponse.items.slice(0, 1);
@@ -120,6 +130,14 @@ function formatTime(value?: string) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function healthSummary() {
+  if (!health.value) {
+    return "等待健康检查返回";
+  }
+
+  return `运行中 · ${health.value.env} · ${formatTime(health.value.time)}`;
 }
 </script>
 
@@ -188,20 +206,24 @@ function formatTime(value?: string) {
           <section class="panel">
             <div class="panel-title">
               <h2>系统状态</h2>
-              <span class="status published">正常</span>
+              <span class="status" :class="healthOk ? 'published' : 'banned'">{{ healthOk ? "正常" : "异常" }}</span>
             </div>
             <ul class="link-list">
               <li>
-                <strong>PostgreSQL</strong>
-                <span>已接入迁移和 SQL 仓储，本机等待数据库环境验证迁移</span>
+                <strong>API 服务</strong>
+                <span>{{ healthSummary() }}</span>
               </li>
               <li>
-                <strong>Redis</strong>
-                <span>会话、限流和任务队列待接入</span>
+                <strong>访问保护</strong>
+                <span>Cookie 会话、CSRF 校验和每分钟 120 次限流已启用</span>
+              </li>
+              <li>
+                <strong>审核队列</strong>
+                <span>{{ submissionStats.submitted }} 篇投稿待审，{{ commentStats.pending }} 条评论待审，{{ messageStats.unread }} 封未读站内信</span>
               </li>
               <li>
                 <strong>媒体存储</strong>
-                <span>开发期本地，生产期 S3 / OSS</span>
+                <span>本地 /uploads 提供文件访问，媒体库接口负责元数据和删除保护</span>
               </li>
             </ul>
           </section>
