@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { RouterLink, RouterView } from "vue-router";
-import { useRoute } from "vue-router";
+import { computed, ref } from "vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
 
 import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
@@ -9,10 +8,11 @@ import SiteSearch from "../components/SiteSearch.vue";
 
 const route = useRoute();
 const searchOpen = ref(false);
+const showChrome = computed(() => !route.meta.hideChrome);
 </script>
 
 <template>
-  <header class="site-header">
+  <header v-if="showChrome" class="site-header">
     <div class="nav">
       <RouterLink class="brand" to="/" aria-label="云间笔记首页">
         <span class="brand-mark">云</span>
@@ -42,8 +42,8 @@ const searchOpen = ref(false);
             <RouterLink to="/archive?tag=PostgreSQL">资源清单</RouterLink>
           </div>
         </div>
-        <RouterLink to="/submit">投稿</RouterLink>
-        <RouterLink to="/account">我的</RouterLink>
+        <RouterLink :class="{ active: route.name === 'submit' }" to="/submit">投稿</RouterLink>
+        <RouterLink :class="{ active: route.path.startsWith('/account') }" to="/account">我的</RouterLink>
         <RouterLink :class="{ active: route.path.startsWith('/admin') }" to="/admin">后台</RouterLink>
       </nav>
       <div class="header-actions">
@@ -55,7 +55,7 @@ const searchOpen = ref(false);
   </header>
 
   <RouterView />
-  <SiteFootbar />
-  <SiteSearch v-model:open="searchOpen" />
-  <SiteBacktop />
+  <SiteFootbar v-if="showChrome" />
+  <SiteSearch v-if="showChrome" v-model:open="searchOpen" />
+  <SiteBacktop v-if="showChrome" />
 </template>

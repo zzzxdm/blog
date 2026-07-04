@@ -1,0 +1,50 @@
+<script setup lang="ts">
+import { RouterLink } from "vue-router";
+</script>
+
+<template>
+  <main class="auth-shell">
+    <section class="auth-visual" aria-label="登录背景">
+      <img
+        src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80"
+        alt="桌面上的笔记本和写作草稿"
+      >
+      <div class="auth-copy">
+        <RouterLink class="brand" to="/">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </RouterLink>
+        <h1>登录后参与讨论，收藏值得反复看的文章。</h1>
+        <p>用户账号用于评论、回复、点赞、收藏和接收通知。访客可以阅读内容，评论默认需要登录。</p>
+      </div>
+    </section>
+
+    <section class="auth-panel-wrap">
+      <div class="auth-panel">
+        <div class="auth-tabs">
+          <a class="active" href="#login">登录</a>
+          <a href="#register">注册</a>
+        </div>
+        <h2>欢迎回来</h2>
+        <p>登录后可继续评论、查看收藏和接收回复通知。</p>
+
+        <form class="settings-stack">
+          <div class="field">
+            <label for="email">邮箱</label>
+            <input class="input" id="email" type="email" value="linyi@example.com">
+          </div>
+          <div class="field">
+            <label for="password">密码</label>
+            <input class="input" id="password" type="password" value="password">
+          </div>
+          <button class="button" type="button">登录</button>
+          <button class="button-secondary" type="button">使用 GitHub 登录</button>
+        </form>
+
+        <div class="section-heading" style="margin: 20px 0 0;">
+          <p>没有账号时，注册后需要先完成邮箱验证。忘记密码可通过邮箱重置。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</template>
