@@ -61,6 +61,10 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !canSubmit(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to submit posts"})
+		return
+	}
 
 	var request SaveRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -82,6 +86,10 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !canSubmit(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to update submissions"})
+		return
+	}
 
 	var request SaveRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -101,6 +109,10 @@ func (handler *Handler) Update(ctx *gin.Context) {
 func (handler *Handler) Submit(ctx *gin.Context) {
 	user, ok := auth.RequireUser(ctx)
 	if !ok {
+		return
+	}
+	if !canSubmit(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to submit posts"})
 		return
 	}
 
@@ -232,4 +244,8 @@ func reviewMessage(submission Submission, action string) messages.CreateRequest 
 		TargetID:      submission.ID,
 		TargetTitle:   submission.Title,
 	}
+}
+
+func canSubmit(user auth.User) bool {
+	return user.Status == "" || user.Status == "active"
 }

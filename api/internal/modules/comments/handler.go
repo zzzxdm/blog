@@ -46,6 +46,10 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !canInteract(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to comment"})
+		return
+	}
 
 	var request CreateRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -72,6 +76,10 @@ func (handler *Handler) ToggleLike(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !canInteract(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to like comments"})
+		return
+	}
 
 	comment, err := handler.repo.ToggleLike(ctx.Request.Context(), ctx.Param("id"), user.ID)
 	if err != nil {
@@ -90,6 +98,10 @@ func (handler *Handler) ToggleLike(ctx *gin.Context) {
 func (handler *Handler) Report(ctx *gin.Context) {
 	user, ok := auth.RequireUser(ctx)
 	if !ok {
+		return
+	}
+	if user.Status == "banned" || user.Status == "deleted" {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to report comments"})
 		return
 	}
 
@@ -172,4 +184,8 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, comment)
+}
+
+func canInteract(user auth.User) bool {
+	return user.Status == "" || user.Status == "active"
 }

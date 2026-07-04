@@ -38,7 +38,7 @@ func (store *SQLStore) Authenticate(email string, password string) (User, string
 		return User{}, "", err
 	}
 
-	if user.Status != "active" || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+	if (user.Status == "banned" || user.Status == "deleted") || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 		return User{}, "", ErrInvalidCredentials
 	}
 
@@ -194,6 +194,28 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 				Role:        "user",
 				Status:      "active",
 				AvatarText:  "陈",
+			},
+			Password: "password",
+		},
+		{
+			User: User{
+				ID:          "user_market",
+				Email:       "market@example.com",
+				DisplayName: "market_user",
+				Role:        "user",
+				Status:      "muted",
+				AvatarText:  "m",
+			},
+			Password: "password",
+		},
+		{
+			User: User{
+				ID:          "user_noise",
+				Email:       "noise@example.com",
+				DisplayName: "noise_2048",
+				Role:        "user",
+				Status:      "banned",
+				AvatarText:  "n",
 			},
 			Password: "password",
 		},

@@ -19,6 +19,7 @@ import (
 	"blog/api/internal/modules/posts"
 	"blog/api/internal/modules/reactions"
 	"blog/api/internal/modules/submissions"
+	"blog/api/internal/modules/users"
 	appserver "blog/api/internal/server"
 )
 
@@ -57,15 +58,16 @@ func main() {
 			messageRepo, messageErr := messages.NewSQLRepository(setupCtx, db)
 			submissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
 			operationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
+			userRepo, userErr := users.NewSQLRepository(setupCtx, db)
 			cancelSetup()
 
-			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil {
+			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil || userErr != nil {
 				if cfg.AppEnv == "production" {
-					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr)
+					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr)
 					os.Exit(1)
 				}
 
-				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr)
+				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr)
 			} else {
 				router = appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
 					AuthStore:      authStore,
@@ -75,6 +77,7 @@ func main() {
 					MessageRepo:    messageRepo,
 					SubmissionRepo: submissionRepo,
 					OperationsRepo: operationsRepo,
+					UserRepo:       userRepo,
 				})
 			}
 		}
