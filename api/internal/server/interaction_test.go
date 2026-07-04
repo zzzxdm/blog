@@ -431,6 +431,7 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	}
 
 	var uploaded struct {
+		ID     string `json:"id"`
 		URL    string `json:"url"`
 		Width  int    `json:"width"`
 		Height int    `json:"height"`
@@ -440,6 +441,27 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	}
 	if !strings.HasPrefix(uploaded.URL, "/uploads/") || uploaded.Width != 1 || uploaded.Height != 1 {
 		t.Fatalf("expected uploaded media metadata, got %+v", uploaded)
+	}
+
+	mediaDetailReq := httptest.NewRequest(http.MethodGet, "/api/admin/media/"+uploaded.ID, nil)
+	for _, cookie := range adminCookies {
+		mediaDetailReq.AddCookie(cookie)
+	}
+	mediaDetailRec := httptest.NewRecorder()
+	router.ServeHTTP(mediaDetailRec, mediaDetailReq)
+	if mediaDetailRec.Code != http.StatusOK || !strings.Contains(mediaDetailRec.Body.String(), "tiny.png") {
+		t.Fatalf("expected media detail, got status=%d body=%q", mediaDetailRec.Code, mediaDetailRec.Body.String())
+	}
+
+	updateMediaReq := httptest.NewRequest(http.MethodPatch, "/api/admin/media/"+uploaded.ID, bytes.NewBufferString(`{"alt":"新的 Alt 文本","category":"正文配图"}`))
+	updateMediaReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		updateMediaReq.AddCookie(cookie)
+	}
+	updateMediaRec := httptest.NewRecorder()
+	router.ServeHTTP(updateMediaRec, updateMediaReq)
+	if updateMediaRec.Code != http.StatusOK || !strings.Contains(updateMediaRec.Body.String(), `"alt":"新的 Alt 文本"`) || !strings.Contains(updateMediaRec.Body.String(), `"category":"正文配图"`) {
+		t.Fatalf("expected media metadata updated, got status=%d body=%q", updateMediaRec.Code, updateMediaRec.Body.String())
 	}
 
 	uploadedListReq := httptest.NewRequest(http.MethodGet, "/api/admin/media", nil)
@@ -457,6 +479,32 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	router.ServeHTTP(staticRec, staticReq)
 	if staticRec.Code != http.StatusOK {
 		t.Fatalf("expected uploaded file to be served, got status=%d", staticRec.Code)
+	}
+
+	deleteUsedReq := httptest.NewRequest(http.MethodDelete, "/api/admin/media/media_001", nil)
+	for _, cookie := range adminCookies {
+		deleteUsedReq.AddCookie(cookie)
+	}
+	deleteUsedRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteUsedRec, deleteUsedReq)
+	if deleteUsedRec.Code != http.StatusConflict {
+		t.Fatalf("expected used media delete status 409, got %d body=%q", deleteUsedRec.Code, deleteUsedRec.Body.String())
+	}
+
+	deleteMediaReq := httptest.NewRequest(http.MethodDelete, "/api/admin/media/"+uploaded.ID, nil)
+	for _, cookie := range adminCookies {
+		deleteMediaReq.AddCookie(cookie)
+	}
+	deleteMediaRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteMediaRec, deleteMediaReq)
+	if deleteMediaRec.Code != http.StatusOK || !strings.Contains(deleteMediaRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected uploaded media deleted, got status=%d body=%q", deleteMediaRec.Code, deleteMediaRec.Body.String())
+	}
+
+	deletedStaticRec := httptest.NewRecorder()
+	router.ServeHTTP(deletedStaticRec, staticReq)
+	if deletedStaticRec.Code != http.StatusNotFound {
+		t.Fatalf("expected uploaded file to be removed, got status=%d", deletedStaticRec.Code)
 	}
 
 	statsReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats", nil)

@@ -44,6 +44,9 @@ func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 	router.PUT("/admin/navigation", handler.UpdateNavigation)
 	router.GET("/admin/media", handler.ListMedia)
 	router.POST("/admin/media", handler.UploadMedia)
+	router.GET("/admin/media/:id", handler.GetMedia)
+	router.PATCH("/admin/media/:id", handler.UpdateMedia)
+	router.DELETE("/admin/media/:id", handler.DeleteMedia)
 	router.GET("/admin/stats", handler.GetStats)
 }
 
@@ -127,6 +130,20 @@ func (handler *Handler) ListMedia(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) GetMedia(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	asset, err := handler.repo.GetMedia(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeMediaError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, asset)
 }
 
 func (handler *Handler) UploadMedia(ctx *gin.Context) {
@@ -229,6 +246,47 @@ func (handler *Handler) UploadMedia(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, created)
 }
 
+func (handler *Handler) UpdateMedia(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request MediaUpdateRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid media metadata payload"})
+		return
+	}
+
+	request.Alt = strings.TrimSpace(request.Alt)
+	request.Category = strings.TrimSpace(request.Category)
+	if request.Category == "" {
+		request.Category = "未分类"
+	}
+
+	asset, err := handler.repo.UpdateMedia(ctx.Request.Context(), ctx.Param("id"), request)
+	if err != nil {
+		handler.writeMediaError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, asset)
+}
+
+func (handler *Handler) DeleteMedia(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	asset, err := handler.repo.DeleteMedia(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeMediaError(ctx, err)
+		return
+	}
+
+	_ = handler.removeLocalUpload(asset)
+	ctx.JSON(http.StatusOK, gin.H{"ok": true, "asset": asset})
+}
+
 func (handler *Handler) GetStats(ctx *gin.Context) {
 	if _, ok := auth.RequireAdmin(ctx); !ok {
 		return
@@ -241,6 +299,46 @@ func (handler *Handler) GetStats(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, stats)
+}
+
+func (handler *Handler) writeMediaError(ctx *gin.Context, err error) {
+	if errors.Is(err, ErrMediaNotFound) {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "media asset not found"})
+		return
+	}
+	if errors.Is(err, ErrMediaInUse) {
+		ctx.JSON(http.StatusConflict, gin.H{"error": "media asset is in use"})
+		return
+	}
+
+	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
+}
+
+func (handler *Handler) removeLocalUpload(asset MediaAsset) error {
+	if !strings.HasPrefix(asset.URL, "/uploads/") {
+		return nil
+	}
+
+	relativePath := strings.TrimPrefix(asset.URL, "/uploads/")
+	targetPath := filepath.Join(handler.uploadDir, filepath.FromSlash(relativePath))
+	root, err := filepath.Abs(handler.uploadDir)
+	if err != nil {
+		return err
+	}
+	target, err := filepath.Abs(targetPath)
+	if err != nil {
+		return err
+	}
+
+	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
+		return nil
+	}
+
+	if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	return nil
 }
 
 func detectMediaType(file multipart.File, fileName string) (string, string, error) {

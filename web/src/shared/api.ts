@@ -651,6 +651,10 @@ export async function getAdminMedia(): Promise<MediaListResponse> {
   return request<MediaListResponse>("/admin/media");
 }
 
+export async function getAdminMediaAsset(id: string): Promise<MediaAsset> {
+  return request<MediaAsset>(`/admin/media/${encodeURIComponent(id)}`);
+}
+
 export async function uploadAdminMedia(file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
   const form = new FormData();
   form.set("file", file);
@@ -674,6 +678,19 @@ export async function uploadAdminMedia(file: File, payload: { alt?: string; cate
   }
 
   return response.json() as Promise<MediaAsset>;
+}
+
+export async function updateAdminMedia(id: string, payload: { alt: string; category: string }): Promise<MediaAsset> {
+  return request<MediaAsset>(`/admin/media/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteAdminMedia(id: string): Promise<{ ok: boolean; asset: MediaAsset }> {
+  return request<{ ok: boolean; asset: MediaAsset }>(`/admin/media/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
 }
 
 export async function getAdminStats(): Promise<AdminStats> {

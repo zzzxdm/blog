@@ -2,8 +2,14 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
+)
+
+var (
+	ErrMediaNotFound = errors.New("media asset not found")
+	ErrMediaInUse    = errors.New("media asset is in use")
 )
 
 type Repository interface {
@@ -13,6 +19,9 @@ type Repository interface {
 	UpdateNavigation(ctx context.Context, navigation Navigation) (Navigation, error)
 	ListMedia(ctx context.Context) (MediaListResult, error)
 	CreateMedia(ctx context.Context, asset MediaAsset) (MediaAsset, error)
+	GetMedia(ctx context.Context, id string) (MediaAsset, error)
+	UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error)
+	DeleteMedia(ctx context.Context, id string) (MediaAsset, error)
 	GetStats(ctx context.Context) (Stats, error)
 }
 
@@ -84,6 +93,55 @@ func (repo *MemoryRepository) CreateMedia(_ context.Context, asset MediaAsset) (
 
 	repo.media = append([]MediaAsset{asset}, repo.media...)
 	return asset, nil
+}
+
+func (repo *MemoryRepository) GetMedia(_ context.Context, id string) (MediaAsset, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	for _, asset := range repo.media {
+		if asset.ID == id {
+			return asset, nil
+		}
+	}
+
+	return MediaAsset{}, ErrMediaNotFound
+}
+
+func (repo *MemoryRepository) UpdateMedia(_ context.Context, id string, request MediaUpdateRequest) (MediaAsset, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	for index := range repo.media {
+		if repo.media[index].ID != id {
+			continue
+		}
+
+		repo.media[index].Alt = request.Alt
+		repo.media[index].Category = request.Category
+		return repo.media[index], nil
+	}
+
+	return MediaAsset{}, ErrMediaNotFound
+}
+
+func (repo *MemoryRepository) DeleteMedia(_ context.Context, id string) (MediaAsset, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	for index, asset := range repo.media {
+		if asset.ID != id {
+			continue
+		}
+		if asset.UsageCount > 0 {
+			return MediaAsset{}, ErrMediaInUse
+		}
+
+		repo.media = append(repo.media[:index], repo.media[index+1:]...)
+		return asset, nil
+	}
+
+	return MediaAsset{}, ErrMediaNotFound
 }
 
 func (repo *MemoryRepository) GetStats(_ context.Context) (Stats, error) {

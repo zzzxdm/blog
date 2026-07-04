@@ -112,6 +112,51 @@ func (repo *SQLRepository) CreateMedia(ctx context.Context, asset MediaAsset) (M
 	return asset, nil
 }
 
+func (repo *SQLRepository) GetMedia(ctx context.Context, id string) (MediaAsset, error) {
+	asset, err := repo.getMedia(ctx, id)
+	if err != nil {
+		return MediaAsset{}, err
+	}
+
+	return asset, nil
+}
+
+func (repo *SQLRepository) UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error) {
+	result, err := repo.db.ExecContext(ctx, `
+		UPDATE media_assets
+		SET alt = $2, category = $3
+		WHERE id = $1
+	`, id, request.Alt, request.Category)
+	if err != nil {
+		return MediaAsset{}, fmt.Errorf("update media asset %s: %w", id, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return MediaAsset{}, fmt.Errorf("read media update rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return MediaAsset{}, ErrMediaNotFound
+	}
+
+	return repo.getMedia(ctx, id)
+}
+
+func (repo *SQLRepository) DeleteMedia(ctx context.Context, id string) (MediaAsset, error) {
+	asset, err := repo.getMedia(ctx, id)
+	if err != nil {
+		return MediaAsset{}, err
+	}
+	if asset.UsageCount > 0 {
+		return MediaAsset{}, ErrMediaInUse
+	}
+
+	if _, err := repo.db.ExecContext(ctx, "DELETE FROM media_assets WHERE id = $1", id); err != nil {
+		return MediaAsset{}, fmt.Errorf("delete media asset %s: %w", id, err)
+	}
+
+	return asset, nil
+}
+
 func (repo *SQLRepository) GetStats(_ context.Context) (Stats, error) {
 	return cloneStats(seedStats()), nil
 }
@@ -213,4 +258,35 @@ func (repo *SQLRepository) insertMedia(ctx context.Context, asset MediaAsset, ig
 	}
 
 	return nil
+}
+
+func (repo *SQLRepository) getMedia(ctx context.Context, id string) (MediaAsset, error) {
+	var asset MediaAsset
+	err := repo.db.QueryRowContext(ctx, `
+		SELECT id, file_name, url, alt, type, category, size_label, width, height, usage_count, uploaded_by, uploaded_at
+		FROM media_assets
+		WHERE id = $1
+	`, id).Scan(
+		&asset.ID,
+		&asset.FileName,
+		&asset.URL,
+		&asset.Alt,
+		&asset.Type,
+		&asset.Category,
+		&asset.SizeLabel,
+		&asset.Width,
+		&asset.Height,
+		&asset.UsageCount,
+		&asset.UploadedBy,
+		&asset.UploadedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return MediaAsset{}, ErrMediaNotFound
+		}
+
+		return MediaAsset{}, fmt.Errorf("load media asset %s: %w", id, err)
+	}
+
+	return asset, nil
 }

@@ -77,6 +77,11 @@ type MediaListResult struct {
 	Total int          `json:"total"`
 }
 
+type MediaUpdateRequest struct {
+	Alt      string `json:"alt"`
+	Category string `json:"category"`
+}
+
 type Metric struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
