@@ -60,6 +60,7 @@ async function readSelected() {
   try {
     const updated = await markMessageRead(selected.value.id);
     patchMessage(updated);
+    await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "标记已读失败";
   }
@@ -85,6 +86,7 @@ function patchMessage(updated: StationMessage) {
 
 function chooseStatus(value: string) {
   filterStatus.value = value;
+  filterType.value = "";
   void load();
 }
 
@@ -152,8 +154,11 @@ function typeClass(value: MessageType) {
           <a :class="{ active: !filterStatus && !filterType }" href="#all" @click.prevent="chooseStatus('')">全部</a>
           <a :class="{ active: filterStatus === 'unread' }" href="#unread" @click.prevent="chooseStatus('unread')">未读</a>
           <a :class="{ active: filterType === 'review' }" href="#review" @click.prevent="chooseType('review')">审核</a>
+          <a :class="{ active: filterType === 'comment' }" href="#comment" @click.prevent="chooseType('comment')">评论</a>
           <a :class="{ active: filterType === 'system' }" href="#system" @click.prevent="chooseType('system')">系统</a>
+          <a :class="{ active: filterType === 'account' }" href="#account" @click.prevent="chooseType('account')">账号</a>
           <a :class="{ active: filterType === 'admin' }" href="#admin" @click.prevent="chooseType('admin')">管理员</a>
+          <a :class="{ active: filterStatus === 'archived' }" href="#archived" @click.prevent="chooseStatus('archived')">归档</a>
         </div>
         <p v-if="loading" class="muted">正在加载站内信...</p>
         <div v-else class="message-list">
