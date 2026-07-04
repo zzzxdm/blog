@@ -431,7 +431,7 @@ func (handler *Handler) removeLocalUpload(asset MediaAsset) error {
 	return nil
 }
 
-func detectMediaType(file multipart.File, fileName string) (string, string, error) {
+func detectMediaType(file multipart.File, _ string) (string, string, error) {
 	header := make([]byte, 512)
 	size, err := file.Read(header)
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -446,9 +446,8 @@ func detectMediaType(file multipart.File, fileName string) (string, string, erro
 		return contentType, extension, nil
 	}
 
-	extension := strings.ToLower(filepath.Ext(fileName))
-	if contentType, ok := mediaExtensions()[extension]; ok {
-		return contentType, normalizedMediaExtension(extension), nil
+	if isWebP(header[:size]) {
+		return "image/webp", ".webp", nil
 	}
 
 	return "", "", errors.New("unsupported media type")
@@ -478,23 +477,10 @@ func mediaContentTypes() map[string]string {
 	}
 }
 
-func mediaExtensions() map[string]string {
-	return map[string]string{
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
-		".png":  "image/png",
-		".webp": "image/webp",
-		".gif":  "image/gif",
-		".pdf":  "application/pdf",
-	}
-}
-
-func normalizedMediaExtension(extension string) string {
-	if extension == ".jpeg" {
-		return ".jpg"
-	}
-
-	return extension
+func isWebP(header []byte) bool {
+	return len(header) >= 12 &&
+		string(header[:4]) == "RIFF" &&
+		string(header[8:12]) == "WEBP"
 }
 
 func mediaKind(contentType string) string {
