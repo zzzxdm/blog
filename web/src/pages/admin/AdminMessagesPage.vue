@@ -227,7 +227,7 @@ function nextScheduleValue() {
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportMessages">{{ exporting ? "导出中..." : "导出记录" }}</button>
-        <button class="button" type="button" :disabled="sending" @click="send">新建消息</button>
+        <button class="button" type="button" :disabled="sending" @click="send">{{ sending ? "发送中..." : "发送消息" }}</button>
       </div>
     </template>
 
