@@ -3,16 +3,20 @@ import { computed, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  getAdminUsers,
   getAdminSubmissions,
   reviewSubmission,
   updateAdminSubmission,
   updateAdminUserRole,
+  type ManagedUser,
   type Submission,
   type SubmissionPayload,
   type SubmissionStats
 } from "../../shared/api";
 
 const submissions = ref<Submission[]>([]);
+const allSubmissions = ref<Submission[]>([]);
+const users = ref<ManagedUser[]>([]);
 const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
 const selectedId = ref("");
 const filterStatus = ref("submitted");
@@ -38,6 +42,20 @@ const sortMode = ref("latest");
 
 const selected = computed(() => submissions.value.find((item) => item.id === selectedId.value) || submissions.value[0]);
 const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).map((item) => item.trim()).filter(Boolean) || []);
+const selectedAuthorUser = computed(() => users.value.find((user) => user.id === selected.value?.authorId));
+const authorSubmissionStats = computed(() => {
+  const authorId = selected.value?.authorId || "";
+  const result = { total: 0, submitted: 0, returned: 0, rejected: 0, published: 0, draft: 0 };
+  allSubmissions.value.forEach((item) => {
+    if (item.authorId !== authorId) {
+      return;
+    }
+
+    result.total++;
+    result[item.status]++;
+  });
+  return result;
+});
 const visibleSubmissions = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase();
   const riskRank: Record<string, number> = { 高: 3, 中: 2, 低: 1 };
@@ -89,8 +107,12 @@ async function load() {
   error.value = "";
 
   try {
-    const response = await getAdminSubmissions(filterStatus.value);
+    const filteredPromise = getAdminSubmissions(filterStatus.value);
+    const allPromise = filterStatus.value ? getAdminSubmissions("") : filteredPromise;
+    const [response, allResponse, userResponse] = await Promise.all([filteredPromise, allPromise, getAdminUsers()]);
     submissions.value = response.items;
+    allSubmissions.value = allResponse.items;
+    users.value = userResponse.items;
     stats.value = response.stats;
     if (!submissions.value.some((item) => item.id === selectedId.value)) {
       selectedId.value = submissions.value[0]?.id || "";
@@ -254,6 +276,13 @@ function statusClass(value: Submission["status"]) {
   }
   return "draft";
 }
+
+function userStatusText(value?: ManagedUser["status"]) {
+  if (value === "muted") return "已禁言";
+  if (value === "banned") return "已封禁";
+  if (value === "deleted") return "已删除";
+  return "账号正常";
+}
 </script>
 
 <template>
@@ -391,13 +420,20 @@ function statusClass(value: Submission["status"]) {
             <div class="setting-row">
               <div>
                 <strong>历史投稿</strong>
-                <div class="meta-row"><span>统计会在用户模块完成后接入</span></div>
+                <div class="meta-row">
+                  <span>共 {{ authorSubmissionStats.total }} 篇</span>
+                  <span>已发布 {{ authorSubmissionStats.published }}</span>
+                  <span>退回 {{ authorSubmissionStats.returned }}</span>
+                </div>
               </div>
             </div>
             <div class="setting-row">
               <div>
                 <strong>评论质量</strong>
-                <div class="meta-row"><span>评论审核模块会补充质量指标</span></div>
+                <div class="meta-row">
+                  <span>{{ selectedAuthorUser ? `${selectedAuthorUser.commentCount} 条评论` : "暂无评论数据" }}</span>
+                  <span>{{ userStatusText(selectedAuthorUser?.status) }}</span>
+                </div>
               </div>
             </div>
             <button class="button-secondary" type="button" :disabled="upgradingAuthor" @click="upgradeAuthor">{{ upgradingAuthor ? "升级中..." : "升级为作者" }}</button>
