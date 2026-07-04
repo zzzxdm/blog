@@ -77,7 +77,7 @@ const todos = computed<TodoItem[]>(() => {
       status: message.status === "unread" ? "未读" : "已发送",
       tone: message.status === "unread" ? "draft" : "published",
       time: formatTime(message.createdAt),
-      actionLabel: "编辑",
+      actionLabel: "查看",
       actionTo: "/admin/messages"
     });
   }
@@ -99,7 +99,7 @@ async function load() {
       getAdminPosts(),
       getAdminSubmissions("submitted"),
       getAdminComments("pending"),
-      getAdminMessages(),
+      getAdminMessages({ status: "unread" }),
       getAdminStats()
     ]);
 
