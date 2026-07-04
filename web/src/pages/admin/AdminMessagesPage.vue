@@ -15,8 +15,10 @@ import {
 import { downloadJson, exportFileName } from "../../shared/download";
 
 const messages = ref<StationMessage[]>([]);
+const users = ref<ManagedUser[]>([]);
 const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
 const loading = ref(false);
+const usersLoading = ref(false);
 const sending = ref(false);
 const exporting = ref(false);
 const error = ref("");
@@ -39,6 +41,8 @@ const typeFilter = ref("");
 const statusFilter = ref("");
 
 const selectedMessage = computed(() => messages.value.find((item) => item.id === selectedId.value) || messages.value[0]);
+const selectableUsers = computed(() => users.value.filter((user) => canReceiveMessage(user)));
+const selectedRecipient = computed(() => selectableUsers.value.find((user) => user.id === recipientId.value));
 const visibleMessages = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase();
   return messages.value.filter((item) => {
@@ -59,7 +63,10 @@ const visibleMessages = computed(() => {
   });
 });
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadUsers();
+});
 
 async function load() {
   loading.value = true;
@@ -135,20 +142,61 @@ async function exportMessages() {
   }
 }
 
+async function loadUsers() {
+  usersLoading.value = true;
+
+  try {
+    const result = await getAdminUsers();
+    users.value = result.items;
+    if (!selectableUsers.value.some((user) => user.id === recipientId.value)) {
+      applyRecipient(selectableUsers.value[0]);
+    } else {
+      syncRecipientFromSelect();
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户列表加载失败";
+  } finally {
+    usersLoading.value = false;
+  }
+}
+
 async function resolveRecipients() {
   if (messageScope.value === "single") {
+    syncRecipientFromSelect();
     return [{ id: recipientId.value.trim(), name: recipientName.value.trim() || recipientId.value.trim() }].filter((item) => item.id);
   }
 
-  const result = await getAdminUsers();
-  return result.items
+  if (!users.value.length) {
+    const result = await getAdminUsers();
+    users.value = result.items;
+  }
+
+  return users.value
     .filter((user) => canReceiveMessage(user))
     .filter((user) => messageScope.value === "all" || user.role === targetRole.value)
     .map((user) => ({ id: user.id, name: user.displayName }));
 }
 
+function applyRecipient(user?: ManagedUser) {
+  recipientId.value = user?.id || "";
+  recipientName.value = user?.displayName || "";
+}
+
+function syncRecipientFromSelect() {
+  if (selectedRecipient.value) {
+    recipientName.value = selectedRecipient.value.displayName;
+  }
+}
+
 function canReceiveMessage(user: ManagedUser) {
   return user.status !== "deleted" && user.status !== "banned";
+}
+
+function roleText(role: string) {
+  if (role === "admin") return "管理员";
+  if (role === "editor") return "编辑";
+  if (role === "author") return "作者";
+  return "注册用户";
 }
 
 function toggleSchedule() {
@@ -320,8 +368,18 @@ function nextScheduleValue() {
           </div>
           <form class="message-compose" @submit.prevent="send">
             <div class="field"><label for="message-scope">接收范围</label><select v-model="messageScope" class="input" id="message-scope"><option value="single">指定用户</option><option value="all">全部注册用户</option><option value="role">按角色发送</option></select></div>
-            <div v-if="messageScope === 'single'" class="field"><label for="message-recipient">接收人 ID</label><input v-model="recipientId" class="input" id="message-recipient"></div>
-            <div v-if="messageScope === 'single'" class="field"><label for="message-recipient-name">接收人名称</label><input v-model="recipientName" class="input" id="message-recipient-name"></div>
+            <div v-if="messageScope === 'single'" class="field">
+              <label for="message-recipient">接收用户</label>
+              <select v-model="recipientId" class="input" id="message-recipient" :disabled="usersLoading || !selectableUsers.length" @change="syncRecipientFromSelect">
+                <option v-if="usersLoading" value="">正在加载用户...</option>
+                <option v-for="user in selectableUsers" :key="user.id" :value="user.id">{{ user.displayName }} · {{ roleText(user.role) }} · {{ user.email }}</option>
+              </select>
+              <div v-if="selectedRecipient" class="meta-row">
+                <span>{{ selectedRecipient.id }}</span>
+                <span>{{ selectedRecipient.emailVerified ? "邮箱已验证" : "邮箱未验证" }}</span>
+              </div>
+              <p v-else-if="!usersLoading" class="muted">暂无可接收用户。</p>
+            </div>
             <div v-if="messageScope === 'role'" class="field"><label for="message-role">接收角色</label><select v-model="targetRole" class="input" id="message-role"><option value="user">注册用户</option><option value="author">作者</option><option value="editor">编辑</option><option value="admin">管理员</option></select></div>
             <div class="field"><label for="message-type">消息类型</label><select v-model="messageType" class="input" id="message-type"><option value="admin">管理员消息</option><option value="review">投稿审核</option><option value="system">站点公告</option><option value="account">系统事件</option></select></div>
             <div class="field"><label for="message-priority">优先级</label><select v-model="priority" class="input" id="message-priority"><option value="normal">普通</option><option value="important">重要</option><option value="urgent">紧急</option></select></div>
