@@ -24,6 +24,7 @@ type ListQuery struct {
 	Keyword  string
 	Category string
 	Tag      string
+	Sort     string
 	Page     int
 	PageSize int
 }

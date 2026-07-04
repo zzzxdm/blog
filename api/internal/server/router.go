@@ -11,6 +11,10 @@ import (
 )
 
 func NewRouter(cfg config.Config) *gin.Engine {
+	return NewRouterWithPostsRepository(cfg, posts.NewMemoryRepository())
+}
+
+func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) *gin.Engine {
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -30,7 +34,7 @@ func NewRouter(cfg config.Config) *gin.Engine {
 		})
 	})
 
-	posts.RegisterPublicRoutes(api, posts.NewMemoryRepository())
+	posts.RegisterPublicRoutes(api, postRepo)
 
 	return router
 }

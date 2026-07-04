@@ -52,6 +52,7 @@ func (handler *Handler) list(ctx *gin.Context, forceKeyword bool) {
 		Keyword:  ctx.Query("q"),
 		Category: ctx.Query("category"),
 		Tag:      ctx.Query("tag"),
+		Sort:     ctx.Query("sort"),
 		Page:     intQuery(ctx, "page", 1),
 		PageSize: intQuery(ctx, "pageSize", 10),
 	}

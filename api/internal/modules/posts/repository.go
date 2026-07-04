@@ -36,9 +36,7 @@ func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (ListResu
 		filtered = append(filtered, post)
 	}
 
-	sort.SliceStable(filtered, func(i, j int) bool {
-		return filtered[i].PublishedAt.After(filtered[j].PublishedAt)
-	})
+	sortPosts(filtered, query.Sort)
 
 	total := len(filtered)
 	start := (page - 1) * pageSize
@@ -102,6 +100,21 @@ func hasTag(tags []string, tag string) bool {
 	}
 
 	return false
+}
+
+func sortPosts(posts []Post, sortMode string) {
+	sort.SliceStable(posts, func(i, j int) bool {
+		switch strings.ToLower(sortMode) {
+		case "views":
+			return posts[i].ViewCount > posts[j].ViewCount
+		case "comments":
+			return posts[i].CommentCount > posts[j].CommentCount
+		case "likes":
+			return posts[i].LikeCount > posts[j].LikeCount
+		default:
+			return posts[i].PublishedAt.After(posts[j].PublishedAt)
+		}
+	})
 }
 
 func normalizePage(page int) int {

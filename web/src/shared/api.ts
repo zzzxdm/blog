@@ -49,6 +49,7 @@ export interface PostListParams {
   q?: string;
   category?: string;
   tag?: string;
+  sort?: "views" | "comments" | "likes";
 }
 
 export async function getPosts(params: PostListParams = {}): Promise<ListResponse<Post>> {

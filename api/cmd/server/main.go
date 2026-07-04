@@ -11,12 +11,31 @@ import (
 	"time"
 
 	"blog/api/internal/config"
+	"blog/api/internal/database"
+	"blog/api/internal/modules/posts"
 	appserver "blog/api/internal/server"
 )
 
 func main() {
 	cfg := config.Load()
-	router := appserver.NewRouter(cfg)
+	ctx := context.Background()
+
+	db, err := database.Open(ctx, cfg)
+	if err != nil {
+		slog.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	migrateCtx, cancelMigrate := context.WithTimeout(ctx, 20*time.Second)
+	if err := database.Migrate(migrateCtx, db); err != nil {
+		cancelMigrate()
+		slog.Error("database migration failed", "error", err)
+		os.Exit(1)
+	}
+	cancelMigrate()
+
+	router := appserver.NewRouterWithPostsRepository(cfg, posts.NewSQLRepository(db))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
