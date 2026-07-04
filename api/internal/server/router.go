@@ -8,6 +8,7 @@ import (
 	"blog/api/internal/modules/adminposts"
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/comments"
+	"blog/api/internal/modules/feeds"
 	"blog/api/internal/modules/messages"
 	"blog/api/internal/modules/operations"
 	"blog/api/internal/modules/posts"
@@ -77,6 +78,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(cors(cfg.WebOrigin))
 
 	router.Use(auth.Middleware(repos.AuthStore))
+	feeds.RegisterRoutes(router, repos.PostRepo, cfg.PublicURL)
 
 	api := router.Group("/api")
 

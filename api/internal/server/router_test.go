@@ -31,6 +31,36 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+func TestFeedSitemapAndRobots(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+		PublicURL: "https://blog.example.com",
+	})
+
+	rssReq := httptest.NewRequest(http.MethodGet, "/rss.xml", nil)
+	rssRec := httptest.NewRecorder()
+	router.ServeHTTP(rssRec, rssReq)
+	if rssRec.Code != http.StatusOK || !strings.Contains(rssRec.Body.String(), "<rss") || !strings.Contains(rssRec.Body.String(), "https://blog.example.com/posts/blog-system-design") {
+		t.Fatalf("expected rss feed, got status=%d body=%q", rssRec.Code, rssRec.Body.String())
+	}
+
+	sitemapReq := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
+	sitemapRec := httptest.NewRecorder()
+	router.ServeHTTP(sitemapRec, sitemapReq)
+	if sitemapRec.Code != http.StatusOK || !strings.Contains(sitemapRec.Body.String(), "<urlset") || !strings.Contains(sitemapRec.Body.String(), "https://blog.example.com/archive") {
+		t.Fatalf("expected sitemap, got status=%d body=%q", sitemapRec.Code, sitemapRec.Body.String())
+	}
+
+	robotsReq := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	robotsRec := httptest.NewRecorder()
+	router.ServeHTTP(robotsRec, robotsReq)
+	if robotsRec.Code != http.StatusOK || !strings.Contains(robotsRec.Body.String(), "Sitemap: https://blog.example.com/sitemap.xml") {
+		t.Fatalf("expected robots txt, got status=%d body=%q", robotsRec.Code, robotsRec.Body.String())
+	}
+}
+
 func contains(value string, part string) bool {
 	return strings.Contains(value, part)
 }
