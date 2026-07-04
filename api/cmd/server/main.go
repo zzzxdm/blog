@@ -14,8 +14,10 @@ import (
 	"blog/api/internal/database"
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/comments"
+	"blog/api/internal/modules/messages"
 	"blog/api/internal/modules/posts"
 	"blog/api/internal/modules/reactions"
+	"blog/api/internal/modules/submissions"
 	appserver "blog/api/internal/server"
 )
 
@@ -51,21 +53,25 @@ func main() {
 			authStore, authErr := auth.NewSQLStore(setupCtx, db)
 			commentRepo, commentErr := comments.NewSQLRepository(setupCtx, db)
 			reactionRepo, reactionErr := reactions.NewSQLRepository(setupCtx, db)
+			messageRepo, messageErr := messages.NewSQLRepository(setupCtx, db)
+			submissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
 			cancelSetup()
 
-			if authErr != nil || commentErr != nil || reactionErr != nil {
+			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil {
 				if cfg.AppEnv == "production" {
-					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr)
+					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr)
 					os.Exit(1)
 				}
 
-				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr)
+				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr)
 			} else {
 				router = appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
-					AuthStore:    authStore,
-					PostRepo:     posts.NewSQLRepository(db),
-					CommentRepo:  commentRepo,
-					ReactionRepo: reactionRepo,
+					AuthStore:      authStore,
+					PostRepo:       posts.NewSQLRepository(db),
+					CommentRepo:    commentRepo,
+					ReactionRepo:   reactionRepo,
+					MessageRepo:    messageRepo,
+					SubmissionRepo: submissionRepo,
 				})
 			}
 		}
