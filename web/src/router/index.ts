@@ -1,6 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 import AccountPage from "../pages/AccountPage.vue";
+import AccountBookmarksPage from "../pages/account/AccountBookmarksPage.vue";
+import AccountCommentsPage from "../pages/account/AccountCommentsPage.vue";
+import AccountMessagesPage from "../pages/account/AccountMessagesPage.vue";
+import AccountSettingsPage from "../pages/account/AccountSettingsPage.vue";
+import AccountSubmissionsPage from "../pages/account/AccountSubmissionsPage.vue";
 import AdminCommentsPage from "../pages/admin/AdminCommentsPage.vue";
 import AdminEditorPage from "../pages/admin/AdminEditorPage.vue";
 import AdminHome from "../pages/admin/AdminHome.vue";
@@ -27,11 +32,11 @@ export const router = createRouter({
     { path: "/login", name: "login", component: LoginPage, meta: { hideChrome: true } },
     { path: "/submit", name: "submit", component: SubmitPage },
     { path: "/account", name: "account", component: AccountPage },
-    { path: "/account/comments", name: "account-comments", component: AccountPage },
-    { path: "/account/bookmarks", name: "account-bookmarks", component: AccountPage },
-    { path: "/account/submissions", name: "account-submissions", component: AccountPage },
-    { path: "/account/messages", name: "account-messages", component: AccountPage },
-    { path: "/account/settings", name: "account-settings", component: AccountPage },
+    { path: "/account/comments", name: "account-comments", component: AccountCommentsPage },
+    { path: "/account/bookmarks", name: "account-bookmarks", component: AccountBookmarksPage },
+    { path: "/account/submissions", name: "account-submissions", component: AccountSubmissionsPage },
+    { path: "/account/messages", name: "account-messages", component: AccountMessagesPage },
+    { path: "/account/settings", name: "account-settings", component: AccountSettingsPage },
     { path: "/admin", name: "admin", component: AdminHome, meta: { hideChrome: true } },
     { path: "/admin/posts", name: "admin-posts", component: AdminPostsPage, meta: { hideChrome: true } },
     { path: "/admin/submissions", name: "admin-submissions", component: AdminSubmissionsPage, meta: { hideChrome: true } },
