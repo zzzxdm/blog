@@ -1,0 +1,113 @@
+<script setup lang="ts">
+import AdminLayout from "../../components/AdminLayout.vue";
+</script>
+
+<template>
+  <AdminLayout title="站内信管理" description="向用户发送审核结果、站点公告和定向运营消息。" mobile-title="站内信管理" primary-action="发送">
+    <template #actions>
+      <div class="header-actions">
+        <button class="button-secondary" type="button">导出记录</button>
+        <button class="button" type="button">新建消息</button>
+      </div>
+    </template>
+
+    <section class="stats-grid" aria-label="站内信统计">
+      <div class="stat-card"><span>本月发送</span><strong>128</strong></div>
+      <div class="stat-card"><span>当前未读</span><strong>59</strong></div>
+      <div class="stat-card"><span>今日发送</span><strong>6</strong></div>
+      <div class="stat-card"><span>送达率</span><strong>99.1%</strong></div>
+    </section>
+
+    <section class="admin-grid-2">
+      <section class="table-panel" aria-label="发送记录">
+        <form class="table-toolbar">
+          <input class="input" type="search" placeholder="搜索标题、接收人、类型" aria-label="搜索站内信">
+          <select class="input" aria-label="消息类型">
+            <option>全部类型</option>
+            <option>管理员消息</option>
+            <option>投稿审核</option>
+            <option>站点公告</option>
+            <option>系统事件</option>
+          </select>
+          <select class="input" aria-label="发送状态">
+            <option>全部状态</option>
+            <option>已发送</option>
+            <option>定时中</option>
+            <option>已撤回</option>
+          </select>
+        </form>
+
+        <table>
+          <thead>
+            <tr>
+              <th>消息</th>
+              <th>范围</th>
+              <th>类型</th>
+              <th>送达</th>
+              <th>已读</th>
+              <th>时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>你的投稿已退回修改</strong><div class="meta-row"><span>关联投稿：如何写一篇可维护的技术文章</span></div></td>
+              <td>林一</td>
+              <td><span class="status review">投稿审核</span></td>
+              <td>1 / 1</td>
+              <td>0 / 1</td>
+              <td>刚刚</td>
+              <td><button class="button-secondary" type="button">查看</button></td>
+            </tr>
+            <tr>
+              <td><strong>本周将维护媒体库上传服务</strong><div class="meta-row"><span>普通注册用户</span><span>重要</span></div></td>
+              <td>全部用户</td>
+              <td><span class="status muted">公告</span></td>
+              <td>1,246 / 1,248</td>
+              <td>812 / 1,248</td>
+              <td>今天 09:30</td>
+              <td><button class="button-secondary" type="button">统计</button></td>
+            </tr>
+            <tr>
+              <td><strong>优质投稿用户邀请</strong><div class="meta-row"><span>筛选：近 30 天通过投稿不少于 2 篇</span></div></td>
+              <td>12 人</td>
+              <td><span class="status published">管理员</span></td>
+              <td>12 / 12</td>
+              <td>9 / 12</td>
+              <td>昨天</td>
+              <td><button class="button-secondary" type="button">复用</button></td>
+            </tr>
+            <tr>
+              <td><strong>评论审核策略更新</strong><div class="meta-row"><span>定时发送：今晚 20:00</span></div></td>
+              <td>作者、编辑</td>
+              <td><span class="status draft">系统</span></td>
+              <td>待发送</td>
+              <td>待发送</td>
+              <td>定时中</td>
+              <td><button class="button-secondary" type="button">撤回</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-title">
+          <h2>发送站内信</h2>
+        </div>
+        <form class="message-compose">
+          <div class="field"><label for="message-scope">接收范围</label><select class="input" id="message-scope"><option>指定用户</option><option>全部注册用户</option><option>按角色发送</option><option>按用户筛选条件发送</option></select></div>
+          <div class="field"><label for="message-recipient">接收人或条件</label><input class="input" id="message-recipient" value="林一 / linyi@example.com"></div>
+          <div class="field"><label for="message-type">消息类型</label><select class="input" id="message-type"><option>管理员消息</option><option>投稿审核</option><option>站点公告</option><option>系统事件</option></select></div>
+          <div class="field"><label for="message-priority">优先级</label><select class="input" id="message-priority"><option>普通</option><option>重要</option><option>紧急</option></select></div>
+          <div class="field"><label for="message-title">标题</label><input class="input" id="message-title" value="你的投稿已退回修改"></div>
+          <div class="field"><label for="message-content">正文</label><textarea class="input" id="message-content">摘要过短，建议明确文章解决的问题；正文中有一段代码没有解释上下文；封面图缺少 alt 文本。修改后可以重新提交。</textarea></div>
+          <div class="field"><label for="message-target">关联目标</label><input class="input" id="message-target" value="投稿：如何写一篇可维护的技术文章"></div>
+          <div class="header-actions">
+            <button class="button" type="button">发送</button>
+            <button class="button-secondary" type="button">定时</button>
+          </div>
+        </form>
+      </aside>
+    </section>
+  </AdminLayout>
+</template>
