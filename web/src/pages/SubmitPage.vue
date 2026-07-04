@@ -45,6 +45,7 @@ const renderedPreviewContent = computed(() => renderMarkdown(content.value));
 const status = computed(() => current.value?.status || "draft");
 const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
 const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交文章草稿，审核通过后会发布到站点。");
+const submissionLimit = computed(() => siteSettings.value?.submissionLimit || "每天最多 3 篇");
 const canEdit = computed(() => submissionsEnabled.value && (!current.value || current.value.status === "draft" || current.value.status === "returned"));
 
 onMounted(() => {
@@ -162,10 +163,18 @@ async function persist(submit: boolean) {
       : await createSubmission(payload(submit));
     message.value = submit ? "已提交审核，审核结果会通过站内信通知你。" : "草稿已保存。";
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "投稿保存失败";
+    error.value = submissionErrorMessage(err);
   } finally {
     saving.value = false;
   }
+}
+
+function submissionErrorMessage(err: unknown) {
+  if (err instanceof Error && err.message === "submission limit exceeded") {
+    return `已达到投稿频率限制（${submissionLimit.value}），请稍后再提交。`;
+  }
+
+  return err instanceof Error ? err.message : "投稿保存失败";
 }
 
 function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | "link") {
@@ -398,6 +407,7 @@ function statusClass(value: string) {
             <div class="review-note">
               <strong>投稿不会直接公开</strong>
               <p>提交后进入待审核状态。编辑可能会通过、退回修改或拒绝投稿。</p>
+              <p>当前频率限制：{{ submissionLimit }}。</p>
             </div>
             <p v-if="message" class="muted">{{ message }}</p>
             <p v-if="error" class="error">{{ error }}</p>

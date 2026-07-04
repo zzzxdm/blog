@@ -42,6 +42,7 @@ type PublicSettings struct {
 	CommentsEnabled         bool      `json:"commentsEnabled"`
 	LoginRequiredForComment bool      `json:"loginRequiredForComment"`
 	SubmissionsEnabled      bool      `json:"submissionsEnabled"`
+	SubmissionLimit         string    `json:"submissionLimit"`
 	SubmissionGuide         string    `json:"submissionGuide"`
 	UpdatedAt               time.Time `json:"updatedAt"`
 }

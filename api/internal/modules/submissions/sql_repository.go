@@ -45,6 +45,21 @@ func (repo *SQLRepository) ListByAuthor(ctx context.Context, userID string, quer
 	}, nil
 }
 
+func (repo *SQLRepository) CountSubmittedSince(ctx context.Context, userID string, since time.Time, excludeID string) (int, error) {
+	var total int
+	if err := repo.db.QueryRowContext(ctx, `
+		SELECT count(*)::int
+		FROM submissions
+		WHERE author_id = $1
+			AND submitted_at >= $2
+			AND ($3 = '' OR id <> $3)
+	`, userID, since, strings.TrimSpace(excludeID)).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count submitted submissions: %w", err)
+	}
+
+	return total, nil
+}
+
 func (repo *SQLRepository) Create(ctx context.Context, request SaveRequest, user auth.User) (Submission, error) {
 	if err := validateSave(request, request.Submit); err != nil {
 		return Submission{}, err

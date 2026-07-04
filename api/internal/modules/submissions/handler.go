@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/messages"
@@ -88,6 +89,9 @@ func (handler *Handler) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
 		return
 	}
+	if request.Submit && !handler.requireSubmissionSlot(ctx, user.ID, settings, "") {
+		return
+	}
 
 	submission, err := handler.repo.Create(ctx.Request.Context(), request, user)
 	if err != nil {
@@ -119,6 +123,9 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	}
 	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
+		return
+	}
+	if request.Submit && !handler.requireSubmissionSlot(ctx, user.ID, settings, ctx.Param("id")) {
 		return
 	}
 
@@ -158,6 +165,9 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
 		return
 	}
+	if !handler.requireSubmissionSlot(ctx, user.ID, settings, current.ID) {
+		return
+	}
 
 	submission, err := handler.repo.Submit(ctx.Request.Context(), ctx.Param("id"), user.ID)
 	if err != nil {
@@ -184,6 +194,25 @@ func (handler *Handler) requireSubmissionSettings(ctx *gin.Context) (operations.
 	}
 
 	return settings, true
+}
+
+func (handler *Handler) requireSubmissionSlot(ctx *gin.Context, userID string, settings operations.Settings, excludeID string) bool {
+	since, limit, ok := submissionLimitWindow(settings.SubmissionLimit, time.Now())
+	if !ok {
+		return true
+	}
+
+	total, err := handler.repo.CountSubmittedSince(ctx.Request.Context(), userID, since, excludeID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submission limit"})
+		return false
+	}
+	if total >= limit {
+		ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "submission limit exceeded"})
+		return false
+	}
+
+	return true
 }
 
 func (handler *Handler) AdminList(ctx *gin.Context) {
@@ -371,4 +400,41 @@ func textContainsBlockedWord(value string, blockedWords []string) bool {
 	}
 
 	return false
+}
+
+func submissionLimitWindow(value string, now time.Time) (time.Time, int, bool) {
+	limit := firstPositiveInt(value)
+	if limit <= 0 {
+		return time.Time{}, 0, false
+	}
+
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if strings.Contains(value, "\u5468") {
+		offset := (int(now.Weekday()) + 6) % 7
+		start = start.AddDate(0, 0, -offset)
+	}
+
+	return start, limit, true
+}
+
+func firstPositiveInt(value string) int {
+	number := 0
+	found := false
+	for _, item := range value {
+		if item < '0' || item > '9' {
+			if found {
+				break
+			}
+			continue
+		}
+
+		found = true
+		number = number*10 + int(item-'0')
+	}
+
+	if !found {
+		return 0
+	}
+
+	return number
 }

@@ -21,6 +21,7 @@ var (
 
 type Repository interface {
 	ListByAuthor(ctx context.Context, userID string, query ListQuery) (ListResult, error)
+	CountSubmittedSince(ctx context.Context, userID string, since time.Time, excludeID string) (int, error)
 	Create(ctx context.Context, request SaveRequest, user auth.User) (Submission, error)
 	Update(ctx context.Context, submissionID string, userID string, request SaveRequest) (Submission, error)
 	Submit(ctx context.Context, submissionID string, userID string) (Submission, error)
@@ -69,6 +70,24 @@ func (repo *MemoryRepository) ListByAuthor(_ context.Context, userID string, que
 		Total: len(items),
 		Stats: repo.statsByAuthorLocked(userID),
 	}, nil
+}
+
+func (repo *MemoryRepository) CountSubmittedSince(_ context.Context, userID string, since time.Time, excludeID string) (int, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	total := 0
+	excludeID = strings.TrimSpace(excludeID)
+	for _, submission := range repo.submissions {
+		if submission.AuthorID != userID || submission.SubmittedAt == nil || submission.ID == excludeID {
+			continue
+		}
+		if !submission.SubmittedAt.Before(since) {
+			total++
+		}
+	}
+
+	return total, nil
 }
 
 func (repo *MemoryRepository) Create(_ context.Context, request SaveRequest, user auth.User) (Submission, error) {

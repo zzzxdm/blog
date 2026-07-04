@@ -318,6 +318,7 @@ export interface SiteSettings {
   commentsEnabled: boolean;
   loginRequiredForComment: boolean;
   submissionsEnabled: boolean;
+  submissionLimit: string;
   submissionGuide: string;
   updatedAt: string;
 }

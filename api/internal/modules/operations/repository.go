@@ -324,6 +324,7 @@ func publicSettings(settings Settings) PublicSettings {
 		CommentsEnabled:         settings.CommentsEnabled,
 		LoginRequiredForComment: settings.LoginRequiredForComment,
 		SubmissionsEnabled:      settings.SubmissionsEnabled,
+		SubmissionLimit:         settings.SubmissionLimit,
 		SubmissionGuide:         settings.SubmissionGuide,
 		UpdatedAt:               settings.UpdatedAt,
 	}
