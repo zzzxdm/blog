@@ -17,6 +17,7 @@ var (
 
 type Repository interface {
 	List(ctx context.Context) (UserListResult, error)
+	Get(ctx context.Context, userID string) (ManagedUser, error)
 	UpdateStatus(ctx context.Context, userID string, status string) (ManagedUser, error)
 	GetAccount(ctx context.Context, user auth.User) (AccountSettings, error)
 	UpdateAccount(ctx context.Context, user auth.User, settings AccountSettings) (AccountSettings, error)
@@ -57,6 +58,18 @@ func (repo *MemoryRepository) List(_ context.Context) (UserListResult, error) {
 		Total: len(items),
 		Stats: countStats(items),
 	}, nil
+}
+
+func (repo *MemoryRepository) Get(_ context.Context, userID string) (ManagedUser, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	user, ok := repo.users[userID]
+	if !ok {
+		return ManagedUser{}, ErrUserNotFound
+	}
+
+	return user, nil
 }
 
 func (repo *MemoryRepository) UpdateStatus(_ context.Context, userID string, status string) (ManagedUser, error) {

@@ -81,6 +81,8 @@ func auditAction(method string, path string) string {
 		return "submission.review"
 	case strings.Contains(path, "/admin/comments"):
 		return "comment.moderate"
+	case strings.Contains(path, "/admin/users") && strings.Contains(path, "/password-reset"):
+		return "user.password_reset"
 	case strings.Contains(path, "/admin/users"):
 		return "user.update"
 	case strings.Contains(path, "/admin/messages"):

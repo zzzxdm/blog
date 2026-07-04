@@ -108,7 +108,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
 	operations.RegisterRoutes(api, repos.OperationsRepo, uploadDir(cfg.UploadDir))
-	users.RegisterRoutes(api, repos.UserRepo)
+	users.RegisterRoutes(api, repos.UserRepo, repos.AuthStore)
 
 	var publisher posts.Publisher
 	if item, ok := repos.PostRepo.(posts.Publisher); ok {

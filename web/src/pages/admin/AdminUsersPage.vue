@@ -5,6 +5,7 @@ import AdminLayout from "../../components/AdminLayout.vue";
 import {
   exportAdminUsers,
   getAdminUsers,
+  requestAdminUserPasswordReset,
   updateAdminUserStatus,
   type ManagedUser,
   type UserStats
@@ -16,6 +17,7 @@ const stats = ref<UserStats>({ total: 0, emailVerified: 0, authors: 0, muted: 0,
 const loading = ref(false);
 const exporting = ref(false);
 const actingId = ref("");
+const resettingId = ref("");
 const error = ref("");
 const message = ref("");
 
@@ -64,6 +66,21 @@ async function exportUsers() {
     error.value = err instanceof Error ? err.message : "用户导出失败";
   } finally {
     exporting.value = false;
+  }
+}
+
+async function resetPassword(user: ManagedUser) {
+  resettingId.value = user.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const result = await requestAdminUserPasswordReset(user.id);
+    message.value = result.resetToken ? `已生成重置 token：${result.resetToken}` : `已向 ${result.user.email} 发送重置入口。`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "密码重置失败";
+  } finally {
+    resettingId.value = "";
   }
 }
 
@@ -159,6 +176,7 @@ function formatDate(value: string) {
             <td>
               <div class="header-actions">
                 <button class="button-secondary" type="button">查看</button>
+                <button class="button-secondary" type="button" :disabled="resettingId === user.id" @click="resetPassword(user)">{{ resettingId === user.id ? "生成中..." : "重置密码" }}</button>
                 <button v-if="user.status === 'active'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'muted')">禁言</button>
                 <button v-else class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'active')">解除</button>
                 <button v-if="user.status !== 'banned'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'banned')">封禁</button>

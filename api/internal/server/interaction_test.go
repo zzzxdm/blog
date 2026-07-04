@@ -712,6 +712,16 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 		t.Fatalf("expected users export, got status=%d body=%q", usersExportRec.Code, usersExportRec.Body.String())
 	}
 
+	resetUserPasswordReq := httptest.NewRequest(http.MethodPost, "/api/admin/users/user_linyi/password-reset", nil)
+	for _, cookie := range adminCookies {
+		resetUserPasswordReq.AddCookie(cookie)
+	}
+	resetUserPasswordRec := httptest.NewRecorder()
+	router.ServeHTTP(resetUserPasswordRec, resetUserPasswordReq)
+	if resetUserPasswordRec.Code != http.StatusOK || !strings.Contains(resetUserPasswordRec.Body.String(), `"delivery":"dev-response"`) || !strings.Contains(resetUserPasswordRec.Body.String(), `"resetToken"`) {
+		t.Fatalf("expected admin password reset token, got status=%d body=%q", resetUserPasswordRec.Code, resetUserPasswordRec.Body.String())
+	}
+
 	muteReq := httptest.NewRequest(http.MethodPut, "/api/admin/users/user_linyi/status", bytes.NewBufferString(`{"status":"muted"}`))
 	muteReq.Header.Set("Content-Type", "application/json")
 	for _, cookie := range adminCookies {

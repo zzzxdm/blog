@@ -494,6 +494,13 @@ export interface UserListResponse {
   stats: UserStats;
 }
 
+export interface AdminPasswordResetResponse {
+  ok: boolean;
+  user: ManagedUser;
+  resetToken?: string;
+  delivery: string;
+}
+
 export interface AccountSettings {
   displayName: string;
   username: string;
@@ -996,6 +1003,12 @@ export async function updateAdminUserStatus(id: string, status: ManagedUser["sta
   return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}/status`, {
     method: "PUT",
     body: JSON.stringify({ status })
+  });
+}
+
+export async function requestAdminUserPasswordReset(id: string): Promise<AdminPasswordResetResponse> {
+  return request<AdminPasswordResetResponse>(`/admin/users/${encodeURIComponent(id)}/password-reset`, {
+    method: "POST"
   });
 }
 

@@ -11,19 +11,21 @@ import (
 )
 
 type Handler struct {
-	repo Repository
+	repo      Repository
+	authStore auth.Store
 }
 
-func NewHandler(repo Repository) *Handler {
-	return &Handler{repo: repo}
+func NewHandler(repo Repository, authStore auth.Store) *Handler {
+	return &Handler{repo: repo, authStore: authStore}
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository) {
-	handler := NewHandler(repo)
+func RegisterRoutes(router gin.IRouter, repo Repository, authStore auth.Store) {
+	handler := NewHandler(repo, authStore)
 
 	router.GET("/admin/users", handler.List)
 	router.GET("/admin/users/export", handler.Export)
 	router.PUT("/admin/users/:id/status", handler.UpdateStatus)
+	router.POST("/admin/users/:id/password-reset", handler.RequestPasswordReset)
 	router.GET("/account/settings", handler.GetAccount)
 	router.PUT("/account/settings", handler.UpdateAccount)
 }
@@ -89,6 +91,40 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, user)
+}
+
+func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+	if handler.authStore == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "password reset is unavailable"})
+		return
+	}
+
+	user, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	token, err := handler.authStore.RequestPasswordReset(user.Email)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, PasswordResetResult{
+		OK:         true,
+		User:       user,
+		ResetToken: token,
+		Delivery:   "dev-response",
+	})
 }
 
 func (handler *Handler) GetAccount(ctx *gin.Context) {

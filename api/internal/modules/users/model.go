@@ -32,6 +32,13 @@ type UserListResult struct {
 	Stats UserStats     `json:"stats"`
 }
 
+type PasswordResetResult struct {
+	OK         bool        `json:"ok"`
+	User       ManagedUser `json:"user"`
+	ResetToken string      `json:"resetToken,omitempty"`
+	Delivery   string      `json:"delivery"`
+}
+
 type StatusRequest struct {
 	Status string `json:"status"`
 }

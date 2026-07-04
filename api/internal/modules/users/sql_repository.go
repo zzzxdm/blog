@@ -37,6 +37,10 @@ func (repo *SQLRepository) List(ctx context.Context) (UserListResult, error) {
 	}, nil
 }
 
+func (repo *SQLRepository) Get(ctx context.Context, userID string) (ManagedUser, error) {
+	return repo.getManagedUser(ctx, userID)
+}
+
 func (repo *SQLRepository) UpdateStatus(ctx context.Context, userID string, status string) (ManagedUser, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	if !validStatus(status) {
