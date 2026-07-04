@@ -45,13 +45,17 @@ func (repo *MemoryRepository) List(_ context.Context, userID string, query ListQ
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
+	now := repo.now()
 	items := make([]Message, 0)
 	for _, message := range repo.messages {
 		if message.RecipientID != userID {
 			continue
 		}
 
-		item := withStatus(message)
+		item := withStatus(message, now)
+		if item.Status == StatusScheduled {
+			continue
+		}
 		if !matchesQuery(item, query) {
 			continue
 		}
@@ -63,7 +67,7 @@ func (repo *MemoryRepository) List(_ context.Context, userID string, query ListQ
 	return ListResult{
 		Items: items,
 		Total: len(items),
-		Stats: repo.statsLocked(userID),
+		Stats: repo.statsLocked(userID, now),
 	}, nil
 }
 
@@ -72,8 +76,9 @@ func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (Lis
 	defer repo.mu.RUnlock()
 
 	items := make([]Message, 0, len(repo.messages))
+	now := repo.now()
 	for _, message := range repo.messages {
-		item := withStatus(message)
+		item := withStatus(message, now)
 		if !matchesQuery(item, query) {
 			continue
 		}
@@ -85,7 +90,7 @@ func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (Lis
 	return ListResult{
 		Items: items,
 		Total: len(items),
-		Stats: repo.adminStatsLocked(),
+		Stats: repo.adminStatsLocked(now),
 	}, nil
 }
 
@@ -94,6 +99,10 @@ func (repo *MemoryRepository) Create(_ context.Context, request CreateRequest, s
 	body := strings.TrimSpace(request.Body)
 	recipientID := strings.TrimSpace(request.RecipientID)
 	if title == "" || body == "" || recipientID == "" {
+		return Message{}, ErrInvalidMessage
+	}
+	scheduledAt, err := parseScheduledAt(request.ScheduledAt)
+	if err != nil {
 		return Message{}, ErrInvalidMessage
 	}
 
@@ -114,13 +123,14 @@ func (repo *MemoryRepository) Create(_ context.Context, request CreateRequest, s
 		TargetID:      strings.TrimSpace(request.TargetID),
 		TargetTitle:   strings.TrimSpace(request.TargetTitle),
 		Status:        StatusUnread,
+		ScheduledAt:   scheduledAt,
 		CreatedAt:     repo.now(),
 	}
 
 	repo.nextID++
 	repo.messages = append(repo.messages, message)
 
-	return message, nil
+	return withStatus(message, repo.now()), nil
 }
 
 func (repo *MemoryRepository) MarkRead(_ context.Context, userID string, messageID string) (Message, error) {
@@ -133,11 +143,14 @@ func (repo *MemoryRepository) MarkRead(_ context.Context, userID string, message
 	}
 
 	now := repo.now()
+	if withStatus(repo.messages[index], now).Status == StatusScheduled {
+		return Message{}, ErrMessageNotFound
+	}
 	if repo.messages[index].ReadAt == nil {
 		repo.messages[index].ReadAt = &now
 	}
 
-	return withStatus(repo.messages[index]), nil
+	return withStatus(repo.messages[index], now), nil
 }
 
 func (repo *MemoryRepository) MarkAllRead(_ context.Context, userID string) (Stats, error) {
@@ -149,12 +162,15 @@ func (repo *MemoryRepository) MarkAllRead(_ context.Context, userID string) (Sta
 		if repo.messages[index].RecipientID != userID || repo.messages[index].ArchivedAt != nil {
 			continue
 		}
+		if withStatus(repo.messages[index], now).Status == StatusScheduled {
+			continue
+		}
 		if repo.messages[index].ReadAt == nil {
 			repo.messages[index].ReadAt = &now
 		}
 	}
 
-	return repo.statsLocked(userID), nil
+	return repo.statsLocked(userID, now), nil
 }
 
 func (repo *MemoryRepository) Archive(_ context.Context, userID string, messageID string) (Message, error) {
@@ -167,12 +183,15 @@ func (repo *MemoryRepository) Archive(_ context.Context, userID string, messageI
 	}
 
 	now := repo.now()
+	if withStatus(repo.messages[index], now).Status == StatusScheduled {
+		return Message{}, ErrMessageNotFound
+	}
 	if repo.messages[index].ReadAt == nil {
 		repo.messages[index].ReadAt = &now
 	}
 	repo.messages[index].ArchivedAt = &now
 
-	return withStatus(repo.messages[index]), nil
+	return withStatus(repo.messages[index], now), nil
 }
 
 func (repo *MemoryRepository) findLocked(userID string, messageID string) int {
@@ -185,14 +204,17 @@ func (repo *MemoryRepository) findLocked(userID string, messageID string) int {
 	return -1
 }
 
-func (repo *MemoryRepository) statsLocked(userID string) Stats {
+func (repo *MemoryRepository) statsLocked(userID string, now time.Time) Stats {
 	stats := Stats{}
 	for _, message := range repo.messages {
 		if message.RecipientID != userID {
 			continue
 		}
 
-		item := withStatus(message)
+		item := withStatus(message, now)
+		if item.Status == StatusScheduled {
+			continue
+		}
 		stats.Total++
 		if item.Status == StatusUnread {
 			stats.Unread++
@@ -211,10 +233,10 @@ func (repo *MemoryRepository) statsLocked(userID string) Stats {
 	return stats
 }
 
-func (repo *MemoryRepository) adminStatsLocked() Stats {
+func (repo *MemoryRepository) adminStatsLocked(now time.Time) Stats {
 	stats := Stats{}
 	for _, message := range repo.messages {
-		item := withStatus(message)
+		item := withStatus(message, now)
 		stats.Total++
 		if item.Status == StatusUnread {
 			stats.Unread++
@@ -233,8 +255,10 @@ func (repo *MemoryRepository) adminStatsLocked() Stats {
 	return stats
 }
 
-func withStatus(message Message) Message {
+func withStatus(message Message, now time.Time) Message {
 	switch {
+	case message.ScheduledAt != nil && message.ScheduledAt.After(now):
+		message.Status = StatusScheduled
 	case message.ArchivedAt != nil:
 		message.Status = StatusArchived
 	case message.ReadAt != nil:
@@ -263,6 +287,23 @@ func matchesQuery(message Message, query ListQuery) bool {
 	}
 
 	return true
+}
+
+func parseScheduledAt(value string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+
+	layouts := []string{time.RFC3339, "2006-01-02T15:04"}
+	for _, layout := range layouts {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			return &parsed, nil
+		}
+	}
+
+	return nil, ErrInvalidMessage
 }
 
 func sortMessages(items []Message) {

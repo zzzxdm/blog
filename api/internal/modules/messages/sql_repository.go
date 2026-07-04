@@ -27,6 +27,7 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 func (repo *SQLRepository) List(ctx context.Context, userID string, query ListQuery) (ListResult, error) {
 	items, err := repo.queryMessages(ctx, `
 		WHERE recipient_id = $1
+			AND (scheduled_at IS NULL OR scheduled_at <= now())
 		ORDER BY created_at DESC
 	`, userID)
 	if err != nil {
@@ -66,14 +67,18 @@ func (repo *SQLRepository) Create(ctx context.Context, request CreateRequest, se
 	if title == "" || body == "" || recipientID == "" {
 		return Message{}, ErrInvalidMessage
 	}
+	scheduledAt, err := parseScheduledAt(request.ScheduledAt)
+	if err != nil {
+		return Message{}, ErrInvalidMessage
+	}
 
 	id := fmt.Sprintf("message_%d", time.Now().UnixNano())
-	_, err := repo.db.ExecContext(ctx, `
+	_, err = repo.db.ExecContext(ctx, `
 		INSERT INTO messages (
 			id, recipient_id, recipient_name, sender_id, sender_name, type, priority,
-			title, body, target_type, target_id, target_title
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		title, body, target_type, target_id, target_title, scheduled_at
+	)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`, id,
 		recipientID,
 		defaultString(strings.TrimSpace(request.RecipientName), recipientID),
@@ -86,6 +91,7 @@ func (repo *SQLRepository) Create(ctx context.Context, request CreateRequest, se
 		strings.TrimSpace(request.TargetType),
 		strings.TrimSpace(request.TargetID),
 		strings.TrimSpace(request.TargetTitle),
+		scheduledAt,
 	)
 	if err != nil {
 		return Message{}, fmt.Errorf("insert message: %w", err)
@@ -101,6 +107,7 @@ func (repo *SQLRepository) MarkRead(ctx context.Context, userID string, messageI
 		SET read_at = COALESCE(read_at, now())
 		WHERE id = $1
 			AND recipient_id = $2
+			AND (scheduled_at IS NULL OR scheduled_at <= now())
 		RETURNING id
 	`, messageID, userID).Scan(&id)
 	if err != nil {
@@ -119,6 +126,7 @@ func (repo *SQLRepository) MarkAllRead(ctx context.Context, userID string) (Stat
 		SET read_at = COALESCE(read_at, now())
 		WHERE recipient_id = $1
 			AND archived_at IS NULL
+			AND (scheduled_at IS NULL OR scheduled_at <= now())
 	`, userID); err != nil {
 		return Stats{}, fmt.Errorf("mark all messages read: %w", err)
 	}
@@ -139,6 +147,7 @@ func (repo *SQLRepository) Archive(ctx context.Context, userID string, messageID
 			archived_at = now()
 		WHERE id = $1
 			AND recipient_id = $2
+			AND (scheduled_at IS NULL OR scheduled_at <= now())
 		RETURNING id
 	`, messageID, userID).Scan(&id)
 	if err != nil {
@@ -178,9 +187,10 @@ func (repo *SQLRepository) queryMessages(ctx context.Context, whereAndOrder stri
 			target_type,
 			target_id,
 			target_title,
-			read_at,
-			archived_at,
-			created_at
+				read_at,
+				archived_at,
+				scheduled_at,
+				created_at
 		FROM messages
 		`+whereAndOrder, args...)
 	if err != nil {
@@ -206,11 +216,12 @@ func (repo *SQLRepository) queryMessages(ctx context.Context, whereAndOrder stri
 			&message.TargetTitle,
 			&message.ReadAt,
 			&message.ArchivedAt,
+			&message.ScheduledAt,
 			&message.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan message: %w", err)
 		}
-		items = append(items, withStatus(message))
+		items = append(items, withStatus(message, time.Now()))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate messages: %w", err)
@@ -232,8 +243,9 @@ func filterMessages(items []Message, query ListQuery) []Message {
 
 func countMessageStats(items []Message) Stats {
 	stats := Stats{}
+	now := time.Now()
 	for _, item := range items {
-		item = withStatus(item)
+		item = withStatus(item, now)
 		stats.Total++
 		if item.Status == StatusUnread {
 			stats.Unread++
@@ -257,11 +269,11 @@ func (repo *SQLRepository) ensureSeedMessages(ctx context.Context) error {
 		if _, err := repo.db.ExecContext(ctx, `
 			INSERT INTO messages (
 				id, recipient_id, recipient_name, sender_id, sender_name, type, priority,
-				title, body, target_type, target_id, target_title, read_at, archived_at, created_at
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-			ON CONFLICT (id) DO NOTHING
-		`,
+			title, body, target_type, target_id, target_title, read_at, archived_at, scheduled_at, created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		ON CONFLICT (id) DO NOTHING
+	`,
 			message.ID,
 			message.RecipientID,
 			message.RecipientName,
@@ -276,6 +288,7 @@ func (repo *SQLRepository) ensureSeedMessages(ctx context.Context) error {
 			message.TargetTitle,
 			message.ReadAt,
 			message.ArchivedAt,
+			message.ScheduledAt,
 			message.CreatedAt,
 		); err != nil {
 			return fmt.Errorf("seed message %s: %w", message.ID, err)

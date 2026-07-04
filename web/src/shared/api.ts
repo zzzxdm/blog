@@ -226,7 +226,7 @@ export interface ReviewPayload {
 }
 
 export type MessageType = "review" | "comment" | "system" | "admin" | "account";
-export type MessageStatus = "unread" | "read" | "archived";
+export type MessageStatus = "unread" | "read" | "archived" | "scheduled";
 
 export interface StationMessage {
   id: string;
@@ -244,6 +244,7 @@ export interface StationMessage {
   status: MessageStatus;
   readAt?: string;
   archivedAt?: string;
+  scheduledAt?: string;
   createdAt: string;
 }
 
@@ -905,6 +906,7 @@ export async function createAdminMessage(payload: {
   targetType?: string;
   targetId?: string;
   targetTitle?: string;
+  scheduledAt?: string;
 }): Promise<StationMessage> {
   return request<StationMessage>("/admin/messages", {
     method: "POST",

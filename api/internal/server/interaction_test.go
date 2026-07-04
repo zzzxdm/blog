@@ -211,6 +211,47 @@ func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
 	if adminMessagesExportRec.Code != http.StatusOK || !strings.Contains(adminMessagesExportRec.Body.String(), `"scope":"messages"`) || !strings.Contains(adminMessagesExportRec.Body.String(), "你的投稿已通过并发布") {
 		t.Fatalf("expected messages export, got status=%d body=%q", adminMessagesExportRec.Code, adminMessagesExportRec.Body.String())
 	}
+
+	scheduledMessageReq := httptest.NewRequest(http.MethodPost, "/api/admin/messages", bytes.NewBufferString(`{
+		"recipientId":"user_linyi",
+		"recipientName":"林一",
+		"type":"admin",
+		"priority":"normal",
+		"title":"明天发送的站内信",
+		"body":"这条消息应该先停留在后台定时列表。",
+		"targetType":"admin-message",
+		"targetTitle":"定时发送",
+		"scheduledAt":"2099-01-01T09:00:00Z"
+	}`))
+	scheduledMessageReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		scheduledMessageReq.AddCookie(cookie)
+	}
+	scheduledMessageRec := httptest.NewRecorder()
+	router.ServeHTTP(scheduledMessageRec, scheduledMessageReq)
+	if scheduledMessageRec.Code != http.StatusCreated || !strings.Contains(scheduledMessageRec.Body.String(), `"status":"scheduled"`) {
+		t.Fatalf("expected scheduled admin message, got status=%d body=%q", scheduledMessageRec.Code, scheduledMessageRec.Body.String())
+	}
+
+	adminScheduledReq := httptest.NewRequest(http.MethodGet, "/api/admin/messages?status=scheduled", nil)
+	for _, cookie := range adminCookies {
+		adminScheduledReq.AddCookie(cookie)
+	}
+	adminScheduledRec := httptest.NewRecorder()
+	router.ServeHTTP(adminScheduledRec, adminScheduledReq)
+	if adminScheduledRec.Code != http.StatusOK || !strings.Contains(adminScheduledRec.Body.String(), "明天发送的站内信") {
+		t.Fatalf("expected scheduled message in admin list, got status=%d body=%q", adminScheduledRec.Code, adminScheduledRec.Body.String())
+	}
+
+	userScheduledReq := httptest.NewRequest(http.MethodGet, "/api/messages", nil)
+	for _, cookie := range userCookies {
+		userScheduledReq.AddCookie(cookie)
+	}
+	userScheduledRec := httptest.NewRecorder()
+	router.ServeHTTP(userScheduledRec, userScheduledReq)
+	if userScheduledRec.Code != http.StatusOK || strings.Contains(userScheduledRec.Body.String(), "明天发送的站内信") {
+		t.Fatalf("expected scheduled message hidden from user inbox, got status=%d body=%q", userScheduledRec.Code, userScheduledRec.Body.String())
+	}
 }
 
 func TestAccountCommentsBookmarksAndAdminModeration(t *testing.T) {

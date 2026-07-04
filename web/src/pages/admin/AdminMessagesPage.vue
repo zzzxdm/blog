@@ -28,6 +28,8 @@ const priority = ref("normal");
 const title = ref("优质投稿用户邀请");
 const body = ref("你最近的投稿质量较高，欢迎继续提交工程实践和写作工作流相关内容。");
 const targetTitle = ref("投稿激励");
+const scheduleOpen = ref(false);
+const scheduledAt = ref("");
 
 const selectedMessage = computed(() => messages.value.find((item) => item.id === selectedId.value) || messages.value[0]);
 
@@ -52,11 +54,17 @@ async function load() {
 }
 
 async function send() {
+  if (scheduleOpen.value && !scheduledAt.value) {
+    error.value = "请选择定时发送时间";
+    return;
+  }
+
   sending.value = true;
   error.value = "";
   message.value = "";
 
   try {
+    const scheduleValue = scheduleOpen.value ? new Date(scheduledAt.value).toISOString() : "";
     await createAdminMessage({
       recipientId: recipientId.value,
       recipientName: recipientName.value,
@@ -65,9 +73,12 @@ async function send() {
       title: title.value,
       body: body.value,
       targetType: "admin-message",
-      targetTitle: targetTitle.value
+      targetTitle: targetTitle.value,
+      scheduledAt: scheduleValue || undefined
     });
-    message.value = "站内信已发送。";
+    message.value = scheduleValue && new Date(scheduleValue) > new Date()
+      ? `站内信已定时到 ${formatTime(scheduleValue)}。`
+      : "站内信已发送。";
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信发送失败";
@@ -89,6 +100,15 @@ async function exportMessages() {
   } finally {
     exporting.value = false;
   }
+}
+
+function toggleSchedule() {
+  scheduleOpen.value = !scheduleOpen.value;
+  if (scheduleOpen.value && !scheduledAt.value) {
+    scheduledAt.value = nextScheduleValue();
+  }
+  message.value = "";
+  error.value = "";
 }
 
 function viewMessage(item: StationMessage) {
@@ -133,6 +153,9 @@ function typeClass(value: MessageType) {
 }
 
 function statusText(value: StationMessage["status"]) {
+  if (value === "scheduled") {
+    return "定时中";
+  }
   if (value === "archived") {
     return "已归档";
   }
@@ -140,6 +163,13 @@ function statusText(value: StationMessage["status"]) {
     return "已读";
   }
   return "未读";
+}
+
+function nextScheduleValue() {
+  const date = new Date();
+  date.setHours(date.getHours() + 1, 0, 0, 0);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 </script>
 
@@ -199,9 +229,9 @@ function statusText(value: StationMessage["status"]) {
               <td><strong>{{ item.title }}</strong><div class="meta-row"><span>{{ item.targetTitle || item.body }}</span></div></td>
               <td>{{ item.recipientName }}</td>
               <td><span class="status" :class="typeClass(item.type)">{{ typeText(item.type) }}</span></td>
-              <td>1 / 1</td>
-              <td>{{ item.status === "unread" ? "0 / 1" : "1 / 1" }}</td>
-              <td>{{ formatTime(item.createdAt) }}</td>
+              <td>{{ item.status === "scheduled" ? "定时中" : "1 / 1" }}</td>
+              <td>{{ item.status === "scheduled" ? "-" : item.status === "unread" ? "0 / 1" : "1 / 1" }}</td>
+              <td>{{ formatTime(item.scheduledAt || item.createdAt) }}</td>
               <td><button class="button-secondary" type="button" @click="viewMessage(item)">查看</button></td>
             </tr>
           </tbody>
@@ -212,7 +242,7 @@ function statusText(value: StationMessage["status"]) {
         <section v-if="selectedMessage" class="panel">
           <div class="panel-title">
             <h2>消息详情</h2>
-            <span class="status" :class="typeClass(selectedMessage.type)">{{ statusText(selectedMessage.status) }}</span>
+            <span class="status" :class="selectedMessage.status === 'scheduled' ? 'muted' : typeClass(selectedMessage.type)">{{ statusText(selectedMessage.status) }}</span>
           </div>
           <div class="settings-stack">
             <div class="field"><label for="detail-title">标题</label><input class="input" id="detail-title" :value="selectedMessage.title" readonly></div>
@@ -223,6 +253,7 @@ function statusText(value: StationMessage["status"]) {
             </div>
             <div class="field"><label for="detail-target">关联目标</label><input class="input" id="detail-target" :value="selectedMessage.targetTitle || selectedMessage.targetId || '无'" readonly></div>
             <div class="meta-row"><span>发送人 {{ selectedMessage.senderName }}</span><span>{{ formatTime(selectedMessage.createdAt) }}</span></div>
+            <div v-if="selectedMessage.scheduledAt" class="meta-row"><span>预约时间 {{ formatTime(selectedMessage.scheduledAt) }}</span></div>
           </div>
         </section>
 
@@ -239,9 +270,10 @@ function statusText(value: StationMessage["status"]) {
             <div class="field"><label for="message-title">标题</label><input v-model="title" class="input" id="message-title"></div>
             <div class="field"><label for="message-content">正文</label><textarea v-model="body" class="input" id="message-content"></textarea></div>
             <div class="field"><label for="message-target">关联目标</label><input v-model="targetTitle" class="input" id="message-target"></div>
+            <div v-if="scheduleOpen" class="field"><label for="message-scheduled-at">定时发送</label><input v-model="scheduledAt" class="input" id="message-scheduled-at" type="datetime-local"></div>
             <div class="header-actions">
-              <button class="button" type="submit" :disabled="sending">{{ sending ? "发送中..." : "发送" }}</button>
-              <button class="button-secondary" type="button">定时</button>
+              <button class="button" type="submit" :disabled="sending">{{ sending ? "发送中..." : scheduleOpen ? "定时发送" : "发送" }}</button>
+              <button class="button-secondary" type="button" :disabled="sending" @click="toggleSchedule">{{ scheduleOpen ? "取消定时" : "定时" }}</button>
             </div>
           </form>
         </section>

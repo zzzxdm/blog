@@ -9,9 +9,10 @@ const (
 	TypeAdmin   = "admin"
 	TypeAccount = "account"
 
-	StatusUnread   = "unread"
-	StatusRead     = "read"
-	StatusArchived = "archived"
+	StatusUnread    = "unread"
+	StatusRead      = "read"
+	StatusArchived  = "archived"
+	StatusScheduled = "scheduled"
 )
 
 type Message struct {
@@ -30,6 +31,7 @@ type Message struct {
 	Status        string     `json:"status"`
 	ReadAt        *time.Time `json:"readAt,omitempty"`
 	ArchivedAt    *time.Time `json:"archivedAt,omitempty"`
+	ScheduledAt   *time.Time `json:"scheduledAt,omitempty"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
@@ -62,4 +64,5 @@ type CreateRequest struct {
 	TargetType    string `json:"targetType"`
 	TargetID      string `json:"targetId"`
 	TargetTitle   string `json:"targetTitle"`
+	ScheduledAt   string `json:"scheduledAt"`
 }
