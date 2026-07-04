@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"blog/api/internal/modules/auth"
@@ -67,6 +68,10 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	var request CreateRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment payload"})
+		return
+	}
+	if containsBlockedWord(request.Body, settings.BlockedWords) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "comment contains blocked word"})
 		return
 	}
 
@@ -247,4 +252,20 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 
 func canInteract(user auth.User) bool {
 	return user.Status == "" || user.Status == "active"
+}
+
+func containsBlockedWord(value string, blockedWords []string) bool {
+	normalizedValue := strings.ToLower(strings.TrimSpace(value))
+	if normalizedValue == "" {
+		return false
+	}
+
+	for _, word := range blockedWords {
+		normalizedWord := strings.ToLower(strings.TrimSpace(word))
+		if normalizedWord != "" && strings.Contains(normalizedValue, normalizedWord) {
+			return true
+		}
+	}
+
+	return false
 }
