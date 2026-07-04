@@ -29,6 +29,7 @@ const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const editorArea = ref<HTMLTextAreaElement | null>(null);
 const siteSettings = ref<SiteSettings | null>(null);
+const linkUrl = ref("https://");
 
 const title = ref("用户评论系统应该怎么设计");
 const summary = ref("从登录用户评论、审核、举报、通知和禁言机制出发，设计一个可维护的评论系统。");
@@ -216,8 +217,10 @@ function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | 
     }
     selectionEnd = selectionStart + inner.length;
   } else {
-    const url = window.prompt("链接地址", "https://");
-    if (!url) {
+    const url = linkUrl.value.trim();
+    if (!url || url === "https://") {
+      error.value = "请输入链接地址。";
+      message.value = "";
       return;
     }
     inner = selected || "链接文字";
@@ -299,10 +302,7 @@ function statusClass(value: string) {
             <button class="tool" type="button" aria-label="代码" :disabled="!canEdit" @click="applyMarkdown('code')">{ }</button>
             <button class="tool" type="button" aria-label="链接" :disabled="!canEdit" @click="applyMarkdown('link')">↗</button>
           </div>
-          <div class="meta-row">
-            <span>Markdown</span>
-            <span>实时预览</span>
-          </div>
+          <label class="editor-link-input"><span class="sr-only">链接地址</span><input v-model="linkUrl" class="input" type="url" placeholder="https://example.com" aria-label="链接地址" :disabled="!canEdit"></label>
         </div>
 
         <div class="editor-grid">

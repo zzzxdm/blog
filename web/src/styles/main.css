@@ -2003,6 +2003,15 @@ td {
   font-weight: 800;
 }
 
+.editor-link-input {
+  width: min(280px, 38vw);
+}
+
+.editor-link-input .input {
+  height: 34px;
+  padding: 0 10px;
+}
+
 .editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -2181,6 +2190,15 @@ textarea.input {
   .table-toolbar,
   .editor-grid {
     grid-template-columns: 1fr;
+  }
+
+  .editor-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .editor-link-input {
+    width: 100%;
   }
 
   .article-feedback {

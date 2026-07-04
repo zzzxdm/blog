@@ -35,6 +35,7 @@ const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
 const editorArea = ref<HTMLTextAreaElement | null>(null);
 const previewArea = ref<HTMLElement | null>(null);
+const linkUrl = ref("https://");
 
 const title = ref("如何设计一个内容长期增长的博客系统");
 const summary = ref("博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。");
@@ -258,8 +259,10 @@ function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | 
     }
     selectionEnd = selectionStart + inner.length;
   } else {
-    const url = window.prompt("链接地址", "https://");
-    if (!url) {
+    const url = linkUrl.value.trim();
+    if (!url || url === "https://") {
+      error.value = "请输入链接地址。";
+      message.value = "";
       return;
     }
     inner = selected || "链接文字";
@@ -335,10 +338,7 @@ function formatDate(value: string) {
             <button class="tool" type="button" aria-label="代码" @click="applyMarkdown('code')">{ }</button>
             <button class="tool" type="button" aria-label="链接" @click="applyMarkdown('link')">↗</button>
           </div>
-          <div class="meta-row">
-            <span>Markdown</span>
-            <span>预览</span>
-          </div>
+          <label class="editor-link-input"><span class="sr-only">链接地址</span><input v-model="linkUrl" class="input" type="url" placeholder="https://example.com" aria-label="链接地址"></label>
         </div>
 
         <div class="editor-grid">
