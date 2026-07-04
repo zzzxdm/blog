@@ -283,11 +283,22 @@ func (repo *MemoryRepository) RestoreRevision(_ context.Context, id string, revi
 }
 
 func countStats(items []AdminPost) Stats {
-	stats := Stats{Total: len(items), MonthlyViews: "16.8k"}
+	return countStatsAt(items, time.Now())
+}
+
+func countStatsAt(items []AdminPost, now time.Time) Stats {
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	nextMonth := monthStart.AddDate(0, 1, 0)
+
+	stats := Stats{Total: len(items)}
+	monthlyViews := 0
 	for _, item := range items {
 		switch item.Status {
 		case StatusPublished:
 			stats.Published++
+			if postPublishedInRange(item, monthStart, nextMonth) {
+				monthlyViews += item.ViewCount
+			}
 		case StatusDraft:
 			stats.Draft++
 		case StatusReview:
@@ -296,8 +307,43 @@ func countStats(items []AdminPost) Stats {
 			stats.Scheduled++
 		}
 	}
+	stats.MonthlyViews = formatCompactCount(monthlyViews)
 
 	return stats
+}
+
+func postPublishedInRange(item AdminPost, start time.Time, end time.Time) bool {
+	if item.PublishedAt != nil {
+		return !item.PublishedAt.Before(start) && item.PublishedAt.Before(end)
+	}
+
+	if item.UpdatedAt.IsZero() {
+		return false
+	}
+
+	return !item.UpdatedAt.Before(start) && item.UpdatedAt.Before(end)
+}
+
+func formatCompactCount(value int) string {
+	if value < 1000 {
+		return fmt.Sprintf("%d", value)
+	}
+	if value < 1000000 {
+		whole := value / 1000
+		decimal := (value % 1000) / 100
+		if decimal == 0 {
+			return fmt.Sprintf("%dk", whole)
+		}
+		return fmt.Sprintf("%d.%dk", whole, decimal)
+	}
+
+	whole := value / 1000000
+	decimal := (value % 1000000) / 100000
+	if decimal == 0 {
+		return fmt.Sprintf("%dm", whole)
+	}
+
+	return fmt.Sprintf("%d.%dm", whole, decimal)
 }
 
 func clonePost(item AdminPost) AdminPost {

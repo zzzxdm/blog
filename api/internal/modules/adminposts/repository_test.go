@@ -177,15 +177,21 @@ func TestMemoryRepositoryPublishDuePublishesOnlyDuePublicScheduledPosts(t *testi
 }
 
 func TestCountStatsIncludesScheduled(t *testing.T) {
-	stats := countStats([]AdminPost{
-		{Status: StatusPublished},
+	now := time.Date(2026, time.July, 15, 10, 0, 0, 0, time.UTC)
+	lastMonth := now.AddDate(0, -1, 0)
+	stats := countStatsAt([]AdminPost{
+		{Status: StatusPublished, ViewCount: 16800, PublishedAt: &now},
+		{Status: StatusPublished, ViewCount: 5000, PublishedAt: &lastMonth},
 		{Status: StatusDraft},
 		{Status: StatusReview},
 		{Status: StatusScheduled},
-	})
+	}, now)
 
-	if stats.Published != 1 || stats.Draft != 1 || stats.Review != 1 || stats.Scheduled != 1 || stats.Total != 4 {
+	if stats.Published != 2 || stats.Draft != 1 || stats.Review != 1 || stats.Scheduled != 1 || stats.Total != 5 {
 		t.Fatalf("countStats = %+v", stats)
+	}
+	if stats.MonthlyViews != "16.8k" {
+		t.Fatalf("MonthlyViews = %q, want 16.8k", stats.MonthlyViews)
 	}
 }
 
