@@ -96,6 +96,47 @@ func TestArticleSEOHTML(t *testing.T) {
 	}
 }
 
+func TestCSRFOriginProtection(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+		PublicURL: "https://blog.example.com",
+	})
+
+	evilReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	evilReq.Header.Set("Origin", "https://evil.example.com")
+	evilRec := httptest.NewRecorder()
+	router.ServeHTTP(evilRec, evilReq)
+	if evilRec.Code != http.StatusForbidden {
+		t.Fatalf("expected evil origin status 403, got %d body=%q", evilRec.Code, evilRec.Body.String())
+	}
+
+	webReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	webReq.Header.Set("Origin", "http://localhost:5173")
+	webRec := httptest.NewRecorder()
+	router.ServeHTTP(webRec, webReq)
+	if webRec.Code != http.StatusOK {
+		t.Fatalf("expected configured web origin accepted, got %d body=%q", webRec.Code, webRec.Body.String())
+	}
+
+	publicReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	publicReq.Header.Set("Origin", "https://blog.example.com")
+	publicRec := httptest.NewRecorder()
+	router.ServeHTTP(publicRec, publicReq)
+	if publicRec.Code != http.StatusOK {
+		t.Fatalf("expected public origin accepted, got %d body=%q", publicRec.Code, publicRec.Body.String())
+	}
+
+	refererReq := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	refererReq.Header.Set("Referer", "https://evil.example.com/logout")
+	refererRec := httptest.NewRecorder()
+	router.ServeHTTP(refererRec, refererReq)
+	if refererRec.Code != http.StatusForbidden {
+		t.Fatalf("expected evil referer status 403, got %d body=%q", refererRec.Code, refererRec.Body.String())
+	}
+}
+
 func contains(value string, part string) bool {
 	return strings.Contains(value, part)
 }

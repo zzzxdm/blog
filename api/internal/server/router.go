@@ -82,6 +82,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(cors(cfg.WebOrigin))
+	router.Use(csrfProtection(cfg.WebOrigin, cfg.PublicURL))
 	router.Use(rateLimit(120, time.Minute))
 	router.Static("/uploads", uploadDir(cfg.UploadDir))
 
@@ -130,7 +131,7 @@ func cors(origin string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		ctx.Header("Access-Control-Allow-Origin", origin)
 		ctx.Header("Access-Control-Allow-Credentials", "true")
-		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Requested-With")
 		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 
 		if ctx.Request.Method == http.MethodOptions {
