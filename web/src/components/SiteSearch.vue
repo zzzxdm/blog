@@ -115,18 +115,28 @@ onUnmounted(() => {
           <strong>没有找到结果</strong>
           <p>换个关键词试试。</p>
         </div>
-        <RouterLink
-          v-for="post in results?.items"
-          v-else
-          :key="post.id"
-          class="search-result"
-          :to="`/posts/${post.slug}`"
-          @click="close"
-        >
-          <div class="meta-row"><span class="tag">{{ post.category }}</span></div>
-          <strong>{{ post.title }}</strong>
-          <p>{{ post.summary }}</p>
-        </RouterLink>
+        <template v-else>
+          <RouterLink
+            v-for="post in results?.items"
+            :key="post.id"
+            class="search-result"
+            :to="`/posts/${post.slug}`"
+            @click="close"
+          >
+            <div class="meta-row"><span class="tag">{{ post.category }}</span></div>
+            <strong>{{ post.title }}</strong>
+            <p>{{ post.summary }}</p>
+          </RouterLink>
+          <RouterLink
+            v-if="results && results.total > results.items.length"
+            class="search-result"
+            :to="{ path: '/archive', query: { q: query.trim() } }"
+            @click="close"
+          >
+            <strong>查看全部 {{ results.total }} 条结果</strong>
+            <p>在归档页继续筛选分类、标签和排序。</p>
+          </RouterLink>
+        </template>
       </div>
     </section>
   </div>
