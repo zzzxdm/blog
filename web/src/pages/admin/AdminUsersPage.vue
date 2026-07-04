@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
@@ -26,6 +26,9 @@ const inviteOpen = ref(false);
 const inviteEmail = ref("");
 const inviteName = ref("");
 const inviteRole = ref("author");
+const selectedId = ref("");
+
+const selectedUser = computed(() => users.value.find((user) => user.id === selectedId.value));
 
 onMounted(load);
 
@@ -42,6 +45,12 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+function viewUser(user: ManagedUser) {
+  selectedId.value = user.id;
+  error.value = "";
+  message.value = "";
 }
 
 async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
@@ -163,6 +172,27 @@ function formatDate(value: string) {
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="muted">{{ message }}</p>
 
+    <section v-if="selectedUser" class="panel">
+      <div class="panel-title">
+        <h2>用户详情</h2>
+        <span class="status" :class="statusClass(selectedUser.status)">{{ statusText(selectedUser.status) }}</span>
+      </div>
+      <div class="admin-grid-2">
+        <div class="profile-hero">
+          <span class="avatar">{{ selectedUser.avatarText }}</span>
+          <div>
+            <strong>{{ selectedUser.displayName }}</strong>
+            <div class="meta-row"><span>{{ selectedUser.email }}</span><span>{{ roleText(selectedUser.role) }}</span></div>
+          </div>
+        </div>
+        <div class="settings-stack">
+          <div class="meta-row"><span>评论 {{ selectedUser.commentCount }}</span><span>收藏 {{ selectedUser.bookmarkCount }}</span><span>{{ selectedUser.emailVerified ? "已验证邮箱" : "未验证邮箱" }}</span></div>
+          <div class="meta-row"><span>注册于 {{ formatDate(selectedUser.registeredAt) }}</span><span>最近登录 {{ formatDate(selectedUser.lastLoginAt) }}</span></div>
+          <p v-if="selectedUser.moderationNote" class="muted">{{ selectedUser.moderationNote }}</p>
+        </div>
+      </div>
+    </section>
+
     <section v-if="inviteOpen" class="panel">
       <div class="panel-title"><h2>邀请作者</h2><span class="tag">作者账号</span></div>
       <form class="settings-stack" @submit.prevent="inviteUser">
@@ -220,7 +250,7 @@ function formatDate(value: string) {
             <td>{{ formatDate(user.lastLoginAt) }}</td>
             <td>
               <div class="header-actions">
-                <button class="button-secondary" type="button">查看</button>
+                <button class="button-secondary" type="button" @click="viewUser(user)">查看</button>
                 <button class="button-secondary" type="button" :disabled="resettingId === user.id" @click="resetPassword(user)">{{ resettingId === user.id ? "生成中..." : "重置密码" }}</button>
                 <button v-if="user.status === 'active'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'muted')">禁言</button>
                 <button v-else class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'active')">解除</button>
