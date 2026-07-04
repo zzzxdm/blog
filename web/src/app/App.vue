@@ -1,14 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 
 import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
 import SiteSearch from "../components/SiteSearch.vue";
+import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
+const auth = useAuthStore();
 const searchOpen = ref(false);
 const showChrome = computed(() => !route.meta.hideChrome);
+
+onMounted(() => {
+  void auth.loadMe();
+});
+
+function logout() {
+  void auth.logout();
+}
 </script>
 
 <template>
@@ -49,7 +59,12 @@ const showChrome = computed(() => !route.meta.hideChrome);
       <div class="header-actions">
         <button class="icon-button" type="button" aria-label="搜索" @click="searchOpen = true">⌕</button>
         <button class="icon-button" type="button" aria-label="切换深色模式">◐</button>
-        <RouterLink class="button-secondary" to="/login">登录</RouterLink>
+        <template v-if="auth.user">
+          <RouterLink class="icon-button" to="/account/messages" aria-label="站内信">信</RouterLink>
+          <RouterLink class="button-secondary" to="/account">{{ auth.user.displayName }}</RouterLink>
+          <button class="button-secondary" type="button" @click="logout">退出</button>
+        </template>
+        <RouterLink v-else class="button-secondary" to="/login">登录</RouterLink>
       </div>
     </div>
   </header>

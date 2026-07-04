@@ -20,22 +20,33 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
+	router := appserver.NewRouter(cfg)
+
 	db, err := database.Open(ctx, cfg)
 	if err != nil {
-		slog.Error("database connection failed", "error", err)
-		os.Exit(1)
-	}
-	defer db.Close()
+		if cfg.AppEnv == "production" {
+			slog.Error("database connection failed", "error", err)
+			os.Exit(1)
+		}
 
-	migrateCtx, cancelMigrate := context.WithTimeout(ctx, 20*time.Second)
-	if err := database.Migrate(migrateCtx, db); err != nil {
-		cancelMigrate()
-		slog.Error("database migration failed", "error", err)
-		os.Exit(1)
-	}
-	cancelMigrate()
+		slog.Warn("database unavailable, using in-memory repositories", "error", err)
+	} else {
+		defer db.Close()
 
-	router := appserver.NewRouterWithPostsRepository(cfg, posts.NewSQLRepository(db))
+		migrateCtx, cancelMigrate := context.WithTimeout(ctx, 20*time.Second)
+		if err := database.Migrate(migrateCtx, db); err != nil {
+			cancelMigrate()
+			if cfg.AppEnv == "production" {
+				slog.Error("database migration failed", "error", err)
+				os.Exit(1)
+			}
+
+			slog.Warn("database migration failed, using in-memory repositories", "error", err)
+		} else {
+			cancelMigrate()
+			router = appserver.NewRouterWithPostsRepository(cfg, posts.NewSQLRepository(db))
+		}
+	}
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,

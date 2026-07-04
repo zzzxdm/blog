@@ -5,7 +5,10 @@ import (
 	"time"
 
 	"blog/api/internal/config"
+	"blog/api/internal/modules/auth"
+	"blog/api/internal/modules/comments"
 	"blog/api/internal/modules/posts"
+	"blog/api/internal/modules/reactions"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,6 +27,9 @@ func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) 
 	router.Use(gin.Recovery())
 	router.Use(cors(cfg.WebOrigin))
 
+	authStore := auth.NewMemoryStore()
+	router.Use(auth.Middleware(authStore))
+
 	api := router.Group("/api")
 
 	api.GET("/health", func(ctx *gin.Context) {
@@ -34,7 +40,10 @@ func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) 
 		})
 	})
 
+	auth.RegisterRoutes(api, authStore)
 	posts.RegisterPublicRoutes(api, postRepo)
+	comments.RegisterRoutes(api, comments.NewMemoryRepository())
+	reactions.RegisterRoutes(api, reactions.NewMemoryRepository())
 
 	return router
 }

@@ -1,20 +1,45 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import {
+  ApiError,
+  createComment,
+  getComments,
+  getReaction,
+  setBookmark,
+  setPostReaction,
+  type Comment,
+  type ReactionSummary
+} from "../shared/api";
+import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const posts = usePostsStore();
 
 const post = computed(() => posts.current);
 const avatarText = computed(() => post.value?.authorName.slice(0, 1) || "管");
+const comments = ref<Comment[]>([]);
+const commentTotal = ref(0);
+const commentBody = ref("");
+const commentsLoading = ref(false);
+const commentError = ref("");
+const reaction = ref<ReactionSummary | null>(null);
+const reactionLoading = ref(false);
+const reactionError = ref("");
+const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCount ?? 0);
+const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
+const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 34);
 
 function load() {
   const slug = String(route.params.slug || "");
   if (slug) {
     void posts.loadBySlug(slug);
+    void loadComments(slug);
+    void loadReaction(slug);
   }
 }
 
@@ -35,8 +60,139 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
+function formatCommentTime(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function statusText(status: Comment["status"]) {
+  if (status === "approved") {
+    return "已通过";
+  }
+  if (status === "pending") {
+    return "待审核";
+  }
+  if (status === "rejected") {
+    return "已拒绝";
+  }
+  if (status === "spam") {
+    return "垃圾评论";
+  }
+  return "已删除";
+}
+
+function statusClass(status: Comment["status"]) {
+  return status === "approved" ? "published" : "review";
+}
+
+async function loadComments(slug: string) {
+  commentsLoading.value = true;
+  commentError.value = "";
+
+  try {
+    const response = await getComments(slug);
+    comments.value = response.items;
+    commentTotal.value = response.total;
+  } catch (error) {
+    commentError.value = error instanceof Error ? error.message : "评论加载失败";
+  } finally {
+    commentsLoading.value = false;
+  }
+}
+
+async function loadReaction(slug: string) {
+  reactionLoading.value = true;
+  reactionError.value = "";
+
+  try {
+    reaction.value = await getReaction(slug);
+  } catch (error) {
+    reactionError.value = error instanceof Error ? error.message : "文章反馈加载失败";
+  } finally {
+    reactionLoading.value = false;
+  }
+}
+
+async function updateReaction(type: "like" | "dislike") {
+  if (!post.value) {
+    return;
+  }
+  if (!auth.user) {
+    reactionError.value = "请先登录后再操作";
+    return;
+  }
+
+  reactionLoading.value = true;
+  reactionError.value = "";
+
+  try {
+    reaction.value = await setPostReaction(post.value.slug, type);
+  } catch (error) {
+    reactionError.value = error instanceof Error ? error.message : "反馈失败";
+  } finally {
+    reactionLoading.value = false;
+  }
+}
+
+async function toggleBookmark() {
+  if (!post.value) {
+    return;
+  }
+  if (!auth.user) {
+    reactionError.value = "请先登录后再收藏";
+    return;
+  }
+
+  reactionLoading.value = true;
+  reactionError.value = "";
+
+  try {
+    reaction.value = await setBookmark(post.value.slug, !reaction.value?.bookmarked);
+  } catch (error) {
+    reactionError.value = error instanceof Error ? error.message : "收藏失败";
+  } finally {
+    reactionLoading.value = false;
+  }
+}
+
+async function submitComment() {
+  if (!post.value) {
+    return;
+  }
+  if (!auth.user) {
+    commentError.value = "请先登录后再评论";
+    return;
+  }
+
+  commentError.value = "";
+
+  try {
+    const created = await createComment(post.value.slug, commentBody.value);
+    comments.value = [created, ...comments.value];
+    commentTotal.value += 1;
+    commentBody.value = "";
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      commentError.value = "登录状态已过期，请重新登录";
+      return;
+    }
+    commentError.value = error instanceof Error ? error.message : "评论提交失败";
+  }
+}
+
 onMounted(load);
 watch(() => route.params.slug, load);
+watch(() => auth.user?.id, () => {
+  const slug = String(route.params.slug || "");
+  if (slug) {
+    void loadComments(slug);
+    void loadReaction(slug);
+  }
+});
 </script>
 
 <template>
@@ -71,9 +227,9 @@ watch(() => route.params.slug, load);
               <div class="meta-row">
                 <span>{{ post.tags[0] || "系统设计" }}</span>
                 <span>{{ formatNumber(post.viewCount) }} 次阅读</span>
-                <span>{{ formatNumber(post.likeCount) }} 次赞</span>
-                <span>{{ formatNumber(post.dislikeCount) }} 次踩</span>
-                <span>{{ formatNumber(post.commentCount) }} 条评论</span>
+                <span>{{ formatNumber(likeCount) }} 次赞</span>
+                <span>{{ formatNumber(dislikeCount) }} 次踩</span>
+                <span>{{ formatNumber(commentTotal || post.commentCount) }} 条评论</span>
               </div>
             </div>
           </div>
@@ -119,114 +275,101 @@ interface Post {
           <div>
             <strong>文章反馈</strong>
             <div class="meta-row">
-              <span>{{ formatNumber(post.likeCount) }} 次赞</span>
-              <span>{{ formatNumber(post.dislikeCount) }} 次踩</span>
-              <span>已收藏 34 次</span>
+              <span>{{ formatNumber(likeCount) }} 次赞</span>
+              <span>{{ formatNumber(dislikeCount) }} 次踩</span>
+              <span>已收藏 {{ formatNumber(bookmarkCount) }} 次</span>
             </div>
           </div>
           <div class="reaction-group">
-            <button class="reaction-button active" type="button" aria-label="点赞文章">
+            <button
+              class="reaction-button"
+              :class="{ active: reaction?.myReaction === 'like' }"
+              type="button"
+              aria-label="点赞文章"
+              :disabled="reactionLoading"
+              @click="updateReaction('like')"
+            >
               <span class="reaction-symbol">↑</span>
-              <span>{{ formatNumber(post.likeCount) }}</span>
+              <span>{{ formatNumber(likeCount) }}</span>
             </button>
-            <button class="reaction-button" type="button" aria-label="点踩文章">
+            <button
+              class="reaction-button"
+              :class="{ active: reaction?.myReaction === 'dislike' }"
+              type="button"
+              aria-label="点踩文章"
+              :disabled="reactionLoading"
+              @click="updateReaction('dislike')"
+            >
               <span class="reaction-symbol">↓</span>
-              <span>{{ formatNumber(post.dislikeCount) }}</span>
+              <span>{{ formatNumber(dislikeCount) }}</span>
             </button>
-            <button class="button-secondary" type="button">收藏</button>
+            <button class="button-secondary" type="button" :disabled="reactionLoading" @click="toggleBookmark">
+              {{ reaction?.bookmarked ? "取消收藏" : "收藏" }}
+            </button>
           </div>
+          <p v-if="reactionError" class="error">{{ reactionError }}</p>
         </section>
 
         <section class="comments" aria-label="评论">
           <div class="section-heading">
             <div>
               <h2>评论</h2>
-              <p>{{ post.commentCount }} 条讨论，评论提交后进入审核队列。</p>
+              <p>{{ commentTotal || post.commentCount }} 条讨论，评论提交后进入审核队列。</p>
             </div>
             <button class="button-secondary" type="button">按时间排序</button>
           </div>
           <div class="comment-box">
             <div class="author-row">
-              <span class="avatar">管</span>
+              <span class="avatar">{{ auth.user?.avatarText || "访" }}</span>
               <div>
-                <strong>管理员</strong>
+                <strong>{{ auth.user?.displayName || "访客" }}</strong>
                 <div class="meta-row">
-                  <span>已登录</span>
+                  <span>{{ auth.user ? "已登录" : "未登录" }}</span>
                   <RouterLink to="/account/comments">查看我的评论</RouterLink>
                 </div>
               </div>
             </div>
-            <textarea placeholder="写下你的想法，支持 Markdown 基础语法"></textarea>
+            <textarea v-model="commentBody" placeholder="写下你的想法，支持 Markdown 基础语法"></textarea>
             <div class="meta-row">
-              <button class="button" type="button">提交评论</button>
+              <button class="button" type="button" :disabled="!commentBody.trim()" @click="submitComment">提交评论</button>
               <span>评论提交后进入审核队列。</span>
+              <RouterLink v-if="!auth.user" to="/login">去登录</RouterLink>
             </div>
+            <p v-if="commentError" class="error">{{ commentError }}</p>
           </div>
 
           <div class="comment-list">
-            <article class="comment-item">
-              <div class="comment-head">
-                <div class="author-row">
-                  <span class="avatar">陈</span>
-                  <div>
-                    <strong>陈默</strong>
-                    <div class="meta-row">
-                      <span>2 小时前</span>
-                      <span>产品设计师</span>
+            <p v-if="commentsLoading" class="muted">正在加载评论...</p>
+            <template v-else>
+              <article
+                v-for="comment in comments"
+                :key="comment.id"
+                class="comment-item"
+                :class="{ reply: comment.parentId }"
+              >
+                <div class="comment-head">
+                  <div class="author-row">
+                    <span class="avatar">{{ comment.avatarText }}</span>
+                    <div>
+                      <strong>{{ comment.authorName }}</strong>
+                      <div class="meta-row">
+                        <span>{{ formatCommentTime(comment.createdAt) }}</span>
+                        <span v-if="comment.isMine">我的评论</span>
+                        <span v-if="comment.isAuthor">作者</span>
+                      </div>
                     </div>
                   </div>
+                  <span class="status" :class="statusClass(comment.status)">{{ statusText(comment.status) }}</span>
                 </div>
-                <span class="status published">已通过</span>
-              </div>
-              <p>文章里提到“内容模型先于页面”很关键。很多博客后期难维护，就是因为一开始把文章当页面模板来处理了。</p>
-              <div class="comment-actions">
-                <button type="button">点赞 18</button>
-                <button type="button">回复</button>
-                <button type="button">举报</button>
-              </div>
-            </article>
-
-            <article class="comment-item reply">
-              <div class="comment-head">
-                <div class="author-row">
-                  <span class="avatar">管</span>
-                  <div>
-                    <strong>管理员</strong>
-                    <div class="meta-row">
-                      <span>作者</span>
-                      <span>1 小时前</span>
-                    </div>
-                  </div>
+                <p>{{ comment.body }}</p>
+                <div class="comment-actions">
+                  <button type="button">点赞 {{ comment.likeCount }}</button>
+                  <button type="button">回复</button>
+                  <button v-if="comment.isMine" type="button">编辑</button>
+                  <button v-else type="button">举报</button>
                 </div>
-                <span class="tag rust">作者回复</span>
-              </div>
-              <p>是的，所以我会优先把 slug、SEO、状态、版本历史这些字段纳入第一版数据模型。</p>
-              <div class="comment-actions">
-                <button type="button">点赞 9</button>
-                <button type="button">回复</button>
-              </div>
-            </article>
-
-            <article class="comment-item">
-              <div class="comment-head">
-                <div class="author-row">
-                  <span class="avatar">林</span>
-                  <div>
-                    <strong>林一</strong>
-                    <div class="meta-row">
-                      <span>刚刚</span>
-                      <span>我的评论</span>
-                    </div>
-                  </div>
-                </div>
-                <span class="status review">待审核</span>
-              </div>
-              <p>如果后续支持站内信，审核结果是否会同步提醒到个人中心？</p>
-              <div class="comment-actions">
-                <button type="button">编辑</button>
-                <button type="button">删除</button>
-              </div>
-            </article>
+              </article>
+            </template>
           </div>
         </section>
       </article>
