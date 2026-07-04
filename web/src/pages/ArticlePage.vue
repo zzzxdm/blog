@@ -12,6 +12,7 @@ import {
   type Comment,
   type ReactionSummary
 } from "../shared/api";
+import { renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
 
@@ -33,6 +34,7 @@ const reactionError = ref("");
 const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCount ?? 0);
 const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
 const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 34);
+const renderedPostContent = computed(() => renderMarkdown(post.value?.content ?? ""));
 
 function load() {
   const slug = String(route.params.slug || "");
@@ -87,6 +89,10 @@ function statusText(status: Comment["status"]) {
 
 function statusClass(status: Comment["status"]) {
   return status === "approved" ? "published" : "review";
+}
+
+function renderedComment(body: string) {
+  return renderMarkdown(body);
 }
 
 async function loadComments(slug: string) {
@@ -240,7 +246,7 @@ watch(() => auth.user?.id, () => {
         </figure>
 
         <section class="article-body">
-          <p>{{ post.content }}</p>
+          <div v-html="renderedPostContent"></div>
 
           <h2 id="content-model">内容模型先于页面</h2>
           <p>文章需要拥有稳定的 slug、可维护的分类标签、SEO 元数据、封面图、摘要、阅读时长、发布时间和更新时间。内容模型稳定后，前台页面、搜索索引和 RSS 输出都可以从同一份数据生成。</p>
@@ -361,7 +367,7 @@ interface Post {
                   </div>
                   <span class="status" :class="statusClass(comment.status)">{{ statusText(comment.status) }}</span>
                 </div>
-                <p>{{ comment.body }}</p>
+                <div class="comment-body" v-html="renderedComment(comment.body)"></div>
                 <div class="comment-actions">
                   <button type="button">点赞 {{ comment.likeCount }}</button>
                   <button type="button">回复</button>
