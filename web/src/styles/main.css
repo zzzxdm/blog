@@ -108,6 +108,12 @@ textarea {
   letter-spacing: 0;
 }
 
+.nav-main-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .brand-mark {
   display: grid;
   width: 34px;
@@ -227,6 +233,10 @@ textarea {
   border-color: rgba(112, 173, 141, 0.52);
   background: var(--surface-2);
   color: var(--green-2);
+}
+
+.nav-toggle {
+  display: none;
 }
 
 .button {
@@ -2214,6 +2224,48 @@ textarea.input {
     width: 100%;
     overflow-x: auto;
     padding-bottom: 4px;
+  }
+
+  .nav-main-row {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .nav-links.is-collapsible {
+    display: none;
+  }
+
+  .nav-links.is-collapsible.is-open {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+
+  .nav-links.is-collapsible a,
+  .nav-links.is-collapsible .nav-menu-item,
+  .nav-links.is-collapsible .nav-parent {
+    width: 100%;
+  }
+
+  .nav-links.is-collapsible .nav-parent {
+    justify-content: space-between;
+  }
+
+  .nav-links.is-collapsible .nav-submenu {
+    position: static;
+    min-width: 0;
+    margin-top: 4px;
+    box-shadow: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
   }
 
   .header-actions {

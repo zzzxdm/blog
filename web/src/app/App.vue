@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 
 import SiteBacktop from "../components/SiteBacktop.vue";
@@ -10,6 +10,7 @@ import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
 const auth = useAuthStore();
+const navOpen = ref(false);
 const searchOpen = ref(false);
 const themeMode = ref<"light" | "dark">("light");
 const categories = ref<Category[]>([]);
@@ -29,6 +30,7 @@ const defaultTopItems: NavItem[] = [
 const topNavItems = computed(() => orderedNavItems(navigation.value?.topItems ?? defaultTopItems));
 const showLoginEntry = computed(() => navigation.value?.showLoginEntry ?? true);
 const externalLinksNewWindow = computed(() => navigation.value?.externalLinksNewWindow ?? true);
+const mobileCollapse = computed(() => navigation.value?.mobileCollapse ?? true);
 const darkModeEnabled = computed(() => siteSettings.value?.darkModeEnabled ?? true);
 
 onMounted(() => {
@@ -37,6 +39,10 @@ onMounted(() => {
   void auth.loadMe();
   void loadCategories();
   void loadNavigation();
+});
+
+watch(() => route.fullPath, () => {
+  navOpen.value = false;
 });
 
 function logout() {
@@ -124,11 +130,24 @@ function isActiveNav(url: string) {
 <template>
   <header v-if="showChrome" class="site-header">
     <div class="nav">
-      <RouterLink class="brand" to="/" :aria-label="`${siteName}首页`">
-        <span class="brand-mark">{{ brandMark }}</span>
-        <span>{{ siteName }}</span>
-      </RouterLink>
-      <nav class="nav-links" aria-label="主导航">
+      <div class="nav-main-row">
+        <RouterLink class="brand" to="/" :aria-label="`${siteName}首页`">
+          <span class="brand-mark">{{ brandMark }}</span>
+          <span>{{ siteName }}</span>
+        </RouterLink>
+        <button
+          v-if="mobileCollapse"
+          class="icon-button nav-toggle"
+          type="button"
+          aria-controls="site-nav"
+          :aria-expanded="navOpen"
+          :aria-label="navOpen ? '收起导航' : '展开导航'"
+          @click="navOpen = !navOpen"
+        >
+          {{ navOpen ? "×" : "☰" }}
+        </button>
+      </div>
+      <nav id="site-nav" class="nav-links" :class="{ 'is-collapsible': mobileCollapse, 'is-open': navOpen }" aria-label="主导航">
         <template v-for="item in topNavItems" :key="item.id">
           <div v-if="item.url === '/archive'" class="nav-menu-item">
             <RouterLink :class="{ active: isActiveNav(item.url) }" class="nav-parent" :to="item.url">
