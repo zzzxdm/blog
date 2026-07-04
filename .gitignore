@@ -17,6 +17,9 @@ coverage/
 *.log
 npm-debug.log*
 
+# Local backups
+backups/
+
 # OS / editor
 .DS_Store
 Thumbs.db

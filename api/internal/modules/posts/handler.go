@@ -4,9 +4,12 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+const maxSearchKeywordRunes = 80
 
 type Handler struct {
 	repo Repository
@@ -49,12 +52,17 @@ func (handler *Handler) GetBySlug(ctx *gin.Context) {
 
 func (handler *Handler) list(ctx *gin.Context, forceKeyword bool) {
 	query := ListQuery{
-		Keyword:  ctx.Query("q"),
-		Category: ctx.Query("category"),
-		Tag:      ctx.Query("tag"),
-		Sort:     ctx.Query("sort"),
+		Keyword:  strings.TrimSpace(ctx.Query("q")),
+		Category: strings.TrimSpace(ctx.Query("category")),
+		Tag:      strings.TrimSpace(ctx.Query("tag")),
+		Sort:     strings.TrimSpace(ctx.Query("sort")),
 		Page:     intQuery(ctx, "page", 1),
 		PageSize: intQuery(ctx, "pageSize", 10),
+	}
+
+	if len([]rune(query.Keyword)) > maxSearchKeywordRunes {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "search keyword is too long"})
+		return
 	}
 
 	if forceKeyword && query.Keyword == "" {
