@@ -397,7 +397,10 @@ func normalizeRedirects(rules []RedirectRule) []RedirectRule {
 			continue
 		}
 		code := rule.Code
-		if code != http.StatusMovedPermanently && code != http.StatusFound {
+		if code != http.StatusMovedPermanently &&
+			code != http.StatusFound &&
+			code != http.StatusTemporaryRedirect &&
+			code != http.StatusPermanentRedirect {
 			code = http.StatusMovedPermanently
 		}
 

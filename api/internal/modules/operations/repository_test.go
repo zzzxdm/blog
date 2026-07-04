@@ -121,8 +121,8 @@ func TestUpdateNavigationNormalizesInput(t *testing.T) {
 	if navigation.Redirects[0].From != "/old" || navigation.Redirects[0].To != "/new" || navigation.Redirects[0].Code != 302 {
 		t.Fatalf("first redirect = %+v, want trimmed 302 rule", navigation.Redirects[0])
 	}
-	if navigation.Redirects[1].From != "/legacy" || navigation.Redirects[1].Code != 301 {
-		t.Fatalf("second redirect = %+v, want invalid code normalized to 301", navigation.Redirects[1])
+	if navigation.Redirects[1].From != "/legacy" || navigation.Redirects[1].Code != 308 {
+		t.Fatalf("second redirect = %+v, want permanent redirect code 308", navigation.Redirects[1])
 	}
 	if navigation.UpdatedAt.IsZero() {
 		t.Fatal("UpdatedAt should be populated")
