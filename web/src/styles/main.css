@@ -690,11 +690,6 @@ textarea {
   gap: 8px;
 }
 
-.newsletter-form {
-  display: grid;
-  gap: 10px;
-}
-
 .input {
   width: 100%;
   min-height: 40px;
