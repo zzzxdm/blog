@@ -1557,7 +1557,7 @@ textarea {
 
 .nav-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 120px 94px;
+  grid-template-columns: 68px minmax(0, 1fr) 120px 94px;
   gap: 10px;
   align-items: center;
   border: 1px solid var(--line);
@@ -1566,15 +1566,32 @@ textarea {
   padding: 10px;
 }
 
-.drag-handle {
+.redirect-item {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 82px 82px;
+}
+
+.nav-order-actions {
   display: grid;
-  width: 34px;
+  grid-template-columns: repeat(2, 30px);
+  gap: 6px;
+}
+
+.nav-order-actions button {
+  display: inline-grid;
+  width: 30px;
   height: 34px;
   place-items: center;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-2);
   color: var(--muted);
+  cursor: pointer;
   font-weight: 900;
+}
+
+.nav-order-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .settings-grid {
@@ -2160,6 +2177,7 @@ textarea.input {
 
   .media-toolbar,
   .nav-item,
+  .redirect-item,
   .topic-list-item,
   .archive-list-item {
     grid-template-columns: 1fr;

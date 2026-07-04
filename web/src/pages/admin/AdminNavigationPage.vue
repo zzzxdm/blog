@@ -6,8 +6,11 @@ import {
   getAdminNavigation,
   updateAdminNavigation,
   type NavItem,
-  type OperationsNavigation
+  type OperationsNavigation,
+  type RedirectRule
 } from "../../shared/api";
+
+type NavListKey = "topItems" | "footerItems";
 
 const navigation = ref<OperationsNavigation | null>(null);
 const loading = ref(false);
@@ -40,7 +43,7 @@ async function save() {
   message.value = "";
 
   try {
-    navigation.value = await updateAdminNavigation(navigation.value);
+    navigation.value = await updateAdminNavigation(normalizedNavigation(navigation.value));
     message.value = "导航已保存。";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "导航保存失败";
@@ -49,7 +52,7 @@ async function save() {
   }
 }
 
-function addItem(target: "topItems" | "footerItems") {
+function addItem(target: NavListKey) {
   if (!navigation.value) {
     return;
   }
@@ -61,14 +64,89 @@ function addItem(target: "topItems" | "footerItems") {
     url: "/",
     order: list.length + 1
   });
+  normalizeItemOrder(list);
 }
 
-function removeItem(target: "topItems" | "footerItems", item: NavItem) {
+function removeItem(target: NavListKey, item: NavItem) {
   if (!navigation.value) {
     return;
   }
 
   navigation.value[target] = navigation.value[target].filter((candidate) => candidate.id !== item.id);
+  normalizeItemOrder(navigation.value[target]);
+}
+
+function moveItem(target: NavListKey, item: NavItem, direction: -1 | 1) {
+  if (!navigation.value) {
+    return;
+  }
+
+  const list = navigation.value[target];
+  const index = list.findIndex((candidate) => candidate.id === item.id);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= list.length) {
+    return;
+  }
+
+  const [moved] = list.splice(index, 1);
+  list.splice(nextIndex, 0, moved);
+  normalizeItemOrder(list);
+}
+
+function addRedirect() {
+  if (!navigation.value) {
+    return;
+  }
+
+  navigation.value.redirects.push({
+    from: "/old-path",
+    to: "/",
+    code: 301
+  });
+}
+
+function removeRedirect(redirect: RedirectRule) {
+  if (!navigation.value) {
+    return;
+  }
+
+  navigation.value.redirects = navigation.value.redirects.filter((candidate) => candidate !== redirect);
+}
+
+function normalizedNavigation(value: OperationsNavigation): OperationsNavigation {
+  return {
+    ...value,
+    topItems: normalizedItems(value.topItems),
+    footerItems: normalizedItems(value.footerItems),
+    redirects: normalizedRedirects(value.redirects)
+  };
+}
+
+function normalizedItems(items: NavItem[]) {
+  return items
+    .filter((item) => item.label.trim() && item.url.trim())
+    .map((item, index) => ({
+      ...item,
+      label: item.label.trim(),
+      url: item.url.trim(),
+      order: index + 1
+    }));
+}
+
+function normalizedRedirects(items: RedirectRule[]) {
+  return items
+    .filter((item) => item.from.trim() && item.to.trim())
+    .map((item) => ({
+      from: item.from.trim(),
+      to: item.to.trim(),
+      code: [301, 302, 307, 308].includes(Number(item.code)) ? Number(item.code) : 301
+    }));
+}
+
+function normalizeItemOrder(items: NavItem[]) {
+  items.forEach((item, index) => {
+    item.order = index + 1;
+  });
 }
 </script>
 
@@ -93,8 +171,14 @@ function removeItem(target: "topItems" | "footerItems", item: NavItem) {
             <button class="button-secondary" type="button" @click="addItem('topItems')">添加菜单</button>
           </div>
           <div class="nav-builder">
-            <article v-for="item in navigation.topItems" :key="item.id" class="nav-item">
-              <span class="drag-handle">≡</span><input v-model="item.label" class="input" aria-label="菜单名称"><input v-model="item.url" class="input" aria-label="菜单链接"><button class="button-secondary" type="button" @click="removeItem('topItems', item)">删除</button>
+            <article v-for="(item, index) in navigation.topItems" :key="item.id" class="nav-item">
+              <div class="nav-order-actions">
+                <button type="button" :disabled="index === 0" title="上移" @click="moveItem('topItems', item, -1)">↑</button>
+                <button type="button" :disabled="index === navigation.topItems.length - 1" title="下移" @click="moveItem('topItems', item, 1)">↓</button>
+              </div>
+              <input v-model="item.label" class="input" aria-label="菜单名称">
+              <input v-model="item.url" class="input" aria-label="菜单链接">
+              <button class="button-secondary" type="button" @click="removeItem('topItems', item)">删除</button>
             </article>
           </div>
         </section>
@@ -105,8 +189,14 @@ function removeItem(target: "topItems" | "footerItems", item: NavItem) {
             <button class="button-secondary" type="button" @click="addItem('footerItems')">添加菜单</button>
           </div>
           <div class="nav-builder">
-            <article v-for="item in navigation.footerItems" :key="item.id" class="nav-item">
-              <span class="drag-handle">≡</span><input v-model="item.label" class="input" aria-label="菜单名称"><input v-model="item.url" class="input" aria-label="菜单链接"><button class="button-secondary" type="button" @click="removeItem('footerItems', item)">删除</button>
+            <article v-for="(item, index) in navigation.footerItems" :key="item.id" class="nav-item">
+              <div class="nav-order-actions">
+                <button type="button" :disabled="index === 0" title="上移" @click="moveItem('footerItems', item, -1)">↑</button>
+                <button type="button" :disabled="index === navigation.footerItems.length - 1" title="下移" @click="moveItem('footerItems', item, 1)">↓</button>
+              </div>
+              <input v-model="item.label" class="input" aria-label="菜单名称">
+              <input v-model="item.url" class="input" aria-label="菜单链接">
+              <button class="button-secondary" type="button" @click="removeItem('footerItems', item)">删除</button>
             </article>
           </div>
         </section>
@@ -139,10 +229,21 @@ function removeItem(target: "topItems" | "footerItems", item: NavItem) {
           <div class="panel-title">
             <h2>重定向</h2>
             <span class="tag rust">{{ navigation.redirects.length }} 条</span>
+            <button class="button-secondary" type="button" @click="addRedirect">添加规则</button>
           </div>
-          <ul class="link-list">
-            <li v-for="redirect in navigation.redirects" :key="redirect.from"><strong>{{ redirect.from }}</strong><span>{{ redirect.code }} 到 {{ redirect.to }}</span></li>
-          </ul>
+          <div class="nav-builder">
+            <article v-for="(redirect, index) in navigation.redirects" :key="`${redirect.from}-${index}`" class="nav-item redirect-item">
+              <input v-model="redirect.from" class="input" aria-label="旧地址" placeholder="/old-path">
+              <input v-model="redirect.to" class="input" aria-label="新地址" placeholder="/new-path">
+              <select v-model.number="redirect.code" class="input" aria-label="状态码">
+                <option :value="301">301</option>
+                <option :value="302">302</option>
+                <option :value="307">307</option>
+                <option :value="308">308</option>
+              </select>
+              <button class="button-secondary" type="button" @click="removeRedirect(redirect)">删除</button>
+            </article>
+          </div>
         </section>
       </aside>
     </section>
