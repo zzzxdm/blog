@@ -440,13 +440,13 @@ func seedStats() Stats {
 			{Label: "用户投稿", Value: "28%", Percent: 28, Tone: "rust"},
 		},
 		SearchTerms: []SearchTerm{
-			{Term: "Vue3 SEO", Count: 1284},
-			{Term: "博客系统设计", Count: 936},
-			{Term: "Markdown 编辑器", Count: 642},
+			{Term: "Vue3", Count: 8},
+			{Term: "博客系统", Count: 6},
+			{Term: "Markdown", Count: 4},
 		},
 		Suggestions: []ContentSuggestion{
-			{Title: "搜索词“评论审核”增长明显", Body: "可以补一篇用户评论系统设计。"},
-			{Title: "专题页带来 18% 收藏", Body: "建议继续完善专题导航。"},
+			{Title: "评论审核相关文章增长明显", Body: "可以补一篇用户评论系统设计。"},
+			{Title: "专题页带来较多收藏", Body: "建议继续完善专题导航。"},
 		},
 	}
 }
@@ -472,12 +472,12 @@ func statsForRange(stats Stats, rangeKey string) Stats {
 			{Label: "周日", Value: "1.3k", Percent: 36},
 		}
 		stats.SearchTerms = []SearchTerm{
-			{Term: "站内信", Count: 214},
-			{Term: "投稿审核", Count: 196},
-			{Term: "Vue3 博客", Count: 151},
+			{Term: "站内信", Count: 3},
+			{Term: "投稿审核", Count: 2},
+			{Term: "Vue3", Count: 2},
 		}
 		stats.Suggestions = []ContentSuggestion{
-			{Title: "投稿审核相关搜索上升", Body: "可以补充一篇投稿流程说明。"},
+			{Title: "投稿审核相关内容增加", Body: "可以补充一篇投稿流程说明。"},
 			{Title: "站内信功能关注度提升", Body: "建议完善账号通知文档。"},
 		}
 	case "ytd":
@@ -504,13 +504,13 @@ func statsForRange(stats Stats, rangeKey string) Stats {
 			{Title: "Redis 和 PostgreSQL 在博客中的分工", Views: "33,406", Bookmarks: 712, Comments: 93, EngagementRate: "3.1%"},
 		}
 		stats.SearchTerms = []SearchTerm{
-			{Term: "博客系统设计", Count: 7294},
-			{Term: "Vue3 SEO", Count: 6180},
-			{Term: "PostgreSQL 全文搜索", Count: 4112},
+			{Term: "博客系统", Count: 24},
+			{Term: "Vue3", Count: 21},
+			{Term: "PostgreSQL", Count: 12},
 		}
 		stats.Suggestions = []ContentSuggestion{
 			{Title: "架构类文章全年表现稳定", Body: "可以将数据库、缓存、搜索整理成系列专题。"},
-			{Title: "Vue3 SEO 长尾流量持续增长", Body: "建议补充 SSR 和预渲染边界文章。"},
+			{Title: "Vue3 内容长期被收藏", Body: "建议补充 SSR 和预渲染边界文章。"},
 		}
 	default:
 		stats.Range = "30d"
