@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
@@ -19,6 +19,37 @@ const exporting = ref(false);
 const actingId = ref("");
 const error = ref("");
 const message = ref("");
+const searchQuery = ref("");
+const sortMode = ref("latest");
+
+const visibleComments = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  const riskRank: Record<string, number> = { 高: 3, 中: 2, 低: 1 };
+  const filtered = comments.value.filter((item) => {
+    if (!keyword) {
+      return true;
+    }
+
+    return [
+      item.body,
+      item.authorName,
+      item.authorId,
+      item.postTitle || "",
+      item.postSlug,
+      item.riskLevel || ""
+    ].join(" ").toLowerCase().includes(keyword);
+  });
+
+  return [...filtered].sort((left, right) => {
+    if (sortMode.value === "likes") {
+      return right.likeCount - left.likeCount;
+    }
+    if (sortMode.value === "risk") {
+      return (riskRank[right.riskLevel || "低"] || 0) - (riskRank[left.riskLevel || "低"] || 0);
+    }
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
+});
 
 onMounted(load);
 
@@ -128,7 +159,7 @@ function statusClass(value: Comment["status"]) {
 
     <section class="table-panel" aria-label="评论列表">
       <form class="table-toolbar" @submit.prevent="load">
-        <input class="input" type="search" placeholder="搜索评论内容、用户、文章" aria-label="搜索评论">
+        <input v-model="searchQuery" class="input" type="search" placeholder="搜索评论内容、用户、文章" aria-label="搜索评论">
         <select v-model="status" class="input" aria-label="评论状态" @change="load">
           <option value="">全部状态</option>
           <option value="pending">待审核</option>
@@ -137,10 +168,10 @@ function statusClass(value: Comment["status"]) {
           <option value="spam">垃圾评论</option>
           <option value="deleted">已删除</option>
         </select>
-        <select class="input" aria-label="排序">
-          <option>最新提交</option>
-          <option>举报优先</option>
-          <option>点赞最多</option>
+        <select v-model="sortMode" class="input" aria-label="排序">
+          <option value="latest">最新提交</option>
+          <option value="risk">风险优先</option>
+          <option value="likes">点赞最多</option>
         </select>
       </form>
 
@@ -158,7 +189,7 @@ function statusClass(value: Comment["status"]) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in comments" :key="item.id">
+          <tr v-for="item in visibleComments" :key="item.id">
             <td>
               <strong>{{ item.body }}</strong>
               <div class="meta-row"><span>{{ item.likeCount }} 次点赞</span><span v-if="item.parentId">回复 {{ item.parentId }}</span></div>
@@ -175,6 +206,9 @@ function statusClass(value: Comment["status"]) {
                 <button class="button-secondary" type="button" :disabled="actingId === item.id" @click="setStatus(item, 'deleted')">删除</button>
               </div>
             </td>
+          </tr>
+          <tr v-if="visibleComments.length === 0">
+            <td colspan="7" class="muted">没有匹配的评论。</td>
           </tr>
         </tbody>
       </table>

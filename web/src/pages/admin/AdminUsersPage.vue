@@ -27,8 +27,29 @@ const inviteEmail = ref("");
 const inviteName = ref("");
 const inviteRole = ref("author");
 const selectedId = ref("");
+const searchQuery = ref("");
+const statusFilter = ref("");
+const roleFilter = ref("");
 
 const selectedUser = computed(() => users.value.find((user) => user.id === selectedId.value));
+const visibleUsers = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  return users.value.filter((user) => {
+    const matchesKeyword = !keyword || [
+      user.displayName,
+      user.email,
+      user.id,
+      roleText(user.role),
+      statusText(user.status),
+      user.moderationNote
+    ].join(" ").toLowerCase().includes(keyword);
+    const matchesStatus = statusFilter.value === ""
+      || (statusFilter.value === "unverified" ? !user.emailVerified : user.status === statusFilter.value);
+    const matchesRole = roleFilter.value === "" || user.role === roleFilter.value;
+
+    return matchesKeyword && matchesStatus && matchesRole;
+  });
+});
 
 onMounted(load);
 
@@ -210,20 +231,20 @@ function formatDate(value: string) {
 
     <section class="table-panel" aria-label="用户列表">
       <form class="table-toolbar" @submit.prevent="load">
-        <input class="input" type="search" placeholder="搜索用户名、邮箱、角色" aria-label="搜索用户">
-        <select class="input" aria-label="用户状态">
-          <option>全部状态</option>
-          <option>正常</option>
-          <option>待验证</option>
-          <option>禁言</option>
-          <option>封禁</option>
+        <input v-model="searchQuery" class="input" type="search" placeholder="搜索用户名、邮箱、角色" aria-label="搜索用户">
+        <select v-model="statusFilter" class="input" aria-label="用户状态">
+          <option value="">全部状态</option>
+          <option value="active">正常</option>
+          <option value="unverified">待验证</option>
+          <option value="muted">禁言</option>
+          <option value="banned">封禁</option>
         </select>
-        <select class="input" aria-label="角色">
-          <option>全部角色</option>
-          <option>注册用户</option>
-          <option>作者</option>
-          <option>编辑</option>
-          <option>管理员</option>
+        <select v-model="roleFilter" class="input" aria-label="角色">
+          <option value="">全部角色</option>
+          <option value="user">注册用户</option>
+          <option value="author">作者</option>
+          <option value="editor">编辑</option>
+          <option value="admin">管理员</option>
         </select>
       </form>
 
@@ -241,7 +262,7 @@ function formatDate(value: string) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in users" :key="user.id">
+          <tr v-for="user in visibleUsers" :key="user.id">
             <td><strong>{{ user.displayName }}</strong><div class="meta-row"><span>{{ user.email }}</span><span>{{ user.emailVerified ? "已验证邮箱" : "未验证邮箱" }}</span><span v-if="user.moderationNote">{{ user.moderationNote }}</span></div></td>
             <td>{{ roleText(user.role) }}</td>
             <td><span class="status" :class="statusClass(user.status)">{{ statusText(user.status) }}</span></td>
@@ -257,6 +278,9 @@ function formatDate(value: string) {
                 <button v-if="user.status !== 'banned'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'banned')">封禁</button>
               </div>
             </td>
+          </tr>
+          <tr v-if="visibleUsers.length === 0">
+            <td colspan="7" class="muted">没有匹配的用户。</td>
           </tr>
         </tbody>
       </table>
