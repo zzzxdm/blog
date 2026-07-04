@@ -60,6 +60,7 @@ const seoTitle = ref("如何设计一个现代化博客系统");
 const seoDescription = ref("从内容模型、发布流程、SEO、缓存和运营能力设计一个可长期维护的博客系统。");
 const status = ref<AdminPostStatus>("draft");
 const visibility = ref<AdminPostVisibility>("public");
+const scheduledAt = ref(nextScheduleValue());
 
 const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
 const description = computed(() => current.value ? `自动保存于 ${new Date(current.value.updatedAt).toLocaleTimeString("zh-CN")}，当前版本 ${current.value.version}。` : "新文章草稿。");
@@ -130,6 +131,7 @@ function applyPost(post: AdminPost) {
   seoDescription.value = post.seoDescription;
   status.value = post.status;
   visibility.value = post.visibility || "public";
+  scheduledAt.value = post.scheduledAt ? toDateTimeLocal(post.scheduledAt) : nextScheduleValue();
 }
 
 function payload(nextStatus: AdminPostStatus): AdminPostPayload {
@@ -144,6 +146,7 @@ function payload(nextStatus: AdminPostStatus): AdminPostPayload {
     seoTitle: seoTitle.value,
     seoDescription: seoDescription.value,
     visibility: visibility.value,
+    scheduledAt: scheduledAt.value ? new Date(scheduledAt.value).toISOString() : undefined,
     status: nextStatus
   };
 }
@@ -194,6 +197,19 @@ async function publish() {
     error.value = err instanceof Error ? err.message : "发布失败";
   } finally {
     saving.value = false;
+  }
+}
+
+async function schedulePost() {
+  if (!scheduledAt.value) {
+    error.value = "请选择发布时间。";
+    message.value = "";
+    return;
+  }
+
+  await save("scheduled");
+  if (!error.value) {
+    message.value = `已保存为待发布，预约时间 ${formatDate(new Date(scheduledAt.value).toISOString())}`;
   }
 }
 
@@ -304,6 +320,18 @@ function formatDate(value: string) {
     minute: "2-digit"
   });
 }
+
+function nextScheduleValue() {
+  const date = new Date();
+  date.setHours(date.getHours() + 1, 0, 0, 0);
+  return toDateTimeLocal(date.toISOString());
+}
+
+function toDateTimeLocal(value: string) {
+  const date = new Date(value);
+  const pad = (item: number) => String(item).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 </script>
 
 <template>
@@ -365,7 +393,7 @@ function formatDate(value: string) {
           <div class="settings-stack">
             <div class="field">
               <label for="publish-time">发布时间</label>
-              <input class="input" id="publish-time" type="datetime-local" value="2026-07-04T20:00">
+              <input v-model="scheduledAt" class="input" id="publish-time" type="datetime-local">
             </div>
             <div class="field">
               <label for="visibility">可见性</label>
@@ -376,6 +404,7 @@ function formatDate(value: string) {
               </select>
             </div>
             <button class="button" type="button" :disabled="saving" @click="save('review')">提交审核</button>
+            <button class="button-secondary" type="button" :disabled="saving" @click="schedulePost">保存定时</button>
           </div>
         </section>
 

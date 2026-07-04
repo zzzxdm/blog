@@ -68,6 +68,7 @@ type Stats struct {
 	Published    int    `json:"published"`
 	Draft        int    `json:"draft"`
 	Review       int    `json:"review"`
+	Scheduled    int    `json:"scheduled"`
 	MonthlyViews string `json:"monthlyViews"`
 	Total        int    `json:"total"`
 }
@@ -85,6 +86,7 @@ type SaveRequest struct {
 	Content        string   `json:"content"`
 	Status         string   `json:"status"`
 	Visibility     string   `json:"visibility"`
+	ScheduledAt    string   `json:"scheduledAt"`
 	Category       string   `json:"category"`
 	Tags           []string `json:"tags"`
 	CoverImage     string   `json:"coverImage"`

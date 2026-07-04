@@ -30,7 +30,7 @@ interface TodoItem {
   actionTo: string;
 }
 
-const postStats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, monthlyViews: "0", total: 0 });
+const postStats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, scheduled: 0, monthlyViews: "0", total: 0 });
 const submissionStats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
 const commentStats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
 const messageStats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });

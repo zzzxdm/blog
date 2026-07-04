@@ -14,7 +14,7 @@ import {
 
 const router = useRouter();
 const posts = ref<AdminPost[]>([]);
-const stats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, monthlyViews: "0", total: 0 });
+const stats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, scheduled: 0, monthlyViews: "0", total: 0 });
 const loading = ref(false);
 const importing = ref(false);
 const error = ref("");
@@ -231,6 +231,7 @@ function formatDate(value: string) {
       <div class="stat-card"><span>已发布</span><strong>{{ stats.published }}</strong></div>
       <div class="stat-card"><span>草稿</span><strong>{{ stats.draft }}</strong></div>
       <div class="stat-card"><span>待审核</span><strong>{{ stats.review }}</strong></div>
+      <div class="stat-card"><span>待发布</span><strong>{{ stats.scheduled }}</strong></div>
       <div class="stat-card"><span>本月阅读</span><strong>{{ stats.monthlyViews }}</strong></div>
     </section>
 

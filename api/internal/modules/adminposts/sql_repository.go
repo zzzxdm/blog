@@ -73,6 +73,10 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	if title == "" {
 		return AdminPost{}, ErrInvalidPost
 	}
+	scheduledAt, err := parseScheduledAt(request.ScheduledAt)
+	if err != nil {
+		return AdminPost{}, err
+	}
 
 	now := repo.now()
 	item := AdminPost{
@@ -101,6 +105,7 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	item.CoverImage = defaultString(strings.TrimSpace(request.CoverImage), "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80")
 	item.SEOtitle = defaultString(strings.TrimSpace(request.SEOtitle), title)
 	item.SEODescription = defaultString(strings.TrimSpace(request.SEODescription), item.Summary)
+	item.ScheduledAt = scheduledAt
 	item.ReadingTime = estimateReadingTime(content)
 	item.UpdatedAt = now
 	item.Version++
@@ -115,6 +120,9 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	}
 	if item.Visibility == "" {
 		item.Visibility = VisibilityPublic
+	}
+	if item.Status == StatusScheduled && item.ScheduledAt == nil {
+		return AdminPost{}, ErrInvalidPost
 	}
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 

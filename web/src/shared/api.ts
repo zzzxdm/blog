@@ -601,6 +601,7 @@ export interface AdminPostStats {
   published: number;
   draft: number;
   review: number;
+  scheduled: number;
   monthlyViews: string;
   total: number;
 }
@@ -623,6 +624,7 @@ export interface AdminPostPayload {
   content: string;
   status: AdminPostStatus;
   visibility: AdminPostVisibility;
+  scheduledAt?: string;
   category: string;
   tags: string[];
   coverImage: string;

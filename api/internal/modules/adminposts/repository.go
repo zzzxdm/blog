@@ -82,6 +82,10 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 	if title == "" {
 		return AdminPost{}, ErrInvalidPost
 	}
+	scheduledAt, err := parseScheduledAt(request.ScheduledAt)
+	if err != nil {
+		return AdminPost{}, err
+	}
 
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
@@ -109,6 +113,7 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 	item.CoverImage = defaultString(strings.TrimSpace(request.CoverImage), "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80")
 	item.SEOtitle = defaultString(strings.TrimSpace(request.SEOtitle), title)
 	item.SEODescription = defaultString(strings.TrimSpace(request.SEODescription), item.Summary)
+	item.ScheduledAt = scheduledAt
 	item.ReadingTime = estimateReadingTime(content)
 	item.UpdatedAt = now
 	item.Version++
@@ -123,6 +128,9 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 	}
 	if item.Visibility == "" {
 		item.Visibility = VisibilityPublic
+	}
+	if item.Status == StatusScheduled && item.ScheduledAt == nil {
+		return AdminPost{}, ErrInvalidPost
 	}
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
@@ -238,6 +246,8 @@ func countStats(items []AdminPost) Stats {
 			stats.Draft++
 		case StatusReview:
 			stats.Review++
+		case StatusScheduled:
+			stats.Scheduled++
 		}
 	}
 
@@ -347,6 +357,20 @@ func normalizeStatus(status string) string {
 	}
 }
 
+func parseScheduledAt(value string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, ErrInvalidPost
+	}
+
+	return &parsed, nil
+}
+
 func normalizeVisibility(visibility string) string {
 	visibility = strings.ToLower(strings.TrimSpace(visibility))
 	switch visibility {
@@ -421,7 +445,7 @@ func defaultString(value string, fallback string) string {
 func seedAdminPosts() map[string]AdminPost {
 	now := time.Now()
 	publishedAt := now.Add(-2 * time.Hour)
-	scheduledAt := time.Date(2026, 7, 4, 20, 0, 0, 0, time.Local)
+	scheduledAt := now.Add(6 * time.Hour)
 	items := []AdminPost{
 		{
 			ID:                "admin_post_001",
