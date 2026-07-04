@@ -23,6 +23,7 @@ func RegisterPublicRoutes(router gin.IRouter, repo Repository) {
 	handler := NewHandler(repo)
 
 	router.GET("/posts", handler.List)
+	router.GET("/site-stats", handler.Stats)
 	router.GET("/posts/:slug", handler.GetBySlug)
 	router.GET("/search", handler.Search)
 }
@@ -48,6 +49,16 @@ func (handler *Handler) GetBySlug(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, post)
+}
+
+func (handler *Handler) Stats(ctx *gin.Context) {
+	stats, err := handler.repo.Stats(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load site stats"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, stats)
 }
 
 func (handler *Handler) getPostForPublicView(ctx *gin.Context) (Post, error) {

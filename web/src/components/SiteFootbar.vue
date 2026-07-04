@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
-import { getPosts, type NavItem, type OperationsNavigation } from "../shared/api";
+import { getSiteStats, type NavItem, type OperationsNavigation, type SiteStats } from "../shared/api";
 
 const props = withDefaults(defineProps<{
   navigation?: OperationsNavigation | null;
@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
 const siteStartDate = new Date(2020, 7, 21, 0, 0, 0);
 const currentYear = new Date().getFullYear();
 const runtimeText = ref("");
-const siteStats = ref<{ postCount: number; viewCount: number; wordCount: number } | null>(null);
+const siteStats = ref<SiteStats | null>(null);
 const defaultFooterItems: NavItem[] = [
   { id: "footer_default_home", label: "首页", url: "/", order: 1 },
   { id: "footer_default_archive", label: "归档", url: "/archive", order: 2 },
@@ -67,19 +67,10 @@ function updateRuntime() {
 
 async function loadSiteStats() {
   try {
-    const response = await getPosts({ page: 1, pageSize: 50 });
-    siteStats.value = {
-      postCount: response.total,
-      viewCount: response.items.reduce((sum, post) => sum + post.viewCount, 0),
-      wordCount: response.items.reduce((sum, post) => sum + estimateWords(post.content || `${post.title}${post.summary}`), 0)
-    };
+    siteStats.value = await getSiteStats();
   } catch {
     siteStats.value = null;
   }
-}
-
-function estimateWords(value: string) {
-  return value.replace(/\s+/g, "").length;
 }
 
 function formatNumber(value: number) {

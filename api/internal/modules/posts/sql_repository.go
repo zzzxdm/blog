@@ -167,6 +167,23 @@ func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Post, er
 	return post, nil
 }
 
+func (repo *SQLRepository) Stats(ctx context.Context) (SiteStats, error) {
+	var stats SiteStats
+	err := repo.db.QueryRowContext(ctx, `
+		SELECT
+			count(*)::int,
+			COALESCE(sum(view_count), 0)::int,
+			COALESCE(sum(char_length(regexp_replace(content, '\s+', '', 'g'))), 0)::int
+		FROM posts
+		WHERE status = 'published'
+	`).Scan(&stats.PostCount, &stats.ViewCount, &stats.WordCount)
+	if err != nil {
+		return SiteStats{}, fmt.Errorf("query site stats: %w", err)
+	}
+
+	return stats, nil
+}
+
 func (repo *SQLRepository) RecordView(ctx context.Context, slug string) (Post, error) {
 	result, err := repo.db.ExecContext(ctx, `
 		UPDATE posts

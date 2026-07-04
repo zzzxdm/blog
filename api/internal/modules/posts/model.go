@@ -39,6 +39,12 @@ type ListResult struct {
 	Total    int    `json:"total"`
 }
 
+type SiteStats struct {
+	PostCount int `json:"postCount"`
+	ViewCount int `json:"viewCount"`
+	WordCount int `json:"wordCount"`
+}
+
 type PublishInput struct {
 	Slug       string
 	Title      string

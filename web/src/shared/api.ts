@@ -36,6 +36,12 @@ export interface Post {
   publishedAt: string;
 }
 
+export interface SiteStats {
+  postCount: number;
+  viewCount: number;
+  wordCount: number;
+}
+
 export interface Category {
   id: string;
   slug: string;
@@ -655,6 +661,10 @@ export async function getPosts(params: PostListParams = {}): Promise<ListRespons
 
 export async function getPostBySlug(slug: string): Promise<Post> {
   return request<Post>(`/posts/${encodeURIComponent(slug)}`);
+}
+
+export async function getSiteStats(): Promise<SiteStats> {
+  return request<SiteStats>("/site-stats");
 }
 
 export async function searchPosts(params: PostListParams): Promise<ListResponse<Post>> {

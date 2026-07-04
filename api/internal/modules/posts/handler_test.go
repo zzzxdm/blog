@@ -84,6 +84,28 @@ func TestGetPostBySlugRecordsView(t *testing.T) {
 	}
 }
 
+func TestSiteStats(t *testing.T) {
+	router := gin.New()
+	RegisterPublicRoutes(router, NewMemoryRepository())
+
+	req := httptest.NewRequest(http.MethodGet, "/site-stats", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response SiteStats
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.PostCount != 3 || response.ViewCount == 0 || response.WordCount == 0 {
+		t.Fatalf("unexpected site stats: %+v", response)
+	}
+}
+
 func TestSearchRequiresKeyword(t *testing.T) {
 	router := gin.New()
 	RegisterPublicRoutes(router, NewMemoryRepository())

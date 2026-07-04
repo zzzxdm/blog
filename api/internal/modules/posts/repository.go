@@ -16,6 +16,7 @@ var ErrInvalidPost = errors.New("invalid post")
 type Repository interface {
 	List(ctx context.Context, query ListQuery) (ListResult, error)
 	GetBySlug(ctx context.Context, slug string) (Post, error)
+	Stats(ctx context.Context) (SiteStats, error)
 }
 
 type MemoryRepository struct {
@@ -74,6 +75,19 @@ func (repo *MemoryRepository) GetBySlug(_ context.Context, slug string) (Post, e
 	}
 
 	return Post{}, ErrNotFound
+}
+
+func (repo *MemoryRepository) Stats(_ context.Context) (SiteStats, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	stats := SiteStats{PostCount: len(repo.posts)}
+	for _, post := range repo.posts {
+		stats.ViewCount += post.ViewCount
+		stats.WordCount += estimateWords(post.Content)
+	}
+
+	return stats, nil
 }
 
 func (repo *MemoryRepository) RecordView(_ context.Context, slug string) (Post, error) {
@@ -239,6 +253,10 @@ func estimateReadingTime(content string) int {
 	}
 
 	return minutes
+}
+
+func estimateWords(content string) int {
+	return len([]rune(strings.Join(strings.Fields(content), "")))
 }
 
 func defaultString(value string, fallback string) string {
