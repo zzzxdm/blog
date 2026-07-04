@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { forgotPassword, resetPassword } from "../shared/api";
+import { forgotPassword, getSiteSettings, resetPassword, type SiteSettings } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
@@ -16,6 +16,21 @@ const displayName = ref("林一");
 const resetToken = ref("");
 const newPassword = ref("");
 const message = ref("");
+const siteSettings = ref<SiteSettings | null>(null);
+const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间笔记");
+const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
+
+onMounted(() => {
+  void loadSiteSettings();
+});
+
+async function loadSiteSettings() {
+  try {
+    siteSettings.value = await getSiteSettings();
+  } catch {
+    siteSettings.value = null;
+  }
+}
 
 async function submit() {
   message.value = "";
@@ -79,13 +94,13 @@ function buttonText() {
     <section class="auth-visual" aria-label="登录背景">
       <img
         src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80"
-        alt="桌面上的笔记本和写作草稿"
-      >
-      <div class="auth-copy">
-        <RouterLink class="brand" to="/">
-          <span class="brand-mark">云</span>
-          <span>云间笔记</span>
-        </RouterLink>
+	        alt="桌面上的笔记本和写作草稿"
+	      >
+	      <div class="auth-copy">
+	        <RouterLink class="brand" to="/">
+	          <span class="brand-mark">{{ brandMark }}</span>
+	          <span>{{ siteName }}</span>
+	        </RouterLink>
         <h1>登录后参与讨论，收藏值得反复看的文章。</h1>
         <p>用户账号用于评论、回复、点赞、收藏和接收通知。访客可以阅读内容，评论默认需要登录。</p>
       </div>
