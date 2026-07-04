@@ -11,6 +11,7 @@ import { useAuthStore } from "../stores/auth";
 const route = useRoute();
 const auth = useAuthStore();
 const searchOpen = ref(false);
+const themeMode = ref<"light" | "dark">("light");
 const categories = ref<Category[]>([]);
 const navigation = ref<OperationsNavigation | null>(null);
 const showChrome = computed(() => !route.meta.hideChrome);
@@ -26,6 +27,7 @@ const showLoginEntry = computed(() => navigation.value?.showLoginEntry ?? true);
 const externalLinksNewWindow = computed(() => navigation.value?.externalLinksNewWindow ?? true);
 
 onMounted(() => {
+  initializeTheme();
   void auth.loadMe();
   void loadCategories();
   void loadNavigation();
@@ -33,6 +35,22 @@ onMounted(() => {
 
 function logout() {
   void auth.logout();
+}
+
+function initializeTheme() {
+  const stored = window.localStorage.getItem("site:theme");
+  const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(stored === "dark" || (!stored && prefersDark) ? "dark" : "light");
+}
+
+function toggleTheme() {
+  applyTheme(themeMode.value === "dark" ? "light" : "dark");
+}
+
+function applyTheme(mode: "light" | "dark") {
+  themeMode.value = mode;
+  document.documentElement.dataset.theme = mode;
+  window.localStorage.setItem("site:theme", mode);
 }
 
 async function loadCategories() {
@@ -126,7 +144,15 @@ function isActiveNav(url: string) {
       </nav>
       <div class="header-actions">
         <button class="icon-button" type="button" aria-label="搜索" @click="searchOpen = true">⌕</button>
-        <button class="icon-button" type="button" aria-label="切换深色模式">◐</button>
+        <button
+          class="icon-button"
+          :class="{ active: themeMode === 'dark' }"
+          type="button"
+          :aria-label="themeMode === 'dark' ? '切换浅色模式' : '切换深色模式'"
+          @click="toggleTheme"
+        >
+          {{ themeMode === "dark" ? "☀" : "◐" }}
+        </button>
         <template v-if="showLoginEntry">
           <template v-if="auth.user">
             <RouterLink class="icon-button" to="/account/messages" aria-label="站内信">信</RouterLink>

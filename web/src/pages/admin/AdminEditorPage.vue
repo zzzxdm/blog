@@ -34,6 +34,7 @@ const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
 const editorArea = ref<HTMLTextAreaElement | null>(null);
+const previewArea = ref<HTMLElement | null>(null);
 
 const title = ref("如何设计一个内容长期增长的博客系统");
 const summary = ref("博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。");
@@ -274,6 +275,10 @@ function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | 
   });
 }
 
+function scrollToPreview() {
+  previewArea.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 function statusText(value: AdminPostStatus) {
   if (value === "published") return "已发布";
   if (value === "scheduled") return "待发布";
@@ -303,7 +308,7 @@ function formatDate(value: string) {
     <template #actions>
       <div class="header-actions">
         <RouterLink v-if="current?.publishedPostSlug" class="button-secondary" :to="`/posts/${current.publishedPostSlug}`">预览</RouterLink>
-        <button v-else class="button-secondary" type="button">预览</button>
+        <button v-else class="button-secondary" type="button" @click="scrollToPreview">预览</button>
         <button class="button-secondary" type="button" :disabled="saving" @click="saveDraft">{{ saving ? "保存中..." : "保存草稿" }}</button>
         <button class="button" type="button" :disabled="saving || visibility !== 'public'" title="私密和会员可见文章暂不支持发布到公开站点" @click="publish">{{ saving ? "发布中..." : "发布" }}</button>
       </div>
@@ -333,7 +338,7 @@ function formatDate(value: string) {
         <div class="editor-grid">
           <textarea ref="editorArea" v-model="content" class="markdown-area" aria-label="Markdown 编辑区"></textarea>
 
-          <article class="preview-area">
+          <article ref="previewArea" class="preview-area">
             <h1>{{ title }}</h1>
             <p>{{ summary }}</p>
             <template v-for="line in previewLines" :key="line">
