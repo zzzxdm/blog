@@ -1080,6 +1080,10 @@ textarea {
   font-weight: 800;
 }
 
+.toc a.nested {
+  margin-left: 10px;
+}
+
 .author-row {
   display: flex;
   align-items: center;

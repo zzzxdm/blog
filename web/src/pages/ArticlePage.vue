@@ -18,7 +18,7 @@ import {
   type ReactionSummary,
   type SiteSettings
 } from "../shared/api";
-import { renderMarkdown } from "../shared/markdown";
+import { extractMarkdownHeadings, renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
 
@@ -45,19 +45,11 @@ const articleBody = ref<HTMLElement | null>(null);
 const readingProgress = ref(0);
 const reactionLoading = ref(false);
 const reactionError = ref("");
-const codeCopied = ref(false);
-const codeSnippet = `type PostStatus = "draft" | "submitted" | "scheduled" | "published" | "archived";
-
-interface Post {
-  title: string;
-  slug: string;
-  status: PostStatus;
-  publishedAt?: Date;
-}`;
 const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCount ?? 0);
 const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
-const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 34);
+const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 0);
 const renderedPostContent = computed(() => renderMarkdown(post.value?.content ?? ""));
+const tocItems = computed(() => extractMarkdownHeadings(post.value?.content ?? ""));
 const commentsEnabled = computed(() => siteSettings.value?.commentsEnabled ?? true);
 const readingProgressEnabled = computed(() => siteSettings.value?.readingProgressEnabled ?? false);
 const visibleComments = computed(() => {
@@ -198,18 +190,6 @@ async function loadRelatedPosts(slug: string) {
     relatedPosts.value = response.items.filter((item) => item.slug !== slug).slice(0, 2);
   } catch {
     relatedPosts.value = [];
-  }
-}
-
-async function copyCode() {
-  try {
-    await navigator.clipboard.writeText(codeSnippet);
-    codeCopied.value = true;
-    window.setTimeout(() => {
-      codeCopied.value = false;
-    }, 1600);
-  } catch {
-    reactionError.value = "复制失败，请手动选择代码";
   }
 }
 
@@ -431,27 +411,6 @@ watch(() => auth.user?.id, () => {
 
         <section ref="articleBody" class="article-body">
           <div v-html="renderedPostContent"></div>
-
-          <h2 id="content-model">内容模型先于页面</h2>
-          <p>文章需要拥有稳定的 slug、可维护的分类标签、SEO 元数据、封面图、摘要、阅读时长、发布时间和更新时间。内容模型稳定后，前台页面、搜索索引和 RSS 输出都可以从同一份数据生成。</p>
-          <blockquote>内容系统的核心不是页面，而是可被长期复用、迁移和分发的数据。</blockquote>
-
-          <h2 id="workflow">发布流程需要留出空间</h2>
-          <p>成熟博客通常支持草稿、预览、审核、定时发布和版本历史。个人博客可以简化审批流程，但不应省略草稿、预览和版本回滚。</p>
-
-          <div class="code-block">
-            <div class="code-header">
-              <span>post-status.ts</span>
-              <button class="button-secondary" type="button" @click="copyCode">{{ codeCopied ? "已复制" : "复制" }}</button>
-            </div>
-            <pre><code>{{ codeSnippet }}</code></pre>
-          </div>
-
-          <h2 id="reading">阅读体验要克制</h2>
-          <p>文章页不需要复杂装饰。合适的行宽、稳定的目录、清晰的代码块、图片懒加载和足够好的移动端排版，比炫目的视觉元素更重要。</p>
-
-          <h2 id="operations">运营能力决定长期价值</h2>
-          <p>阅读量、热门文章、内容标签、内容来源和评论反馈可以帮助作者判断内容是否有效。对于持续写作来说，数据反馈是内容迭代的重要基础。</p>
         </section>
 
         <section class="article-feedback" aria-label="文章反馈">
@@ -570,15 +529,19 @@ watch(() => auth.user?.id, () => {
       </article>
 
       <aside class="toc" aria-label="文章目录">
-        <section class="panel">
+        <section v-if="tocItems.length" class="panel">
           <div class="panel-title">
             <h2>目录</h2>
           </div>
           <nav>
-            <a class="active" href="#content-model">内容模型先于页面</a>
-            <a href="#workflow">发布流程需要留出空间</a>
-            <a href="#reading">阅读体验要克制</a>
-            <a href="#operations">运营能力决定长期价值</a>
+            <a
+              v-for="(heading, index) in tocItems"
+              :key="`${heading.id}-${index}`"
+              :class="{ active: index === 0, nested: heading.level > 2 }"
+              :href="`#${heading.id}`"
+            >
+              {{ heading.text }}
+            </a>
           </nav>
         </section>
 

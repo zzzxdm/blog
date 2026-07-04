@@ -1,3 +1,9 @@
+export interface MarkdownHeading {
+  id: string;
+  level: number;
+  text: string;
+}
+
 export function renderMarkdown(markdown: string): string {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const html: string[] = [];
@@ -86,6 +92,39 @@ export function renderMarkdown(markdown: string): string {
   flushList();
 
   return html.join("\n");
+}
+
+export function extractMarkdownHeadings(markdown: string): MarkdownHeading[] {
+  const headings: MarkdownHeading[] = [];
+  let inCode = false;
+
+  markdown
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("```")) {
+        inCode = !inCode;
+        return;
+      }
+      if (inCode) {
+        return;
+      }
+
+      const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+      if (!heading) {
+        return;
+      }
+
+      const text = heading[2].trim();
+      headings.push({
+        id: slugify(text),
+        level: heading[1].length + 1,
+        text
+      });
+    });
+
+  return headings;
 }
 
 function renderInline(value: string): string {
