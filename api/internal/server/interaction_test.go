@@ -484,13 +484,13 @@ func TestAdminOperationsAPIs(t *testing.T) {
 
 	navigationReq := httptest.NewRequest(http.MethodPut, "/api/admin/navigation", bytes.NewBufferString(`{
 		"topItems":[{"id":"top_1","label":"首页","url":"/","order":1},{"id":"top_2","label":"归档","url":"/archive","order":2}],
-		"footerItems":[{"id":"footer_1","label":"RSS","url":"/rss.xml","order":1}],
+		"footerItems":[{"id":"footer_1","label":"Archive","url":"/archive","order":1}],
 		"mobileCollapse":true,
 		"externalLinksNewWindow":true,
 		"showLoginEntry":true,
 		"githubUrl":"https://github.com/example",
 		"contactEmail":"hello@example.com",
-		"rssUrl":"/rss.xml",
+		"rssUrl":"",
 		"redirects":[{"from":"/old","to":"/new","code":301}]
 	}`))
 	navigationReq.Header.Set("Content-Type", "application/json")
@@ -501,6 +501,13 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	router.ServeHTTP(navigationRec, navigationReq)
 	if navigationRec.Code != http.StatusOK || !strings.Contains(navigationRec.Body.String(), `"label":"归档"`) {
 		t.Fatalf("expected navigation updated, got status=%d body=%q", navigationRec.Code, navigationRec.Body.String())
+	}
+
+	publicNavigationReq := httptest.NewRequest(http.MethodGet, "/api/navigation", nil)
+	publicNavigationRec := httptest.NewRecorder()
+	router.ServeHTTP(publicNavigationRec, publicNavigationReq)
+	if publicNavigationRec.Code != http.StatusOK || !strings.Contains(publicNavigationRec.Body.String(), `"label":"Archive"`) {
+		t.Fatalf("expected public navigation, got status=%d body=%q", publicNavigationRec.Code, publicNavigationRec.Body.String())
 	}
 
 	mediaReq := httptest.NewRequest(http.MethodGet, "/api/admin/media", nil)

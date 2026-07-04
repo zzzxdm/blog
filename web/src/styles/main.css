@@ -267,6 +267,21 @@ textarea {
   gap: 18px;
 }
 
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.footer-links a {
+  color: rgba(255, 254, 250, 0.74);
+}
+
+.footer-links a:hover {
+  color: #fffefa;
+}
+
 .social-links {
   display: flex;
   align-items: center;
@@ -2166,5 +2181,10 @@ textarea.input {
   .social-links {
     flex-wrap: wrap;
     gap: 14px 18px;
+  }
+
+  .footer-links {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }

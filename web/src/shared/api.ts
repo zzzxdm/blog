@@ -943,6 +943,10 @@ export async function createAdminBackup(): Promise<BackupResult> {
   });
 }
 
+export async function getSiteNavigation(): Promise<OperationsNavigation> {
+  return request<OperationsNavigation>("/navigation");
+}
+
 export async function getAdminNavigation(): Promise<OperationsNavigation> {
   return request<OperationsNavigation>("/admin/navigation");
 }

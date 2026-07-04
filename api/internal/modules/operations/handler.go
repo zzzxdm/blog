@@ -39,6 +39,7 @@ func NewHandler(repo Repository, uploadDir string) *Handler {
 func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 	handler := NewHandler(repo, uploadDir)
 
+	router.GET("/navigation", handler.GetPublicNavigation)
 	router.GET("/admin/settings", handler.GetSettings)
 	router.PUT("/admin/settings", handler.UpdateSettings)
 	router.POST("/admin/settings/test-mail", handler.SendTestMail)
@@ -122,6 +123,14 @@ func (handler *Handler) GetNavigation(ctx *gin.Context) {
 		return
 	}
 
+	handler.writeNavigation(ctx)
+}
+
+func (handler *Handler) GetPublicNavigation(ctx *gin.Context) {
+	handler.writeNavigation(ctx)
+}
+
+func (handler *Handler) writeNavigation(ctx *gin.Context) {
 	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load navigation"})
