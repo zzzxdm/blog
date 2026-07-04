@@ -431,7 +431,7 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		"submissionGuide":"保持原创。",
 		"mailEnabled":false,
 		"mailProvider":"Resend",
-		"fromEmail":"newsletter@example.com",
+		"fromEmail":"noreply@example.com",
 		"adminTwoFactorRequired":true,
 		"loginFailureLock":true,
 		"sessionDays":7,

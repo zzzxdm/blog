@@ -301,7 +301,7 @@ func defaultString(value string, fallback string) string {
 
 func testMailResult(settings Settings, now time.Time) TestMailResult {
 	provider := defaultString(settings.MailProvider, "SMTP")
-	fromEmail := defaultString(settings.FromEmail, "newsletter@example.com")
+	fromEmail := defaultString(settings.FromEmail, "noreply@example.com")
 	return TestMailResult{
 		OK:        true,
 		Provider:  provider,
@@ -346,7 +346,7 @@ func seedSettings() Settings {
 		SubmissionGuide:         "投稿需要原创、结构清晰，并补充必要的图片 alt 文本和参考来源。",
 		MailEnabled:             false,
 		MailProvider:            "Resend",
-		FromEmail:               "newsletter@example.com",
+		FromEmail:               "noreply@example.com",
 		AdminTwoFactorRequired:  true,
 		LoginFailureLock:        true,
 		SessionDays:             7,
@@ -378,7 +378,6 @@ func seedNavigation() Navigation {
 		RSSURL:                 "/rss.xml",
 		Redirects: []RedirectRule{
 			{From: "/old-blog-design", To: "/posts/blog-system-design", Code: 301},
-			{From: "/newsletter", To: "/topics/content-growth", Code: 302},
 		},
 		UpdatedAt: time.Now(),
 	}
@@ -423,7 +422,7 @@ func seedStats() Stats {
 			{Label: "搜索", Value: "46%", Percent: 72},
 			{Label: "直接", Value: "22%", Percent: 34, Tone: "rust"},
 			{Label: "社交", Value: "18%", Percent: 28, Tone: "amber"},
-			{Label: "订阅", Value: "14%", Percent: 20},
+			{Label: "RSS", Value: "14%", Percent: 20},
 		},
 		SearchTerms: []SearchTerm{
 			{Term: "Vue3 SEO", Count: 1284},
