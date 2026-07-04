@@ -545,8 +545,8 @@ watch(() => auth.user?.id, () => {
             <div>
               <strong>{{ post.authorName }}</strong>
               <div class="meta-row">
-                <span>128 篇文章</span>
-                <span>24 个专题</span>
+                <span>{{ post.category }}</span>
+                <span>{{ post.tags.length }} 个标签</span>
               </div>
             </div>
           </div>

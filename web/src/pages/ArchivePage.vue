@@ -21,6 +21,7 @@ const categories = ref<Category[]>([]);
 const currentPage = computed(() => normalizePage(route.query.page));
 const selectedTag = computed(() => stringQuery(route.query.tag));
 const total = computed(() => posts.list?.total ?? 0);
+const categoryCount = computed(() => categories.value.length || 4);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 const pageNumbers = computed(() => {
   const pages = [1, 2, 3].filter((page) => page <= totalPages.value);
@@ -171,7 +172,7 @@ function tagTone(post: Post, index = 0) {
       </div>
       <div class="meta-row">
         <span>{{ total }} 篇文章</span>
-        <span>{{ selectedTag || "24 个专题" }}</span>
+        <span>{{ selectedTag || `${categoryCount} 个分类` }}</span>
         <span>{{ formatNumber(posts.list?.items.reduce((sum, post) => sum + post.viewCount, 0) ?? 0) }} 次阅读</span>
       </div>
     </section>

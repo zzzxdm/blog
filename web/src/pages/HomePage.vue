@@ -7,6 +7,7 @@ import { getSiteSettings, type Post, type SiteSettings } from "../shared/api";
 
 const posts = usePostsStore();
 const siteSettings = ref<SiteSettings | null>(null);
+const featuredTopicCount = 4;
 
 const allPosts = computed(() => posts.list?.items ?? []);
 const featurePost = computed(() => allPosts.value[0] ?? null);
@@ -15,9 +16,23 @@ const latestPosts = computed(() => allPosts.value.slice(1, 5));
 const siteDescription = computed(() => siteSettings.value?.siteDescription || "技术、产品、工程实践和长期写作的沉淀。");
 const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
 const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交原创文章，审核通过后发布到站点。");
+const monthlyPostCount = computed(() => {
+  const now = new Date();
+  const count = allPosts.value.filter((post) => {
+    const publishedAt = new Date(post.publishedAt);
+    return publishedAt.getFullYear() === now.getFullYear() && publishedAt.getMonth() === now.getMonth();
+  }).length;
+
+  return count || Math.min(allPosts.value.length, posts.list?.total ?? 0);
+});
+const categorySummary = computed(() => {
+  const names = [...new Set(allPosts.value.map((post) => post.category).filter(Boolean))];
+  return names.slice(0, 3).join("、") || "持续更新";
+});
+const totalCommentCount = computed(() => allPosts.value.reduce((sum, post) => sum + post.commentCount, 0));
 
 onMounted(() => {
-  void posts.loadList({ page: 1, pageSize: 6 });
+  void posts.loadList({ page: 1, pageSize: 12 });
   void loadSiteSettings();
 });
 
@@ -59,7 +74,7 @@ function tagTone(post: Post, index = 0) {
       </div>
       <div class="meta-row">
         <span>{{ posts.list?.total ?? 0 }} 篇文章</span>
-        <span>24 个专题</span>
+        <span>{{ featuredTopicCount }} 个专题</span>
         <span>每周更新</span>
       </div>
     </section>
@@ -167,15 +182,15 @@ function tagTone(post: Post, index = 0) {
             <ul class="link-list">
               <li>
                 <strong>本月更新</strong>
-                <span>12 篇文章 · 3 个专题</span>
+                <span>{{ monthlyPostCount }} 篇文章 · {{ featuredTopicCount }} 个专题</span>
               </li>
               <li>
                 <strong>热门分类</strong>
-                <span>工程实践、产品设计、内容系统</span>
+                <span>{{ categorySummary }}</span>
               </li>
               <li>
                 <strong>读者反馈</strong>
-                <span>评论审核通过率 92%</span>
+                <span>{{ totalCommentCount }} 条评论互动</span>
               </li>
             </ul>
           </section>
