@@ -672,6 +672,157 @@ func TestAdminPostSaveAndPublish(t *testing.T) {
 	}
 }
 
+func TestTaxonomyAPIs(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	categoriesReq := httptest.NewRequest(http.MethodGet, "/api/categories", nil)
+	categoriesRec := httptest.NewRecorder()
+	router.ServeHTTP(categoriesRec, categoriesReq)
+	if categoriesRec.Code != http.StatusOK || !strings.Contains(categoriesRec.Body.String(), `"name":"工程实践"`) || !strings.Contains(categoriesRec.Body.String(), `"postCount":3`) {
+		t.Fatalf("expected public categories, got status=%d body=%q", categoriesRec.Code, categoriesRec.Body.String())
+	}
+
+	tagsReq := httptest.NewRequest(http.MethodGet, "/api/tags", nil)
+	tagsRec := httptest.NewRecorder()
+	router.ServeHTTP(tagsRec, tagsReq)
+	if tagsRec.Code != http.StatusOK || !strings.Contains(tagsRec.Body.String(), `"name":"博客系统"`) {
+		t.Fatalf("expected public tags, got status=%d body=%q", tagsRec.Code, tagsRec.Body.String())
+	}
+
+	anonCreateReq := httptest.NewRequest(http.MethodPost, "/api/admin/categories", bytes.NewBufferString(`{"name":"读书笔记","slug":"reading-notes"}`))
+	anonCreateReq.Header.Set("Content-Type", "application/json")
+	anonCreateRec := httptest.NewRecorder()
+	router.ServeHTTP(anonCreateRec, anonCreateReq)
+	if anonCreateRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected anonymous category create status 401, got %d", anonCreateRec.Code)
+	}
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+
+	createCategoryReq := httptest.NewRequest(http.MethodPost, "/api/admin/categories", bytes.NewBufferString(`{
+		"name":"读书笔记",
+		"slug":"reading-notes",
+		"description":"书评、阅读记录和资料整理。",
+		"sortOrder":70
+	}`))
+	createCategoryReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		createCategoryReq.AddCookie(cookie)
+	}
+	createCategoryRec := httptest.NewRecorder()
+	router.ServeHTTP(createCategoryRec, createCategoryReq)
+	if createCategoryRec.Code != http.StatusCreated || !strings.Contains(createCategoryRec.Body.String(), `"slug":"reading-notes"`) {
+		t.Fatalf("expected category created, got status=%d body=%q", createCategoryRec.Code, createCategoryRec.Body.String())
+	}
+
+	var createdCategory struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createCategoryRec.Body.Bytes(), &createdCategory); err != nil {
+		t.Fatalf("decode category: %v", err)
+	}
+
+	updateCategoryReq := httptest.NewRequest(http.MethodPut, "/api/admin/categories/"+createdCategory.ID, bytes.NewBufferString(`{
+		"name":"阅读笔记",
+		"slug":"reading",
+		"description":"阅读和资料整理。",
+		"sortOrder":75
+	}`))
+	updateCategoryReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		updateCategoryReq.AddCookie(cookie)
+	}
+	updateCategoryRec := httptest.NewRecorder()
+	router.ServeHTTP(updateCategoryRec, updateCategoryReq)
+	if updateCategoryRec.Code != http.StatusOK || !strings.Contains(updateCategoryRec.Body.String(), `"slug":"reading"`) {
+		t.Fatalf("expected category updated, got status=%d body=%q", updateCategoryRec.Code, updateCategoryRec.Body.String())
+	}
+
+	duplicateCategoryReq := httptest.NewRequest(http.MethodPost, "/api/admin/categories", bytes.NewBufferString(`{"name":"工程实践","slug":"engineering"}`))
+	duplicateCategoryReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		duplicateCategoryReq.AddCookie(cookie)
+	}
+	duplicateCategoryRec := httptest.NewRecorder()
+	router.ServeHTTP(duplicateCategoryRec, duplicateCategoryReq)
+	if duplicateCategoryRec.Code != http.StatusConflict {
+		t.Fatalf("expected duplicate category status 409, got %d body=%q", duplicateCategoryRec.Code, duplicateCategoryRec.Body.String())
+	}
+
+	deleteUsedCategoryReq := httptest.NewRequest(http.MethodDelete, "/api/admin/categories/category_engineering", nil)
+	for _, cookie := range adminCookies {
+		deleteUsedCategoryReq.AddCookie(cookie)
+	}
+	deleteUsedCategoryRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteUsedCategoryRec, deleteUsedCategoryReq)
+	if deleteUsedCategoryRec.Code != http.StatusConflict {
+		t.Fatalf("expected used category delete status 409, got %d body=%q", deleteUsedCategoryRec.Code, deleteUsedCategoryRec.Body.String())
+	}
+
+	deleteCategoryReq := httptest.NewRequest(http.MethodDelete, "/api/admin/categories/"+createdCategory.ID, nil)
+	for _, cookie := range adminCookies {
+		deleteCategoryReq.AddCookie(cookie)
+	}
+	deleteCategoryRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteCategoryRec, deleteCategoryReq)
+	if deleteCategoryRec.Code != http.StatusOK || !strings.Contains(deleteCategoryRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected category deleted, got status=%d body=%q", deleteCategoryRec.Code, deleteCategoryRec.Body.String())
+	}
+
+	createTagReq := httptest.NewRequest(http.MethodPost, "/api/admin/tags", bytes.NewBufferString(`{"name":"数据库","slug":"database"}`))
+	createTagReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		createTagReq.AddCookie(cookie)
+	}
+	createTagRec := httptest.NewRecorder()
+	router.ServeHTTP(createTagRec, createTagReq)
+	if createTagRec.Code != http.StatusCreated || !strings.Contains(createTagRec.Body.String(), `"slug":"database"`) {
+		t.Fatalf("expected tag created, got status=%d body=%q", createTagRec.Code, createTagRec.Body.String())
+	}
+
+	var createdTag struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createTagRec.Body.Bytes(), &createdTag); err != nil {
+		t.Fatalf("decode tag: %v", err)
+	}
+
+	updateTagReq := httptest.NewRequest(http.MethodPut, "/api/admin/tags/"+createdTag.ID, bytes.NewBufferString(`{"name":"数据库实践","slug":"database-practice"}`))
+	updateTagReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		updateTagReq.AddCookie(cookie)
+	}
+	updateTagRec := httptest.NewRecorder()
+	router.ServeHTTP(updateTagRec, updateTagReq)
+	if updateTagRec.Code != http.StatusOK || !strings.Contains(updateTagRec.Body.String(), `"slug":"database-practice"`) {
+		t.Fatalf("expected tag updated, got status=%d body=%q", updateTagRec.Code, updateTagRec.Body.String())
+	}
+
+	deleteUsedTagReq := httptest.NewRequest(http.MethodDelete, "/api/admin/tags/tag_blog_system", nil)
+	for _, cookie := range adminCookies {
+		deleteUsedTagReq.AddCookie(cookie)
+	}
+	deleteUsedTagRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteUsedTagRec, deleteUsedTagReq)
+	if deleteUsedTagRec.Code != http.StatusConflict {
+		t.Fatalf("expected used tag delete status 409, got %d body=%q", deleteUsedTagRec.Code, deleteUsedTagRec.Body.String())
+	}
+
+	deleteTagReq := httptest.NewRequest(http.MethodDelete, "/api/admin/tags/"+createdTag.ID, nil)
+	for _, cookie := range adminCookies {
+		deleteTagReq.AddCookie(cookie)
+	}
+	deleteTagRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteTagRec, deleteTagReq)
+	if deleteTagRec.Code != http.StatusOK || !strings.Contains(deleteTagRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected tag deleted, got status=%d body=%q", deleteTagRec.Code, deleteTagRec.Body.String())
+	}
+}
+
 func loginForTest(t *testing.T, router http.Handler, email string, password string) []*http.Cookie {
 	t.Helper()
 

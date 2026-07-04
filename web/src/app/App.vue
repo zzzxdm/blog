@@ -5,19 +5,31 @@ import { RouterLink, RouterView, useRoute } from "vue-router";
 import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
 import SiteSearch from "../components/SiteSearch.vue";
+import { getCategories, type Category } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
 const auth = useAuthStore();
 const searchOpen = ref(false);
+const categories = ref<Category[]>([]);
 const showChrome = computed(() => !route.meta.hideChrome);
+const navCategories = computed(() => categories.value.slice(0, 4));
 
 onMounted(() => {
   void auth.loadMe();
+  void loadCategories();
 });
 
 function logout() {
   void auth.logout();
+}
+
+async function loadCategories() {
+  try {
+    categories.value = (await getCategories()).items;
+  } catch {
+    categories.value = [];
+  }
 }
 </script>
 
@@ -36,9 +48,9 @@ function logout() {
           </RouterLink>
           <div class="nav-submenu">
             <RouterLink to="/archive">全部文章</RouterLink>
-            <RouterLink to="/archive?category=工程实践">工程实践</RouterLink>
-            <RouterLink to="/archive?category=产品设计">产品设计</RouterLink>
-            <RouterLink to="/archive?category=运营">内容运营</RouterLink>
+            <RouterLink v-for="item in navCategories" :key="item.id" :to="`/archive?category=${encodeURIComponent(item.name)}`">
+              {{ item.name }}
+            </RouterLink>
           </div>
         </div>
         <div class="nav-menu-item">

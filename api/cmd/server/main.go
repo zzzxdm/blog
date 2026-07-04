@@ -20,6 +20,7 @@ import (
 	"blog/api/internal/modules/posts"
 	"blog/api/internal/modules/reactions"
 	"blog/api/internal/modules/submissions"
+	"blog/api/internal/modules/taxonomies"
 	"blog/api/internal/modules/users"
 	appserver "blog/api/internal/server"
 )
@@ -81,6 +82,7 @@ func main() {
 					OperationsRepo: operationsRepo,
 					UserRepo:       userRepo,
 					AdminPostRepo:  adminPostRepo,
+					TaxonomyRepo:   taxonomies.NewSQLRepository(db),
 				})
 			}
 		}

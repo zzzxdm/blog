@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 
 import { usePostsStore } from "../stores/posts";
-import type { Post } from "../shared/api";
+import { getCategories, type Category, type Post } from "../shared/api";
 
 type ArchiveView = "grid" | "list";
 
@@ -16,6 +16,7 @@ const keyword = ref("");
 const category = ref("");
 const sort = ref("latest");
 const view = ref<ArchiveView>("grid");
+const categories = ref<Category[]>([]);
 
 const currentPage = computed(() => normalizePage(route.query.page));
 const selectedTag = computed(() => stringQuery(route.query.tag));
@@ -49,6 +50,18 @@ watch(
   },
   { immediate: true }
 );
+
+onMounted(() => {
+  void loadCategories();
+});
+
+async function loadCategories() {
+  try {
+    categories.value = (await getCategories()).items;
+  } catch {
+    categories.value = [];
+  }
+}
 
 function initialView(): ArchiveView {
   const routeView = stringQuery(route.query.view);
@@ -167,11 +180,9 @@ function tagTone(post: Post, index = 0) {
       <input v-model="keyword" class="input" type="search" placeholder="搜索标题、摘要或标签" aria-label="搜索文章">
       <select v-model="category" class="input" aria-label="选择分类">
         <option value="">全部分类</option>
-        <option value="工程实践">工程实践</option>
-        <option value="产品设计">产品设计</option>
-        <option value="运营">内容运营</option>
-        <option value="架构">架构</option>
-        <option value="Vue3">Vue3</option>
+        <option v-for="item in categories" :key="item.id" :value="item.name">
+          {{ item.name }}{{ item.postCount ? ` (${item.postCount})` : "" }}
+        </option>
       </select>
       <select v-model="sort" class="input" aria-label="排序方式">
         <option value="latest">最新发布</option>

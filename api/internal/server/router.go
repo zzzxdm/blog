@@ -15,6 +15,7 @@ import (
 	"blog/api/internal/modules/reactions"
 	"blog/api/internal/modules/seo"
 	"blog/api/internal/modules/submissions"
+	"blog/api/internal/modules/taxonomies"
 	"blog/api/internal/modules/users"
 
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,7 @@ type Repositories struct {
 	OperationsRepo operations.Repository
 	UserRepo       users.Repository
 	AdminPostRepo  adminposts.Repository
+	TaxonomyRepo   taxonomies.Repository
 }
 
 func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engine {
@@ -72,6 +74,9 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	if repos.AdminPostRepo == nil {
 		repos.AdminPostRepo = adminposts.NewMemoryRepository()
 	}
+	if repos.TaxonomyRepo == nil {
+		repos.TaxonomyRepo = taxonomies.NewMemoryRepository()
+	}
 
 	router := gin.New()
 	router.Use(gin.Logger())
@@ -95,6 +100,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	})
 
 	auth.RegisterRoutes(api, repos.AuthStore)
+	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
 	comments.RegisterRoutes(api, repos.CommentRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)

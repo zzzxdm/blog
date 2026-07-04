@@ -36,6 +36,39 @@ export interface Post {
   publishedAt: string;
 }
 
+export interface Category {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+  postCount: number;
+}
+
+export interface Tag {
+  id: string;
+  slug: string;
+  name: string;
+  postCount: number;
+}
+
+export interface TaxonomyListResponse<T> {
+  items: T[];
+  total: number;
+}
+
+export interface SaveCategoryPayload {
+  slug: string;
+  name: string;
+  description: string;
+  sortOrder: number;
+}
+
+export interface SaveTagPayload {
+  slug: string;
+  name: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -456,6 +489,54 @@ export async function getPostBySlug(slug: string): Promise<Post> {
 export async function searchPosts(params: PostListParams): Promise<ListResponse<Post>> {
   const query = toQuery(params);
   return request<ListResponse<Post>>(`/search${query}`);
+}
+
+export async function getCategories(): Promise<TaxonomyListResponse<Category>> {
+  return request<TaxonomyListResponse<Category>>("/categories");
+}
+
+export async function getTags(): Promise<TaxonomyListResponse<Tag>> {
+  return request<TaxonomyListResponse<Tag>>("/tags");
+}
+
+export async function createAdminCategory(payload: SaveCategoryPayload): Promise<Category> {
+  return request<Category>("/admin/categories", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateAdminCategory(id: string, payload: SaveCategoryPayload): Promise<Category> {
+  return request<Category>(`/admin/categories/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteAdminCategory(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/admin/categories/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function createAdminTag(payload: SaveTagPayload): Promise<Tag> {
+  return request<Tag>("/admin/tags", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateAdminTag(id: string, payload: SaveTagPayload): Promise<Tag> {
+  return request<Tag>(`/admin/tags/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteAdminTag(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/admin/tags/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {

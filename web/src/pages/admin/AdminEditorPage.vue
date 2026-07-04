@@ -5,12 +5,16 @@ import { useRoute } from "vue-router";
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
   createAdminPost,
+  getCategories,
   getAdminPost,
+  getTags,
   publishAdminPost,
   updateAdminPost,
   type AdminPost,
   type AdminPostPayload,
-  type AdminPostStatus
+  type AdminPostStatus,
+  type Category,
+  type Tag
 } from "../../shared/api";
 
 const route = useRoute();
@@ -20,6 +24,8 @@ const loading = ref(false);
 const saving = ref(false);
 const error = ref("");
 const message = ref("");
+const categoryOptions = ref<Category[]>([]);
+const tagOptions = ref<Tag[]>([]);
 
 const title = ref("如何设计一个内容长期增长的博客系统");
 const summary = ref("博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。");
@@ -47,7 +53,21 @@ const status = ref<AdminPostStatus>("draft");
 const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
 const description = computed(() => current.value ? `自动保存于 ${new Date(current.value.updatedAt).toLocaleTimeString("zh-CN")}，当前版本 ${current.value.version}。` : "新文章草稿。");
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadTaxonomies();
+});
+
+async function loadTaxonomies() {
+  try {
+    const [categoryResult, tagResult] = await Promise.all([getCategories(), getTags()]);
+    categoryOptions.value = categoryResult.items;
+    tagOptions.value = tagResult.items;
+  } catch {
+    categoryOptions.value = [];
+    tagOptions.value = [];
+  }
+}
 
 async function load() {
   const id = String(route.query.id || "");
@@ -224,8 +244,20 @@ function statusText(value: AdminPostStatus) {
             <div class="field"><label for="title">标题</label><input v-model="title" class="input" id="title"></div>
             <div class="field"><label for="summary">摘要</label><textarea v-model="summary" class="input" id="summary"></textarea></div>
             <div class="field"><label for="slug">Slug</label><input v-model="slug" class="input" id="slug"></div>
-            <div class="field"><label for="category">分类</label><select v-model="category" class="input" id="category"><option>工程实践</option><option>产品设计</option><option>内容运营</option><option>Vue3</option></select></div>
-            <div class="field"><label for="tags">标签</label><input v-model="tagsText" class="input" id="tags"></div>
+            <div class="field">
+              <label for="category">分类</label>
+              <select v-model="category" class="input" id="category">
+                <option v-for="item in categoryOptions" :key="item.id" :value="item.name">{{ item.name }}</option>
+                <option v-if="!categoryOptions.length">工程实践</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="tags">标签</label>
+              <input v-model="tagsText" class="input" id="tags" list="admin-tag-options">
+              <datalist id="admin-tag-options">
+                <option v-for="item in tagOptions" :key="item.id" :value="item.name"></option>
+              </datalist>
+            </div>
           </div>
         </section>
 

@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import {
   createSubmission,
+  getCategories,
+  getTags,
   updateSubmission,
+  type Category,
   type Submission,
-  type SubmissionPayload
+  type SubmissionPayload,
+  type Tag
 } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 
@@ -16,10 +20,12 @@ const current = ref<Submission | null>(null);
 const saving = ref(false);
 const message = ref("");
 const error = ref("");
+const categoryOptions = ref<Category[]>([]);
+const tagOptions = ref<Tag[]>([]);
 
 const title = ref("用户评论系统应该怎么设计");
 const summary = ref("从登录用户评论、审核、举报、通知和禁言机制出发，设计一个可维护的评论系统。");
-const category = ref("用户系统");
+const category = ref("工程实践");
 const tagsText = ref("评论, 用户系统, 审核");
 const slug = ref("user-comment-system-design");
 const coverImage = ref("https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=700&q=80");
@@ -43,6 +49,21 @@ const content = ref(`# 用户评论系统应该怎么设计
 const tags = computed(() => tagsText.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean));
 const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
 const status = computed(() => current.value?.status || "draft");
+
+onMounted(() => {
+  void loadTaxonomies();
+});
+
+async function loadTaxonomies() {
+  try {
+    const [categoryResult, tagResult] = await Promise.all([getCategories(), getTags()]);
+    categoryOptions.value = categoryResult.items;
+    tagOptions.value = tagResult.items;
+  } catch {
+    categoryOptions.value = [];
+    tagOptions.value = [];
+  }
+}
 
 function payload(submit = false): SubmissionPayload {
   return {
@@ -217,10 +238,8 @@ function statusClass(value: string) {
             <div class="field">
               <label for="category">建议分类</label>
               <select v-model="category" class="input" id="category">
-                <option>用户系统</option>
-                <option>工程实践</option>
-                <option>内容治理</option>
-                <option>写作工作流</option>
+                <option v-for="item in categoryOptions" :key="item.id" :value="item.name">{{ item.name }}</option>
+                <option v-if="!categoryOptions.length">工程实践</option>
               </select>
             </div>
             <div class="field">
@@ -229,7 +248,10 @@ function statusClass(value: string) {
             </div>
             <div class="field">
               <label for="tags">标签</label>
-              <input v-model="tagsText" class="input" id="tags">
+              <input v-model="tagsText" class="input" id="tags" list="submit-tag-options">
+              <datalist id="submit-tag-options">
+                <option v-for="item in tagOptions" :key="item.id" :value="item.name"></option>
+              </datalist>
             </div>
           </div>
         </section>
