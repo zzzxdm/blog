@@ -10,6 +10,12 @@ const (
 	StatusArchived  = "archived"
 )
 
+const (
+	VisibilityPublic  = "public"
+	VisibilityPrivate = "private"
+	VisibilityMembers = "members"
+)
+
 type AdminPost struct {
 	ID                string     `json:"id"`
 	Slug              string     `json:"slug"`
@@ -17,6 +23,7 @@ type AdminPost struct {
 	Summary           string     `json:"summary"`
 	Content           string     `json:"content"`
 	Status            string     `json:"status"`
+	Visibility        string     `json:"visibility"`
 	Category          string     `json:"category"`
 	Tags              []string   `json:"tags"`
 	CoverImage        string     `json:"coverImage"`
@@ -42,6 +49,7 @@ type Revision struct {
 	Summary        string    `json:"summary"`
 	Content        string    `json:"content"`
 	Status         string    `json:"status"`
+	Visibility     string    `json:"visibility"`
 	Category       string    `json:"category"`
 	Tags           []string  `json:"tags"`
 	CoverImage     string    `json:"coverImage"`
@@ -76,6 +84,7 @@ type SaveRequest struct {
 	Summary        string   `json:"summary"`
 	Content        string   `json:"content"`
 	Status         string   `json:"status"`
+	Visibility     string   `json:"visibility"`
 	Category       string   `json:"category"`
 	Tags           []string `json:"tags"`
 	CoverImage     string   `json:"coverImage"`

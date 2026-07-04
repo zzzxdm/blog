@@ -8,7 +8,8 @@ import {
   getAdminPosts,
   type AdminPost,
   type AdminPostPayload,
-  type AdminPostStats
+  type AdminPostStats,
+  type AdminPostVisibility
 } from "../../shared/api";
 
 const router = useRouter();
@@ -32,6 +33,7 @@ const visiblePosts = computed(() => {
       post.authorName,
       post.category,
       post.slug,
+      visibilityText(post.visibility),
       post.tags.join(" ")
     ].join(" ").toLowerCase().includes(keyword);
     const matchesStatus = statusFilter.value === "" || post.status === statusFilter.value;
@@ -114,6 +116,7 @@ function markdownPayload(markdown: string, fileName: string): AdminPostPayload {
     category: parsed.meta.category || "工程实践",
     tags,
     coverImage: parsed.meta.coverImage || "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80",
+    visibility: visibilityFromMeta(parsed.meta.visibility),
     seoTitle: parsed.meta.seoTitle || title,
     seoDescription: parsed.meta.seoDescription || summary
   };
@@ -173,6 +176,19 @@ function slugFrom(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug || `import-${Date.now()}`;
+}
+
+function visibilityFromMeta(value = ""): AdminPostVisibility {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "private" || normalized === "私密") return "private";
+  if (normalized === "members" || normalized === "member" || normalized === "会员可见") return "members";
+  return "public";
+}
+
+function visibilityText(visibility: AdminPostVisibility) {
+  if (visibility === "private") return "私密";
+  if (visibility === "members") return "会员可见";
+  return "公开";
 }
 
 function statusText(status: AdminPost["status"]) {
@@ -259,6 +275,7 @@ function formatDate(value: string) {
               <strong>{{ post.title }}</strong>
               <div class="meta-row">
                 <span>{{ post.authorName }}</span>
+                <span>{{ visibilityText(post.visibility) }}</span>
                 <span v-if="post.status === 'scheduled' && post.scheduledAt">定时发布：{{ formatDate(post.scheduledAt) }}</span>
                 <span v-else>/posts/{{ post.publishedPostSlug || post.slug }}</span>
               </div>

@@ -79,6 +79,7 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 		ID:         fmt.Sprintf("admin_post_%d", now.UnixNano()),
 		AuthorName: "管理员",
 		Status:     StatusDraft,
+		Visibility: VisibilityPublic,
 		Version:    0,
 		UpdatedAt:  now,
 	}
@@ -109,6 +110,12 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	if item.Status == "" {
 		item.Status = StatusDraft
 	}
+	if request.Visibility != "" {
+		item.Visibility = normalizeVisibility(request.Visibility)
+	}
+	if item.Visibility == "" {
+		item.Visibility = VisibilityPublic
+	}
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
 	if err := repo.savePost(ctx, item, false); err != nil {
@@ -125,6 +132,10 @@ func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher pos
 	}
 	if strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.Content) == "" {
 		return AdminPost{}, ErrInvalidPost
+	}
+	item.Visibility = normalizeVisibility(item.Visibility)
+	if item.Visibility != VisibilityPublic {
+		return AdminPost{}, ErrPostNotPublic
 	}
 	if item.Status == StatusPublished && item.PublishedPostSlug != "" {
 		return clonePost(item), nil

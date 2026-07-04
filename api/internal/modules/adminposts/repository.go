@@ -16,6 +16,7 @@ var (
 	ErrPostNotFound     = errors.New("admin post not found")
 	ErrRevisionNotFound = errors.New("admin post revision not found")
 	ErrInvalidPost      = errors.New("invalid admin post")
+	ErrPostNotPublic    = errors.New("admin post is not public")
 )
 
 type Repository interface {
@@ -92,6 +93,7 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 			ID:         fmt.Sprintf("admin_post_%03d", repo.nextID),
 			AuthorName: "管理员",
 			Status:     StatusDraft,
+			Visibility: VisibilityPublic,
 			Version:    0,
 			UpdatedAt:  now,
 		}
@@ -116,6 +118,12 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 	if item.Status == "" {
 		item.Status = StatusDraft
 	}
+	if request.Visibility != "" {
+		item.Visibility = normalizeVisibility(request.Visibility)
+	}
+	if item.Visibility == "" {
+		item.Visibility = VisibilityPublic
+	}
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
 	repo.items[item.ID] = item
@@ -132,6 +140,11 @@ func (repo *MemoryRepository) Publish(ctx context.Context, id string, publisher 
 	if strings.TrimSpace(item.Title) == "" || strings.TrimSpace(item.Content) == "" {
 		repo.mu.Unlock()
 		return AdminPost{}, ErrInvalidPost
+	}
+	item.Visibility = normalizeVisibility(item.Visibility)
+	if item.Visibility != VisibilityPublic {
+		repo.mu.Unlock()
+		return AdminPost{}, ErrPostNotPublic
 	}
 	if item.Status == StatusPublished && item.PublishedPostSlug != "" {
 		repo.mu.Unlock()
@@ -232,6 +245,7 @@ func countStats(items []AdminPost) Stats {
 }
 
 func clonePost(item AdminPost) AdminPost {
+	item.Visibility = normalizeVisibility(item.Visibility)
 	item.Tags = append([]string{}, item.Tags...)
 	item.Revisions = cloneRevisions(item.Revisions)
 	return item
@@ -246,6 +260,7 @@ func snapshotRevision(item AdminPost, createdAt time.Time) Revision {
 		Summary:        item.Summary,
 		Content:        item.Content,
 		Status:         item.Status,
+		Visibility:     normalizeVisibility(item.Visibility),
 		Category:       item.Category,
 		Tags:           append([]string{}, item.Tags...),
 		CoverImage:     item.CoverImage,
@@ -298,6 +313,7 @@ func restoreFromRevision(item AdminPost, revision Revision) AdminPost {
 	item.Title = revision.Title
 	item.Summary = revision.Summary
 	item.Content = revision.Content
+	item.Visibility = normalizeVisibility(revision.Visibility)
 	item.Category = defaultString(strings.TrimSpace(revision.Category), item.Category)
 	item.Tags = normalizeTags(revision.Tags)
 	item.CoverImage = revision.CoverImage
@@ -316,6 +332,7 @@ func cloneRevisions(revisions []Revision) []Revision {
 }
 
 func cloneRevision(revision Revision) Revision {
+	revision.Visibility = normalizeVisibility(revision.Visibility)
 	revision.Tags = append([]string{}, revision.Tags...)
 	return revision
 }
@@ -327,6 +344,16 @@ func normalizeStatus(status string) string {
 		return status
 	default:
 		return StatusDraft
+	}
+}
+
+func normalizeVisibility(visibility string) string {
+	visibility = strings.ToLower(strings.TrimSpace(visibility))
+	switch visibility {
+	case VisibilityPrivate, VisibilityMembers:
+		return visibility
+	default:
+		return VisibilityPublic
 	}
 }
 
@@ -403,6 +430,7 @@ func seedAdminPosts() map[string]AdminPost {
 			Summary:           "博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。",
 			Content:           "一个现代化博客系统需要从内容资产的生命周期开始设计。",
 			Status:            StatusPublished,
+			Visibility:        VisibilityPublic,
 			Category:          "工程实践",
 			Tags:              []string{"博客系统", "架构", "内容治理"},
 			CoverImage:        "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80",
@@ -424,6 +452,7 @@ func seedAdminPosts() map[string]AdminPost {
 			Summary:     "客户端渲染、接口缓存和服务端 meta 需要明确边界。",
 			Content:     "Vue3 内容站可以保持前端开发效率，同时通过 Go 输出基础 HTML。",
 			Status:      StatusScheduled,
+			Visibility:  VisibilityPublic,
 			Category:    "Vue3",
 			Tags:        []string{"Vue3", "SEO", "缓存"},
 			CoverImage:  "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=1400&q=80",
@@ -439,6 +468,7 @@ func seedAdminPosts() map[string]AdminPost {
 			Summary:      "版本记录不是复杂功能，而是内容资产的基本保险。",
 			Content:      "文章会被持续修订，后台需要记录版本历史、修改人、变更摘要和回滚能力。",
 			Status:       StatusReview,
+			Visibility:   VisibilityPublic,
 			Category:     "内容治理",
 			Tags:         []string{"版本历史", "内容治理"},
 			CoverImage:   "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80",
@@ -455,6 +485,7 @@ func seedAdminPosts() map[string]AdminPost {
 			Summary:    "编辑器、预览、封面和 SEO 字段要服务写作流程。",
 			Content:    "Markdown 编辑器需要稳定的草稿保存、预览、图片插入、代码块处理和 SEO 字段编辑。",
 			Status:     StatusDraft,
+			Visibility: VisibilityPublic,
 			Category:   "编辑器",
 			Tags:       []string{"Markdown", "写作工作流"},
 			AuthorName: "管理员",

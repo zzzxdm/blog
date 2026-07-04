@@ -146,6 +146,10 @@ func (handler *Handler) writeError(ctx *gin.Context, err error) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "title and content are required"})
 		return
 	}
+	if errors.Is(err, ErrPostNotPublic) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "非公开文章暂不支持发布到公开站点"})
+		return
+	}
 
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update admin post"})
 }

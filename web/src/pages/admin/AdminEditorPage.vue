@@ -15,6 +15,7 @@ import {
   type AdminPost,
   type AdminPostPayload,
   type AdminPostRevision,
+  type AdminPostVisibility,
   type AdminPostStatus,
   type Category,
   type Tag
@@ -56,6 +57,7 @@ const coverImage = ref("https://images.unsplash.com/photo-1498050108023-c5249f4d
 const seoTitle = ref("如何设计一个现代化博客系统");
 const seoDescription = ref("从内容模型、发布流程、SEO、缓存和运营能力设计一个可长期维护的博客系统。");
 const status = ref<AdminPostStatus>("draft");
+const visibility = ref<AdminPostVisibility>("public");
 
 const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
 const description = computed(() => current.value ? `自动保存于 ${new Date(current.value.updatedAt).toLocaleTimeString("zh-CN")}，当前版本 ${current.value.version}。` : "新文章草稿。");
@@ -125,6 +127,7 @@ function applyPost(post: AdminPost) {
   seoTitle.value = post.seoTitle;
   seoDescription.value = post.seoDescription;
   status.value = post.status;
+  visibility.value = post.visibility || "public";
 }
 
 function payload(nextStatus: AdminPostStatus): AdminPostPayload {
@@ -138,6 +141,7 @@ function payload(nextStatus: AdminPostStatus): AdminPostPayload {
     coverImage: coverImage.value,
     seoTitle: seoTitle.value,
     seoDescription: seoDescription.value,
+    visibility: visibility.value,
     status: nextStatus
   };
 }
@@ -166,6 +170,12 @@ async function save(nextStatus: AdminPostStatus) {
 }
 
 async function publish() {
+  if (visibility.value !== "public") {
+    error.value = "非公开文章暂不支持发布到公开站点。";
+    message.value = "";
+    return;
+  }
+
   saving.value = true;
   error.value = "";
   message.value = "";
@@ -272,6 +282,12 @@ function statusText(value: AdminPostStatus) {
   return "草稿";
 }
 
+function visibilityText(value: AdminPostVisibility) {
+  if (value === "private") return "私密";
+  if (value === "members") return "会员可见";
+  return "公开";
+}
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
     month: "2-digit",
@@ -289,7 +305,7 @@ function formatDate(value: string) {
         <RouterLink v-if="current?.publishedPostSlug" class="button-secondary" :to="`/posts/${current.publishedPostSlug}`">预览</RouterLink>
         <button v-else class="button-secondary" type="button">预览</button>
         <button class="button-secondary" type="button" :disabled="saving" @click="saveDraft">{{ saving ? "保存中..." : "保存草稿" }}</button>
-        <button class="button" type="button" :disabled="saving" @click="publish">{{ saving ? "发布中..." : "发布" }}</button>
+        <button class="button" type="button" :disabled="saving || visibility !== 'public'" title="私密和会员可见文章暂不支持发布到公开站点" @click="publish">{{ saving ? "发布中..." : "发布" }}</button>
       </div>
     </template>
 
@@ -342,13 +358,13 @@ function formatDate(value: string) {
             </div>
             <div class="field">
               <label for="visibility">可见性</label>
-              <select class="input" id="visibility">
-                <option>公开</option>
-                <option>私密</option>
-                <option>会员可见</option>
+              <select v-model="visibility" class="input" id="visibility">
+                <option value="public">公开</option>
+                <option value="private">私密</option>
+                <option value="members">会员可见</option>
               </select>
             </div>
-            <button class="button" type="button" @click="save('review')">提交审核</button>
+            <button class="button" type="button" :disabled="saving" @click="save('review')">提交审核</button>
           </div>
         </section>
 
@@ -423,6 +439,7 @@ function formatDate(value: string) {
               <p>{{ revision.summary || "无摘要" }}</p>
               <div class="meta-row">
                 <span>{{ formatDate(revision.createdAt) }}</span>
+                <span>{{ visibilityText(revision.visibility) }}</span>
                 <span>{{ revision.authorName }}</span>
                 <button class="button-secondary" type="button" :disabled="restoringId === revision.id || revision.version === current?.version" @click="restoreRevision(revision)">
                   {{ restoringId === revision.id ? "恢复中..." : "恢复" }}

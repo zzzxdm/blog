@@ -537,6 +537,7 @@ export interface AccountSettings {
 }
 
 export type AdminPostStatus = "draft" | "review" | "scheduled" | "published" | "archived";
+export type AdminPostVisibility = "public" | "private" | "members";
 
 export interface AdminPost {
   id: string;
@@ -545,6 +546,7 @@ export interface AdminPost {
   summary: string;
   content: string;
   status: AdminPostStatus;
+  visibility: AdminPostVisibility;
   category: string;
   tags: string[];
   coverImage: string;
@@ -569,6 +571,7 @@ export interface AdminPostRevision {
   summary: string;
   content: string;
   status: AdminPostStatus;
+  visibility: AdminPostVisibility;
   category: string;
   tags: string[];
   coverImage: string;
@@ -603,6 +606,7 @@ export interface AdminPostPayload {
   summary: string;
   content: string;
   status: AdminPostStatus;
+  visibility: AdminPostVisibility;
   category: string;
   tags: string[];
   coverImage: string;
