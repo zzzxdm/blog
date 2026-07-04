@@ -856,6 +856,25 @@ textarea {
   padding: 32px 0 64px;
 }
 
+.reading-progress {
+  position: fixed;
+  z-index: 80;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: rgba(255, 254, 250, 0.42);
+  pointer-events: none;
+}
+
+.reading-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--rust), var(--green));
+  transition: width 0.12s linear;
+}
+
 .article-hero h1 {
   margin: 12px 0 14px;
   font-size: clamp(34px, 6vw, 62px);

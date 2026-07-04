@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
@@ -41,6 +41,8 @@ const replyTo = ref<Comment | null>(null);
 const relatedPosts = ref<Post[]>([]);
 const reaction = ref<ReactionSummary | null>(null);
 const siteSettings = ref<SiteSettings | null>(null);
+const articleBody = ref<HTMLElement | null>(null);
+const readingProgress = ref(0);
 const reactionLoading = ref(false);
 const reactionError = ref("");
 const codeCopied = ref(false);
@@ -57,6 +59,7 @@ const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.
 const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 34);
 const renderedPostContent = computed(() => renderMarkdown(post.value?.content ?? ""));
 const commentsEnabled = computed(() => siteSettings.value?.commentsEnabled ?? true);
+const readingProgressEnabled = computed(() => siteSettings.value?.readingProgressEnabled ?? false);
 const visibleComments = computed(() => {
   return [...comments.value].sort((left, right) => {
     const leftTime = new Date(left.createdAt).getTime();
@@ -82,6 +85,24 @@ function back() {
   }
 
   void router.push("/archive");
+}
+
+function updateReadingProgress() {
+  const target = articleBody.value;
+  if (!target) {
+    readingProgress.value = 0;
+    return;
+  }
+
+  const rect = target.getBoundingClientRect();
+  const scrollTop = window.scrollY || document.documentElement.scrollTop;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const start = scrollTop + rect.top;
+  const end = start + target.offsetHeight - viewportHeight * 0.45;
+  const total = Math.max(1, end - start);
+  const current = scrollTop - start;
+
+  readingProgress.value = Math.min(100, Math.max(0, Math.round((current / total) * 100)));
 }
 
 function formatDate(value: string) {
@@ -328,8 +349,21 @@ function insertComment(items: Comment[], created: Comment) {
 onMounted(() => {
   load();
   void loadSiteSettings();
+  updateReadingProgress();
+  window.addEventListener("scroll", updateReadingProgress, { passive: true });
+  window.addEventListener("resize", updateReadingProgress);
 });
-watch(() => route.params.slug, load);
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", updateReadingProgress);
+  window.removeEventListener("resize", updateReadingProgress);
+});
+watch(post, () => {
+  window.requestAnimationFrame(updateReadingProgress);
+});
+watch(() => route.params.slug, () => {
+  readingProgress.value = 0;
+  load();
+});
 watch(() => auth.user?.id, () => {
   const slug = String(route.params.slug || "");
   if (slug) {
@@ -340,6 +374,18 @@ watch(() => auth.user?.id, () => {
 </script>
 
 <template>
+  <div
+    v-if="readingProgressEnabled && post"
+    class="reading-progress"
+    role="progressbar"
+    aria-label="阅读进度"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    :aria-valuenow="readingProgress"
+  >
+    <span :style="{ width: `${readingProgress}%` }"></span>
+  </div>
+
   <main class="article-shell">
     <p v-if="posts.loading" class="muted">正在加载文章...</p>
     <p v-else-if="posts.error" class="error">{{ posts.error }}</p>
@@ -383,7 +429,7 @@ watch(() => auth.user?.id, () => {
           <img :src="post.coverImage" :alt="post.title">
         </figure>
 
-        <section class="article-body">
+        <section ref="articleBody" class="article-body">
           <div v-html="renderedPostContent"></div>
 
           <h2 id="content-model">内容模型先于页面</h2>
