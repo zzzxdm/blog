@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
+import { RouterLink } from "vue-router";
 
 import { useHealthStore } from "../stores/health";
+import { usePostsStore } from "../stores/posts";
 
 const health = useHealthStore();
+const posts = usePostsStore();
 
 onMounted(() => {
   void health.load();
+  void posts.loadList({ page: 1, pageSize: 3 });
 });
 </script>
 
@@ -29,18 +33,36 @@ onMounted(() => {
       </aside>
     </section>
 
-    <section class="content-grid" aria-label="开发入口">
-      <article class="panel">
-        <h2>前台</h2>
-        <p>首页、归档、专题和文章详情会从当前骨架继续接入真实接口。</p>
-      </article>
-      <article class="panel">
-        <h2>后台</h2>
-        <p>文章管理、媒体库、评论审核和投稿审核会按模块逐步实现。</p>
-      </article>
-      <article class="panel">
-        <h2>搜索</h2>
-        <p>搜索使用 PostgreSQL 全文搜索，不引入专用搜索中间件。</p>
+    <section class="section-heading">
+      <div>
+        <span class="eyebrow">Latest</span>
+        <h2>最新文章</h2>
+        <p>数据来自 Go API，当前使用内存 repository，后续会替换为 PostgreSQL。</p>
+      </div>
+      <RouterLink class="button-secondary" to="/archive">查看归档</RouterLink>
+    </section>
+
+    <p v-if="posts.loading" class="muted">正在加载文章...</p>
+    <p v-else-if="posts.error" class="error">{{ posts.error }}</p>
+
+    <section v-else class="content-grid" aria-label="最新文章">
+      <article v-for="post in posts.list?.items" :key="post.id" class="post-card">
+        <img :src="post.coverImage" :alt="post.title">
+        <div class="post-card-body">
+          <div class="meta-row">
+            <span class="tag">{{ post.category }}</span>
+            <span>{{ post.readingTime }} 分钟阅读</span>
+          </div>
+          <h2>
+            <RouterLink :to="`/posts/${post.slug}`">{{ post.title }}</RouterLink>
+          </h2>
+          <p>{{ post.summary }}</p>
+          <div class="meta-row">
+            <span>{{ post.viewCount }} 次阅读</span>
+            <span>{{ post.commentCount }} 条评论</span>
+            <span>{{ post.likeCount }} 赞</span>
+          </div>
+        </div>
       </article>
     </section>
   </main>

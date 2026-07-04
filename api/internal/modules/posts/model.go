@@ -1,0 +1,36 @@
+package posts
+
+import "time"
+
+type Post struct {
+	ID           string    `json:"id"`
+	Slug         string    `json:"slug"`
+	Title        string    `json:"title"`
+	Summary      string    `json:"summary"`
+	Content      string    `json:"content"`
+	Category     string    `json:"category"`
+	Tags         []string  `json:"tags"`
+	CoverImage   string    `json:"coverImage"`
+	AuthorName   string    `json:"authorName"`
+	ReadingTime  int       `json:"readingTime"`
+	ViewCount    int       `json:"viewCount"`
+	LikeCount    int       `json:"likeCount"`
+	DislikeCount int       `json:"dislikeCount"`
+	CommentCount int       `json:"commentCount"`
+	PublishedAt  time.Time `json:"publishedAt"`
+}
+
+type ListQuery struct {
+	Keyword  string
+	Category string
+	Tag      string
+	Page     int
+	PageSize int
+}
+
+type ListResult struct {
+	Items    []Post `json:"items"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+	Total    int    `json:"total"`
+}

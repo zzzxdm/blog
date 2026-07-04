@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import AdminHome from "../pages/admin/AdminHome.vue";
 import ArchivePage from "../pages/ArchivePage.vue";
+import ArticlePage from "../pages/ArticlePage.vue";
 import HomePage from "../pages/HomePage.vue";
 
 export const router = createRouter({
@@ -9,6 +10,7 @@ export const router = createRouter({
   routes: [
     { path: "/", name: "home", component: HomePage },
     { path: "/archive", name: "archive", component: ArchivePage },
+    { path: "/posts/:slug", name: "post", component: ArticlePage },
     { path: "/admin", name: "admin", component: AdminHome }
   ],
   scrollBehavior() {

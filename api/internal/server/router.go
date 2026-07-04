@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"blog/api/internal/config"
+	"blog/api/internal/modules/posts"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,13 +20,17 @@ func NewRouter(cfg config.Config) *gin.Engine {
 	router.Use(gin.Recovery())
 	router.Use(cors(cfg.WebOrigin))
 
-	router.GET("/api/health", func(ctx *gin.Context) {
+	api := router.Group("/api")
+
+	api.GET("/health", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, gin.H{
 			"status": "ok",
 			"env":    cfg.AppEnv,
 			"time":   time.Now().UTC().Format(time.RFC3339),
 		})
 	})
+
+	posts.RegisterPublicRoutes(api, posts.NewMemoryRepository())
 
 	return router
 }
