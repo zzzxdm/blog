@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
@@ -32,6 +32,7 @@ const message = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
+const editorArea = ref<HTMLTextAreaElement | null>(null);
 
 const title = ref("如何设计一个内容长期增长的博客系统");
 const summary = ref("博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。");
@@ -205,6 +206,64 @@ async function restoreRevision(revision: AdminPostRevision) {
   }
 }
 
+function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | "link") {
+  const textarea = editorArea.value;
+  const start = textarea?.selectionStart ?? content.value.length;
+  const end = textarea?.selectionEnd ?? content.value.length;
+  const selected = content.value.slice(start, end);
+  let inner = selected;
+  let replacement = "";
+  let selectionStart = start;
+  let selectionEnd = start;
+
+  if (type === "bold") {
+    inner = selected || "加粗文字";
+    replacement = `**${inner}**`;
+    selectionStart = start + 2;
+    selectionEnd = selectionStart + inner.length;
+  } else if (type === "italic") {
+    inner = selected || "斜体文字";
+    replacement = `*${inner}*`;
+    selectionStart = start + 1;
+    selectionEnd = selectionStart + inner.length;
+  } else if (type === "heading") {
+    inner = selected || "小标题";
+    replacement = `## ${inner}`;
+    selectionStart = start + 3;
+    selectionEnd = selectionStart + inner.length;
+  } else if (type === "quote") {
+    inner = selected || "引用内容";
+    replacement = inner.split("\n").map((line) => `> ${line}`).join("\n");
+    selectionStart = start;
+    selectionEnd = start + replacement.length;
+  } else if (type === "code") {
+    inner = selected || "code";
+    if (inner.includes("\n")) {
+      replacement = `\`\`\`\n${inner}\n\`\`\``;
+      selectionStart = start + 4;
+    } else {
+      replacement = `\`${inner}\``;
+      selectionStart = start + 1;
+    }
+    selectionEnd = selectionStart + inner.length;
+  } else {
+    const url = window.prompt("链接地址", "https://");
+    if (!url) {
+      return;
+    }
+    inner = selected || "链接文字";
+    replacement = `[${inner}](${url})`;
+    selectionStart = start + 1;
+    selectionEnd = selectionStart + inner.length;
+  }
+
+  content.value = `${content.value.slice(0, start)}${replacement}${content.value.slice(end)}`;
+  void nextTick(() => {
+    editorArea.value?.focus();
+    editorArea.value?.setSelectionRange(selectionStart, selectionEnd);
+  });
+}
+
 function statusText(value: AdminPostStatus) {
   if (value === "published") return "已发布";
   if (value === "scheduled") return "待发布";
@@ -240,14 +299,14 @@ function formatDate(value: string) {
 
     <section class="editor-layout">
       <div class="editor-panel">
-        <div class="editor-toolbar">
-          <div class="tool-group" aria-label="编辑工具栏">
-            <button class="tool" type="button" aria-label="加粗">B</button>
-            <button class="tool" type="button" aria-label="斜体">I</button>
-            <button class="tool" type="button" aria-label="标题">H</button>
-            <button class="tool" type="button" aria-label="引用">"</button>
-            <button class="tool" type="button" aria-label="代码">{ }</button>
-            <button class="tool" type="button" aria-label="链接">↗</button>
+          <div class="editor-toolbar">
+            <div class="tool-group" aria-label="编辑工具栏">
+            <button class="tool" type="button" aria-label="加粗" @click="applyMarkdown('bold')">B</button>
+            <button class="tool" type="button" aria-label="斜体" @click="applyMarkdown('italic')">I</button>
+            <button class="tool" type="button" aria-label="标题" @click="applyMarkdown('heading')">H</button>
+            <button class="tool" type="button" aria-label="引用" @click="applyMarkdown('quote')">"</button>
+            <button class="tool" type="button" aria-label="代码" @click="applyMarkdown('code')">{ }</button>
+            <button class="tool" type="button" aria-label="链接" @click="applyMarkdown('link')">↗</button>
           </div>
           <div class="meta-row">
             <span>Markdown</span>
@@ -256,7 +315,7 @@ function formatDate(value: string) {
         </div>
 
         <div class="editor-grid">
-          <textarea v-model="content" class="markdown-area" aria-label="Markdown 编辑区"></textarea>
+          <textarea ref="editorArea" v-model="content" class="markdown-area" aria-label="Markdown 编辑区"></textarea>
 
           <article class="preview-area">
             <h1>{{ title }}</h1>
