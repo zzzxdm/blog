@@ -61,6 +61,41 @@ func TestFeedSitemapAndRobots(t *testing.T) {
 	}
 }
 
+func TestArticleSEOHTML(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+		PublicURL: "https://blog.example.com",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/posts/blog-system-design", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	expectedParts := []string{
+		"<title>如何设计一个内容长期增长的博客系统 - 云间笔记</title>",
+		`<link rel="canonical" href="https://blog.example.com/posts/blog-system-design">`,
+		`<meta property="og:title" content="如何设计一个内容长期增长的博客系统">`,
+		`<script type="application/ld+json">`,
+		`"@type":"BlogPosting"`,
+		`"url":"https://blog.example.com/posts/blog-system-design"`,
+		`<link rel="stylesheet" href="/assets/index.css">`,
+		`<script type="module" src="/assets/index.js"></script>`,
+	}
+	for _, part := range expectedParts {
+		if !strings.Contains(body, part) {
+			t.Fatalf("expected article html to contain %q, got %q", part, body)
+		}
+	}
+}
+
 func contains(value string, part string) bool {
 	return strings.Contains(value, part)
 }
