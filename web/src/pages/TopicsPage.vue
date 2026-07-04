@@ -15,9 +15,6 @@ interface Topic {
   tone: TopicTone;
   tags: string[];
   categories: string[];
-  fallbackCount: number;
-  recentLabel: string;
-  readsLabel: string;
 }
 
 const route = useRoute();
@@ -35,10 +32,7 @@ const topics: Topic[] = [
     imageAlt: "代码编辑器和开发设备",
     tone: "",
     tags: ["博客系统", "架构", "内容治理", "评论"],
-    categories: ["工程实践", "产品设计", "用户系统", "内容治理"],
-    fallbackCount: 18,
-    recentLabel: "今天",
-    readsLabel: "12.4k"
+    categories: ["工程实践", "产品设计", "用户系统", "内容治理"]
   },
   {
     slug: "vue3-content",
@@ -48,23 +42,17 @@ const topics: Topic[] = [
     imageAlt: "代码编辑器中的程序文件",
     tone: "rust",
     tags: ["Vue3", "SEO", "缓存"],
-    categories: ["Vue3"],
-    fallbackCount: 12,
-    recentLabel: "2 天前",
-    readsLabel: "9.8k"
+    categories: ["Vue3"]
   },
   {
     slug: "writing-workflow",
     title: "写作工作流",
-    summary: "草稿、版本历史、编辑器、发布审批、Newsletter 和长期内容维护。",
+    summary: "草稿、版本历史、编辑器、发布审批和长期内容维护。",
     image: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80",
     imageAlt: "笔记本和写作草稿",
     tone: "amber",
     tags: ["工作流", "写作工作流", "Markdown"],
-    categories: ["写作工作流"],
-    fallbackCount: 9,
-    recentLabel: "5 天前",
-    readsLabel: "6.1k"
+    categories: ["写作工作流"]
   },
   {
     slug: "resource-list",
@@ -74,10 +62,7 @@ const topics: Topic[] = [
     imageAlt: "桌面上的计划清单和电脑",
     tone: "",
     tags: ["PostgreSQL", "Redis", "全文搜索", "SEO"],
-    categories: ["架构", "运营"],
-    fallbackCount: 7,
-    recentLabel: "1 周前",
-    readsLabel: "4.9k"
+    categories: ["架构", "运营"]
   }
 ];
 
@@ -87,8 +72,7 @@ const currentTopic = computed(() => {
 });
 
 const currentTopicPosts = computed(() => {
-  const matches = topicPosts(currentTopic.value);
-  return (matches.length ? matches : posts.value).slice(0, 4);
+  return topicPosts(currentTopic.value).slice(0, 4);
 });
 
 const articleCountText = computed(() => `${total.value || posts.value.length} 篇文章`);
@@ -124,19 +108,27 @@ function matchesTopic(post: Post, topic: Topic) {
 }
 
 function topicArticleCount(topic: Topic) {
-  return Math.max(topic.fallbackCount, topicPosts(topic).length);
+  return topicPosts(topic).length;
+}
+
+function topicLatestLabel(topic: Topic) {
+  const latest = topicPosts(topic)
+    .map((post) => post.publishedAt)
+    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
+
+  return latest ? formatDate(latest) : "暂无更新";
 }
 
 function topicStatus(index: number) {
   if (index === 0) {
-    return { className: "published", label: "已读 42%" };
+    return { className: "published", label: "推荐阅读" };
   }
 
   if (index === 1) {
-    return { className: "draft", label: "未读" };
+    return { className: "review", label: "进阶阅读" };
   }
 
-  return { className: "review", label: "新文章" };
+  return { className: "draft", label: "延伸阅读" };
 }
 
 function topicLink(topic: Topic) {
@@ -175,7 +167,7 @@ function stringQuery(value: unknown) {
             <span class="rank-number">{{ index + 1 }}</span>
             <RouterLink :to="topicLink(topic)">
               <strong>{{ topic.title }}</strong>
-              <span>{{ topicArticleCount(topic) }} 篇文章 · {{ topic.readsLabel }} 阅读</span>
+              <span>{{ topicArticleCount(topic) }} 篇文章 · 最近 {{ topicLatestLabel(topic) }}</span>
             </RouterLink>
           </li>
         </ol>
@@ -195,7 +187,7 @@ function stringQuery(value: unknown) {
         <div class="topic-card-body">
           <div class="meta-row">
             <span class="tag" :class="topic.tone">{{ topicArticleCount(topic) }} 篇文章</span>
-            <span>最近更新：{{ topic.recentLabel }}</span>
+            <span>最近更新：{{ topicLatestLabel(topic) }}</span>
           </div>
           <h3>
             <RouterLink :to="topicLink(topic)">{{ topic.title }}</RouterLink>
@@ -217,7 +209,7 @@ function stringQuery(value: unknown) {
 
         <p v-if="loading" class="muted">正在加载专题文章...</p>
         <p v-else-if="error" class="error">{{ error }}</p>
-        <div v-else class="topic-list">
+        <div v-else-if="currentTopicPosts.length" class="topic-list">
           <article v-for="(post, index) in currentTopicPosts" :key="post.id" class="topic-list-item">
             <img :src="post.coverImage" :alt="post.title">
             <div>
@@ -233,6 +225,7 @@ function stringQuery(value: unknown) {
             <span class="status" :class="topicStatus(index).className">{{ topicStatus(index).label }}</span>
           </article>
         </div>
+        <p v-else class="muted">这个专题暂无文章。</p>
       </div>
 
       <aside class="sidebar">
