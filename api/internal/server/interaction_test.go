@@ -377,6 +377,74 @@ func TestAdminOperationsAPIs(t *testing.T) {
 	}
 }
 
+func TestUsersAndAccountSettingsAPIs(t *testing.T) {
+	router := NewRouter(config.Config{
+		AppEnv:    "test",
+		HTTPAddr:  ":0",
+		WebOrigin: "http://localhost:5173",
+	})
+
+	userCookies := loginForTest(t, router, "linyi@example.com", "password")
+	userAdminReq := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	for _, cookie := range userCookies {
+		userAdminReq.AddCookie(cookie)
+	}
+	userAdminRec := httptest.NewRecorder()
+	router.ServeHTTP(userAdminRec, userAdminReq)
+	if userAdminRec.Code != http.StatusForbidden {
+		t.Fatalf("expected user admin list status 403, got %d", userAdminRec.Code)
+	}
+
+	accountReq := httptest.NewRequest(http.MethodPut, "/api/account/settings", bytes.NewBufferString(`{
+		"displayName":"林一新版",
+		"username":"linyi",
+		"email":"linyi@example.com",
+		"avatarText":"林",
+		"bio":"更新后的个人简介",
+		"twoFactor":true,
+		"loginAlert":true,
+		"notifyReview":true,
+		"notifyComment":true,
+		"notifyAnnouncement":true,
+		"emailNotification":false,
+		"publicProfile":true,
+		"publicBookmarks":false,
+		"profileUrl":"https://blog.example.com/authors/linyi",
+		"timezone":"Asia/Shanghai"
+	}`))
+	accountReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range userCookies {
+		accountReq.AddCookie(cookie)
+	}
+	accountRec := httptest.NewRecorder()
+	router.ServeHTTP(accountRec, accountReq)
+	if accountRec.Code != http.StatusOK || !strings.Contains(accountRec.Body.String(), "林一新版") {
+		t.Fatalf("expected account settings updated, got status=%d body=%q", accountRec.Code, accountRec.Body.String())
+	}
+
+	adminCookies := loginForTest(t, router, "admin@example.com", "password")
+	adminListReq := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
+	for _, cookie := range adminCookies {
+		adminListReq.AddCookie(cookie)
+	}
+	adminListRec := httptest.NewRecorder()
+	router.ServeHTTP(adminListRec, adminListReq)
+	if adminListRec.Code != http.StatusOK || !strings.Contains(adminListRec.Body.String(), "market_user") {
+		t.Fatalf("expected admin users list, got status=%d body=%q", adminListRec.Code, adminListRec.Body.String())
+	}
+
+	muteReq := httptest.NewRequest(http.MethodPut, "/api/admin/users/user_linyi/status", bytes.NewBufferString(`{"status":"muted"}`))
+	muteReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		muteReq.AddCookie(cookie)
+	}
+	muteRec := httptest.NewRecorder()
+	router.ServeHTTP(muteRec, muteReq)
+	if muteRec.Code != http.StatusOK || !strings.Contains(muteRec.Body.String(), `"status":"muted"`) {
+		t.Fatalf("expected muted user, got status=%d body=%q", muteRec.Code, muteRec.Body.String())
+	}
+}
+
 func loginForTest(t *testing.T, router http.Handler, email string, password string) []*http.Cookie {
 	t.Helper()
 

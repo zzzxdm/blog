@@ -320,6 +320,61 @@ export interface AdminStats {
   suggestions: ContentSuggestion[];
 }
 
+export interface ManagedUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  status: "active" | "muted" | "banned" | "deleted";
+  avatarText: string;
+  emailVerified: boolean;
+  twoFactor: boolean;
+  commentCount: number;
+  bookmarkCount: number;
+  lastLoginAt: string;
+  registeredAt: string;
+  moderationNote: string;
+}
+
+export interface UserStats {
+  total: number;
+  emailVerified: number;
+  authors: number;
+  muted: number;
+  banned: number;
+}
+
+export interface UserListResponse {
+  items: ManagedUser[];
+  total: number;
+  stats: UserStats;
+}
+
+export interface AccountSettings {
+  displayName: string;
+  username: string;
+  email: string;
+  avatarText: string;
+  bio: string;
+  twoFactor: boolean;
+  loginAlert: boolean;
+  notifyReview: boolean;
+  notifyComment: boolean;
+  notifyAnnouncement: boolean;
+  emailNotification: boolean;
+  publicProfile: boolean;
+  publicBookmarks: boolean;
+  profileUrl: string;
+  timezone: string;
+  securityLevel: string;
+  loginDeviceCount: number;
+  publicPostCount: number;
+  profileCompleteness: number;
+  currentDeviceDescription: string;
+  lastDeviceDescription: string;
+  updatedAt: string;
+}
+
 export interface ListResponse<T> {
   items: T[];
   page: number;
@@ -532,6 +587,28 @@ export async function getAdminMedia(): Promise<MediaListResponse> {
 
 export async function getAdminStats(): Promise<AdminStats> {
   return request<AdminStats>("/admin/stats");
+}
+
+export async function getAdminUsers(): Promise<UserListResponse> {
+  return request<UserListResponse>("/admin/users");
+}
+
+export async function updateAdminUserStatus(id: string, status: ManagedUser["status"]): Promise<ManagedUser> {
+  return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status })
+  });
+}
+
+export async function getAccountSettings(): Promise<AccountSettings> {
+  return request<AccountSettings>("/account/settings");
+}
+
+export async function updateAccountSettings(payload: AccountSettings): Promise<AccountSettings> {
+  return request<AccountSettings>("/account/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
 }
 
 export class ApiError extends Error {

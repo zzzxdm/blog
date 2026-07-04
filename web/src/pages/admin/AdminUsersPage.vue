@@ -1,5 +1,82 @@
 <script setup lang="ts">
+import { onMounted, ref } from "vue";
+
 import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  getAdminUsers,
+  updateAdminUserStatus,
+  type ManagedUser,
+  type UserStats
+} from "../../shared/api";
+
+const users = ref<ManagedUser[]>([]);
+const stats = ref<UserStats>({ total: 0, emailVerified: 0, authors: 0, muted: 0, banned: 0 });
+const loading = ref(false);
+const actingId = ref("");
+const error = ref("");
+const message = ref("");
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const response = await getAdminUsers();
+    users.value = response.items;
+    stats.value = response.stats;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户列表加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
+  actingId.value = user.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await updateAdminUserStatus(user.id, status);
+    message.value = "用户状态已更新。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户状态更新失败";
+  } finally {
+    actingId.value = "";
+  }
+}
+
+function roleText(role: string) {
+  if (role === "admin") return "管理员";
+  if (role === "editor") return "编辑";
+  if (role === "author") return "作者";
+  return "注册用户";
+}
+
+function statusText(status: ManagedUser["status"]) {
+  if (status === "muted") return "禁言";
+  if (status === "banned") return "封禁";
+  if (status === "deleted") return "已删除";
+  return "正常";
+}
+
+function statusClass(status: ManagedUser["status"]) {
+  if (status === "muted") return "muted";
+  if (status === "banned" || status === "deleted") return "banned";
+  return "published";
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 </script>
 
 <template>
@@ -12,14 +89,17 @@ import AdminLayout from "../../components/AdminLayout.vue";
     </template>
 
     <section class="stats-grid" aria-label="用户统计">
-      <div class="stat-card"><span>注册用户</span><strong>1,248</strong></div>
-      <div class="stat-card"><span>已验证邮箱</span><strong>932</strong></div>
-      <div class="stat-card"><span>作者</span><strong>8</strong></div>
-      <div class="stat-card"><span>禁言中</span><strong>12</strong></div>
+      <div class="stat-card"><span>注册用户</span><strong>{{ stats.total }}</strong></div>
+      <div class="stat-card"><span>已验证邮箱</span><strong>{{ stats.emailVerified }}</strong></div>
+      <div class="stat-card"><span>作者</span><strong>{{ stats.authors }}</strong></div>
+      <div class="stat-card"><span>禁言中</span><strong>{{ stats.muted }}</strong></div>
     </section>
 
+    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="message" class="muted">{{ message }}</p>
+
     <section class="table-panel" aria-label="用户列表">
-      <form class="table-toolbar">
+      <form class="table-toolbar" @submit.prevent="load">
         <input class="input" type="search" placeholder="搜索用户名、邮箱、角色" aria-label="搜索用户">
         <select class="input" aria-label="用户状态">
           <option>全部状态</option>
@@ -37,7 +117,8 @@ import AdminLayout from "../../components/AdminLayout.vue";
         </select>
       </form>
 
-      <table>
+      <p v-if="loading" class="muted">正在加载用户...</p>
+      <table v-else>
         <thead>
           <tr>
             <th>用户</th>
@@ -50,41 +131,21 @@ import AdminLayout from "../../components/AdminLayout.vue";
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td><strong>林一</strong><div class="meta-row"><span>linyi@example.com</span><span>已验证邮箱</span></div></td>
-            <td>注册用户</td>
-            <td><span class="status published">正常</span></td>
-            <td>42</td>
-            <td>18</td>
-            <td>今天 15:12</td>
-            <td><div class="header-actions"><button class="button-secondary" type="button">查看</button><button class="button-secondary" type="button">禁言</button></div></td>
-          </tr>
-          <tr>
-            <td><strong>管理员</strong><div class="meta-row"><span>author@example.com</span><span>双因素已开启</span></div></td>
-            <td>管理员</td>
-            <td><span class="status published">正常</span></td>
-            <td>128</td>
-            <td>6</td>
-            <td>刚刚</td>
-            <td><button class="button-secondary" type="button">查看</button></td>
-          </tr>
-          <tr>
-            <td><strong>market_user</strong><div class="meta-row"><span>market@example.com</span><span>推广链接举报 3 次</span></div></td>
-            <td>注册用户</td>
-            <td><span class="status muted">禁言</span></td>
-            <td>9</td>
-            <td>0</td>
-            <td>12 分钟前</td>
-            <td><div class="header-actions"><button class="button-secondary" type="button">解除</button><button class="button-secondary" type="button">封禁</button></div></td>
-          </tr>
-          <tr>
-            <td><strong>noise_2048</strong><div class="meta-row"><span>noise@example.com</span><span>未验证邮箱</span></div></td>
-            <td>注册用户</td>
-            <td><span class="status banned">封禁</span></td>
-            <td>21</td>
-            <td>0</td>
-            <td>今天 09:18</td>
-            <td><button class="button-secondary" type="button">查看</button></td>
+          <tr v-for="user in users" :key="user.id">
+            <td><strong>{{ user.displayName }}</strong><div class="meta-row"><span>{{ user.email }}</span><span>{{ user.emailVerified ? "已验证邮箱" : "未验证邮箱" }}</span><span v-if="user.moderationNote">{{ user.moderationNote }}</span></div></td>
+            <td>{{ roleText(user.role) }}</td>
+            <td><span class="status" :class="statusClass(user.status)">{{ statusText(user.status) }}</span></td>
+            <td>{{ user.commentCount }}</td>
+            <td>{{ user.bookmarkCount }}</td>
+            <td>{{ formatDate(user.lastLoginAt) }}</td>
+            <td>
+              <div class="header-actions">
+                <button class="button-secondary" type="button">查看</button>
+                <button v-if="user.status === 'active'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'muted')">禁言</button>
+                <button v-else class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'active')">解除</button>
+                <button v-if="user.status !== 'banned'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'banned')">封禁</button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>

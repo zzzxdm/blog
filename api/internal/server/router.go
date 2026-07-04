@@ -12,6 +12,7 @@ import (
 	"blog/api/internal/modules/posts"
 	"blog/api/internal/modules/reactions"
 	"blog/api/internal/modules/submissions"
+	"blog/api/internal/modules/users"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +33,7 @@ type Repositories struct {
 	MessageRepo    messages.Repository
 	SubmissionRepo submissions.Repository
 	OperationsRepo operations.Repository
+	UserRepo       users.Repository
 }
 
 func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engine {
@@ -60,6 +62,9 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	if repos.OperationsRepo == nil {
 		repos.OperationsRepo = operations.NewMemoryRepository()
 	}
+	if repos.UserRepo == nil {
+		repos.UserRepo = users.NewMemoryRepository()
+	}
 
 	router := gin.New()
 	router.Use(gin.Logger())
@@ -84,6 +89,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
 	operations.RegisterRoutes(api, repos.OperationsRepo)
+	users.RegisterRoutes(api, repos.UserRepo)
 
 	var publisher posts.Publisher
 	if item, ok := repos.PostRepo.(posts.Publisher); ok {
