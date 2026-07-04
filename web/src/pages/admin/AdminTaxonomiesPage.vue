@@ -1,0 +1,323 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+
+import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  createAdminCategory,
+  createAdminTag,
+  deleteAdminCategory,
+  deleteAdminTag,
+  getCategories,
+  getTags,
+  updateAdminCategory,
+  updateAdminTag,
+  type Category,
+  type Tag
+} from "../../shared/api";
+
+const categories = ref<Category[]>([]);
+const tags = ref<Tag[]>([]);
+const loading = ref(false);
+const saving = ref(false);
+const actingId = ref("");
+const error = ref("");
+const message = ref("");
+
+const categoryId = ref("");
+const categoryName = ref("");
+const categorySlug = ref("");
+const categoryDescription = ref("");
+const categorySortOrder = ref(10);
+
+const tagId = ref("");
+const tagName = ref("");
+const tagSlug = ref("");
+
+const categoryPostTotal = computed(() => categories.value.reduce((sum, item) => sum + item.postCount, 0));
+const tagPostTotal = computed(() => tags.value.reduce((sum, item) => sum + item.postCount, 0));
+const unusedCategories = computed(() => categories.value.filter((item) => item.postCount === 0).length);
+const unusedTags = computed(() => tags.value.filter((item) => item.postCount === 0).length);
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const [categoryResult, tagResult] = await Promise.all([getCategories(), getTags()]);
+    categories.value = categoryResult.items;
+    tags.value = tagResult.items;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "分类标签加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function resetCategoryForm() {
+  categoryId.value = "";
+  categoryName.value = "";
+  categorySlug.value = "";
+  categoryDescription.value = "";
+  categorySortOrder.value = nextCategorySortOrder();
+}
+
+function editCategory(item: Category) {
+  categoryId.value = item.id;
+  categoryName.value = item.name;
+  categorySlug.value = item.slug;
+  categoryDescription.value = item.description;
+  categorySortOrder.value = item.sortOrder;
+}
+
+async function saveCategory() {
+  saving.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const payload = {
+      name: categoryName.value,
+      slug: categorySlug.value,
+      description: categoryDescription.value,
+      sortOrder: categorySortOrder.value
+    };
+
+    if (categoryId.value) {
+      await updateAdminCategory(categoryId.value, payload);
+      message.value = "分类已更新。";
+    } else {
+      await createAdminCategory(payload);
+      message.value = "分类已创建。";
+    }
+
+    resetCategoryForm();
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "分类保存失败";
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function removeCategory(item: Category) {
+  if (item.postCount > 0 || !window.confirm(`删除分类「${item.name}」？`)) {
+    return;
+  }
+
+  actingId.value = item.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await deleteAdminCategory(item.id);
+    if (categoryId.value === item.id) {
+      resetCategoryForm();
+    }
+    message.value = "分类已删除。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "分类删除失败";
+  } finally {
+    actingId.value = "";
+  }
+}
+
+function resetTagForm() {
+  tagId.value = "";
+  tagName.value = "";
+  tagSlug.value = "";
+}
+
+function editTag(item: Tag) {
+  tagId.value = item.id;
+  tagName.value = item.name;
+  tagSlug.value = item.slug;
+}
+
+async function saveTag() {
+  saving.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const payload = {
+      name: tagName.value,
+      slug: tagSlug.value
+    };
+
+    if (tagId.value) {
+      await updateAdminTag(tagId.value, payload);
+      message.value = "标签已更新。";
+    } else {
+      await createAdminTag(payload);
+      message.value = "标签已创建。";
+    }
+
+    resetTagForm();
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "标签保存失败";
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function removeTag(item: Tag) {
+  if (item.postCount > 0 || !window.confirm(`删除标签「${item.name}」？`)) {
+    return;
+  }
+
+  actingId.value = item.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await deleteAdminTag(item.id);
+    if (tagId.value === item.id) {
+      resetTagForm();
+    }
+    message.value = "标签已删除。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "标签删除失败";
+  } finally {
+    actingId.value = "";
+  }
+}
+
+function nextCategorySortOrder() {
+  const maxOrder = Math.max(0, ...categories.value.map((item) => item.sortOrder));
+  return maxOrder + 10;
+}
+</script>
+
+<template>
+  <AdminLayout title="分类标签" description="管理文章分类、标签、排序和引用关系，保持内容结构稳定。" mobile-title="分类标签" primary-action="写作">
+    <template #actions>
+      <div class="header-actions">
+        <button class="button-secondary" type="button" :disabled="loading" @click="load">刷新</button>
+        <RouterLink class="button" to="/admin/editor">写文章</RouterLink>
+      </div>
+    </template>
+
+    <section class="stats-grid" aria-label="分类标签统计">
+      <div class="stat-card"><span>分类</span><strong>{{ categories.length }}</strong></div>
+      <div class="stat-card"><span>标签</span><strong>{{ tags.length }}</strong></div>
+      <div class="stat-card"><span>分类引用</span><strong>{{ categoryPostTotal }}</strong></div>
+      <div class="stat-card"><span>可清理</span><strong>{{ unusedCategories + unusedTags }}</strong></div>
+    </section>
+
+    <p v-if="loading" class="muted">正在加载分类标签...</p>
+    <p v-else-if="error" class="error">{{ error }}</p>
+    <p v-if="message" class="muted">{{ message }}</p>
+
+    <section class="admin-grid-2">
+      <section class="table-panel" aria-label="分类列表">
+        <div class="panel-title" style="padding: 16px 16px 0;">
+          <h2>分类</h2>
+          <button class="button-secondary" type="button" @click="resetCategoryForm">新建分类</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>Slug</th>
+              <th>排序</th>
+              <th>文章</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in categories" :key="item.id">
+              <td>
+                <strong>{{ item.name }}</strong>
+                <div class="meta-row"><span>{{ item.description || "无描述" }}</span></div>
+              </td>
+              <td>{{ item.slug }}</td>
+              <td>{{ item.sortOrder }}</td>
+              <td>{{ item.postCount }}</td>
+              <td>
+                <div class="header-actions">
+                  <button class="button-secondary" type="button" @click="editCategory(item)">编辑</button>
+                  <button class="button-secondary" type="button" :disabled="item.postCount > 0 || actingId === item.id" @click="removeCategory(item)">删除</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-title">
+          <h2>{{ categoryId ? "编辑分类" : "新建分类" }}</h2>
+          <span class="tag">{{ unusedCategories }} 个未使用</span>
+        </div>
+        <form class="settings-stack" @submit.prevent="saveCategory">
+          <div class="field"><label for="category-name">名称</label><input v-model="categoryName" class="input" id="category-name"></div>
+          <div class="field"><label for="category-slug">Slug</label><input v-model="categorySlug" class="input" id="category-slug"></div>
+          <div class="field"><label for="category-description">描述</label><textarea v-model="categoryDescription" class="input" id="category-description"></textarea></div>
+          <div class="field"><label for="category-order">排序</label><input v-model.number="categorySortOrder" class="input" id="category-order" type="number"></div>
+          <div class="header-actions">
+            <button class="button" type="submit" :disabled="saving || !categoryName">{{ saving ? "保存中..." : "保存分类" }}</button>
+            <button class="button-secondary" type="button" @click="resetCategoryForm">清空</button>
+          </div>
+        </form>
+      </aside>
+    </section>
+
+    <section class="admin-grid-2" style="margin-top: 20px;">
+      <section class="table-panel" aria-label="标签列表">
+        <div class="panel-title" style="padding: 16px 16px 0;">
+          <h2>标签</h2>
+          <button class="button-secondary" type="button" @click="resetTagForm">新建标签</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>Slug</th>
+              <th>文章</th>
+              <th>热度</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in tags" :key="item.id">
+              <td><strong>{{ item.name }}</strong></td>
+              <td>{{ item.slug }}</td>
+              <td>{{ item.postCount }}</td>
+              <td><span class="status" :class="item.postCount > 0 ? 'published' : 'muted'">{{ item.postCount > 0 ? "使用中" : "未使用" }}</span></td>
+              <td>
+                <div class="header-actions">
+                  <button class="button-secondary" type="button" @click="editTag(item)">编辑</button>
+                  <button class="button-secondary" type="button" :disabled="item.postCount > 0 || actingId === item.id" @click="removeTag(item)">删除</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-title">
+          <h2>{{ tagId ? "编辑标签" : "新建标签" }}</h2>
+          <span class="tag rust">{{ tagPostTotal }} 次引用</span>
+        </div>
+        <form class="settings-stack" @submit.prevent="saveTag">
+          <div class="field"><label for="tag-name">名称</label><input v-model="tagName" class="input" id="tag-name"></div>
+          <div class="field"><label for="tag-slug">Slug</label><input v-model="tagSlug" class="input" id="tag-slug"></div>
+          <div class="review-note">
+            <strong>标签用于跨分类检索</strong>
+            <p>删除前需要先确认没有文章引用；合并标签可通过编辑文章标签完成。</p>
+          </div>
+          <div class="header-actions">
+            <button class="button" type="submit" :disabled="saving || !tagName">{{ saving ? "保存中..." : "保存标签" }}</button>
+            <button class="button-secondary" type="button" @click="resetTagForm">清空</button>
+          </div>
+        </form>
+      </aside>
+    </section>
+  </AdminLayout>
+</template>

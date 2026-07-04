@@ -16,6 +16,7 @@ import AdminPostsPage from "../pages/admin/AdminPostsPage.vue";
 import AdminSettingsPage from "../pages/admin/AdminSettingsPage.vue";
 import AdminStatsPage from "../pages/admin/AdminStatsPage.vue";
 import AdminSubmissionsPage from "../pages/admin/AdminSubmissionsPage.vue";
+import AdminTaxonomiesPage from "../pages/admin/AdminTaxonomiesPage.vue";
 import AdminUsersPage from "../pages/admin/AdminUsersPage.vue";
 import ArchivePage from "../pages/ArchivePage.vue";
 import ArticlePage from "../pages/ArticlePage.vue";
@@ -44,6 +45,7 @@ export const router = createRouter({
     { path: "/admin/posts", name: "admin-posts", component: AdminPostsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/submissions", name: "admin-submissions", component: AdminSubmissionsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/editor", name: "admin-editor", component: AdminEditorPage, meta: { hideChrome: true, requiresAdmin: true } },
+    { path: "/admin/taxonomies", name: "admin-taxonomies", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/comments", name: "admin-comments", component: AdminCommentsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/users", name: "admin-users", component: AdminUsersPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/messages", name: "admin-messages", component: AdminMessagesPage, meta: { hideChrome: true, requiresAdmin: true } },
