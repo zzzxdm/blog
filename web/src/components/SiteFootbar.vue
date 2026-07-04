@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
-import type { NavItem, OperationsNavigation } from "../shared/api";
+import { getPosts, type NavItem, type OperationsNavigation } from "../shared/api";
 
 const props = withDefaults(defineProps<{
   navigation?: OperationsNavigation | null;
@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<{
 const siteStartDate = new Date(2020, 7, 21, 0, 0, 0);
 const currentYear = new Date().getFullYear();
 const runtimeText = ref("");
+const siteStats = ref<{ postCount: number; viewCount: number; wordCount: number } | null>(null);
 const defaultFooterItems: NavItem[] = [
   { id: "footer_default_home", label: "首页", url: "/", order: 1 },
   { id: "footer_default_archive", label: "归档", url: "/archive", order: 2 },
@@ -64,6 +65,38 @@ function updateRuntime() {
   runtimeText.value = getRuntimeText();
 }
 
+async function loadSiteStats() {
+  try {
+    const response = await getPosts({ page: 1, pageSize: 50 });
+    siteStats.value = {
+      postCount: response.total,
+      viewCount: response.items.reduce((sum, post) => sum + post.viewCount, 0),
+      wordCount: response.items.reduce((sum, post) => sum + estimateWords(post.content || `${post.title}${post.summary}`), 0)
+    };
+  } catch {
+    siteStats.value = null;
+  }
+}
+
+function estimateWords(value: string) {
+  return value.replace(/\s+/g, "").length;
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("zh-CN").format(value);
+}
+
+function formatWords(value: number) {
+  if (value >= 10000) {
+    return `${(value / 10000).toFixed(1)}w`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+
+  return String(value);
+}
+
 function orderedNavItems(items: NavItem[]) {
   return [...items]
     .filter((item) => item.label.trim() && item.url.trim())
@@ -84,6 +117,7 @@ function opensNewWindow(url: string) {
 
 onMounted(() => {
   updateRuntime();
+  void loadSiteStats();
   timer = window.setInterval(updateRuntime, 1000);
 });
 
@@ -101,7 +135,11 @@ onUnmounted(() => {
         <div>Copyright © {{ currentYear }} <strong>{{ siteName }}</strong>.</div>
         <div>{{ runtimeText }}</div>
         <div v-if="beian">{{ beian }}</div>
-        <div>总访问量: 47087 人次 <span>|</span> 访客人数: 28294 人 <span>|</span> 字数统计: 46.8k 字</div>
+        <div v-if="siteStats">
+          总阅读量: {{ formatNumber(siteStats.viewCount) }} 次 <span>|</span>
+          文章数: {{ formatNumber(siteStats.postCount) }} 篇 <span>|</span>
+          字数统计: {{ formatWords(siteStats.wordCount) }} 字
+        </div>
       </div>
       <div class="footbar-tools">
         <nav v-if="footerItems.length" class="footer-links" aria-label="底部导航">
