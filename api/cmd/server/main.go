@@ -12,6 +12,7 @@ import (
 
 	"blog/api/internal/config"
 	"blog/api/internal/database"
+	"blog/api/internal/modules/adminposts"
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/comments"
 	"blog/api/internal/modules/messages"
@@ -59,15 +60,16 @@ func main() {
 			submissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
 			operationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
 			userRepo, userErr := users.NewSQLRepository(setupCtx, db)
+			adminPostRepo, adminPostErr := adminposts.NewSQLRepository(setupCtx, db)
 			cancelSetup()
 
-			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil || userErr != nil {
+			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil || userErr != nil || adminPostErr != nil {
 				if cfg.AppEnv == "production" {
-					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr)
+					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr, "admin_posts", adminPostErr)
 					os.Exit(1)
 				}
 
-				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr)
+				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr, "admin_posts", adminPostErr)
 			} else {
 				router = appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
 					AuthStore:      authStore,
@@ -78,6 +80,7 @@ func main() {
 					SubmissionRepo: submissionRepo,
 					OperationsRepo: operationsRepo,
 					UserRepo:       userRepo,
+					AdminPostRepo:  adminPostRepo,
 				})
 			}
 		}
