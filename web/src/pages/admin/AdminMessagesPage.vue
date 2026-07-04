@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
@@ -19,6 +19,7 @@ const sending = ref(false);
 const exporting = ref(false);
 const error = ref("");
 const message = ref("");
+const selectedId = ref("");
 
 const recipientId = ref("user_linyi");
 const recipientName = ref("林一");
@@ -27,6 +28,8 @@ const priority = ref("normal");
 const title = ref("优质投稿用户邀请");
 const body = ref("你最近的投稿质量较高，欢迎继续提交工程实践和写作工作流相关内容。");
 const targetTitle = ref("投稿激励");
+
+const selectedMessage = computed(() => messages.value.find((item) => item.id === selectedId.value) || messages.value[0]);
 
 onMounted(load);
 
@@ -38,6 +41,9 @@ async function load() {
     const response = await getAdminMessages();
     messages.value = response.items;
     stats.value = response.stats;
+    if (!messages.value.some((item) => item.id === selectedId.value)) {
+      selectedId.value = messages.value[0]?.id || "";
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信记录加载失败";
   } finally {
@@ -85,6 +91,12 @@ async function exportMessages() {
   }
 }
 
+function viewMessage(item: StationMessage) {
+  selectedId.value = item.id;
+  message.value = "";
+  error.value = "";
+}
+
 function formatTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
     month: "2-digit",
@@ -118,6 +130,16 @@ function typeClass(value: MessageType) {
     return "muted";
   }
   return "published";
+}
+
+function statusText(value: StationMessage["status"]) {
+  if (value === "archived") {
+    return "已归档";
+  }
+  if (value === "read") {
+    return "已读";
+  }
+  return "未读";
 }
 </script>
 
@@ -180,30 +202,49 @@ function typeClass(value: MessageType) {
               <td>1 / 1</td>
               <td>{{ item.status === "unread" ? "0 / 1" : "1 / 1" }}</td>
               <td>{{ formatTime(item.createdAt) }}</td>
-              <td><button class="button-secondary" type="button">查看</button></td>
+              <td><button class="button-secondary" type="button" @click="viewMessage(item)">查看</button></td>
             </tr>
           </tbody>
         </table>
       </section>
 
-      <aside class="panel">
-        <div class="panel-title">
-          <h2>发送站内信</h2>
-        </div>
-        <form class="message-compose" @submit.prevent="send">
-          <div class="field"><label for="message-scope">接收范围</label><select class="input" id="message-scope"><option>指定用户</option><option>全部注册用户</option><option>按角色发送</option><option>按用户筛选条件发送</option></select></div>
-          <div class="field"><label for="message-recipient">接收人 ID</label><input v-model="recipientId" class="input" id="message-recipient"></div>
-          <div class="field"><label for="message-recipient-name">接收人名称</label><input v-model="recipientName" class="input" id="message-recipient-name"></div>
-          <div class="field"><label for="message-type">消息类型</label><select v-model="messageType" class="input" id="message-type"><option value="admin">管理员消息</option><option value="review">投稿审核</option><option value="system">站点公告</option><option value="account">系统事件</option></select></div>
-          <div class="field"><label for="message-priority">优先级</label><select v-model="priority" class="input" id="message-priority"><option value="normal">普通</option><option value="important">重要</option><option value="urgent">紧急</option></select></div>
-          <div class="field"><label for="message-title">标题</label><input v-model="title" class="input" id="message-title"></div>
-          <div class="field"><label for="message-content">正文</label><textarea v-model="body" class="input" id="message-content"></textarea></div>
-          <div class="field"><label for="message-target">关联目标</label><input v-model="targetTitle" class="input" id="message-target"></div>
-          <div class="header-actions">
-            <button class="button" type="submit" :disabled="sending">{{ sending ? "发送中..." : "发送" }}</button>
-            <button class="button-secondary" type="button">定时</button>
+      <aside class="settings-stack">
+        <section v-if="selectedMessage" class="panel">
+          <div class="panel-title">
+            <h2>消息详情</h2>
+            <span class="status" :class="typeClass(selectedMessage.type)">{{ statusText(selectedMessage.status) }}</span>
           </div>
-        </form>
+          <div class="settings-stack">
+            <div class="field"><label for="detail-title">标题</label><input class="input" id="detail-title" :value="selectedMessage.title" readonly></div>
+            <div class="field"><label for="detail-body">正文</label><textarea class="input" id="detail-body" :value="selectedMessage.body" readonly></textarea></div>
+            <div class="admin-grid-2">
+              <div class="field"><label for="detail-recipient">接收人</label><input class="input" id="detail-recipient" :value="selectedMessage.recipientName" readonly></div>
+              <div class="field"><label for="detail-type">类型</label><input class="input" id="detail-type" :value="typeText(selectedMessage.type)" readonly></div>
+            </div>
+            <div class="field"><label for="detail-target">关联目标</label><input class="input" id="detail-target" :value="selectedMessage.targetTitle || selectedMessage.targetId || '无'" readonly></div>
+            <div class="meta-row"><span>发送人 {{ selectedMessage.senderName }}</span><span>{{ formatTime(selectedMessage.createdAt) }}</span></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h2>发送站内信</h2>
+          </div>
+          <form class="message-compose" @submit.prevent="send">
+            <div class="field"><label for="message-scope">接收范围</label><select class="input" id="message-scope"><option>指定用户</option><option>全部注册用户</option><option>按角色发送</option><option>按用户筛选条件发送</option></select></div>
+            <div class="field"><label for="message-recipient">接收人 ID</label><input v-model="recipientId" class="input" id="message-recipient"></div>
+            <div class="field"><label for="message-recipient-name">接收人名称</label><input v-model="recipientName" class="input" id="message-recipient-name"></div>
+            <div class="field"><label for="message-type">消息类型</label><select v-model="messageType" class="input" id="message-type"><option value="admin">管理员消息</option><option value="review">投稿审核</option><option value="system">站点公告</option><option value="account">系统事件</option></select></div>
+            <div class="field"><label for="message-priority">优先级</label><select v-model="priority" class="input" id="message-priority"><option value="normal">普通</option><option value="important">重要</option><option value="urgent">紧急</option></select></div>
+            <div class="field"><label for="message-title">标题</label><input v-model="title" class="input" id="message-title"></div>
+            <div class="field"><label for="message-content">正文</label><textarea v-model="body" class="input" id="message-content"></textarea></div>
+            <div class="field"><label for="message-target">关联目标</label><input v-model="targetTitle" class="input" id="message-target"></div>
+            <div class="header-actions">
+              <button class="button" type="submit" :disabled="sending">{{ sending ? "发送中..." : "发送" }}</button>
+              <button class="button-secondary" type="button">定时</button>
+            </div>
+          </form>
+        </section>
       </aside>
     </section>
   </AdminLayout>
