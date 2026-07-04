@@ -22,6 +22,13 @@ type session struct {
 	ExpiresAt time.Time
 }
 
+type Store interface {
+	Authenticate(email string, password string) (User, string, error)
+	Register(request RegisterRequest) (User, string, error)
+	UserBySession(token string) (User, error)
+	DeleteSession(token string)
+}
+
 type MemoryStore struct {
 	mu             sync.RWMutex
 	usersByID      map[string]User

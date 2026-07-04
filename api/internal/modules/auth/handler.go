@@ -14,14 +14,14 @@ const (
 )
 
 type Handler struct {
-	store *MemoryStore
+	store Store
 }
 
-func NewHandler(store *MemoryStore) *Handler {
+func NewHandler(store Store) *Handler {
 	return &Handler{store: store}
 }
 
-func RegisterRoutes(router gin.IRouter, store *MemoryStore) {
+func RegisterRoutes(router gin.IRouter, store Store) {
 	handler := NewHandler(store)
 
 	router.POST("/auth/login", handler.Login)
@@ -30,7 +30,7 @@ func RegisterRoutes(router gin.IRouter, store *MemoryStore) {
 	router.GET("/me", handler.Me)
 }
 
-func Middleware(store *MemoryStore) gin.HandlerFunc {
+func Middleware(store Store) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token, err := ctx.Cookie(SessionCookieName)
 		if err != nil || token == "" {

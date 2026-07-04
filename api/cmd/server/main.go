@@ -12,7 +12,10 @@ import (
 
 	"blog/api/internal/config"
 	"blog/api/internal/database"
+	"blog/api/internal/modules/auth"
+	"blog/api/internal/modules/comments"
 	"blog/api/internal/modules/posts"
+	"blog/api/internal/modules/reactions"
 	appserver "blog/api/internal/server"
 )
 
@@ -44,7 +47,27 @@ func main() {
 			slog.Warn("database migration failed, using in-memory repositories", "error", err)
 		} else {
 			cancelMigrate()
-			router = appserver.NewRouterWithPostsRepository(cfg, posts.NewSQLRepository(db))
+			setupCtx, cancelSetup := context.WithTimeout(ctx, 10*time.Second)
+			authStore, authErr := auth.NewSQLStore(setupCtx, db)
+			commentRepo, commentErr := comments.NewSQLRepository(setupCtx, db)
+			reactionRepo, reactionErr := reactions.NewSQLRepository(setupCtx, db)
+			cancelSetup()
+
+			if authErr != nil || commentErr != nil || reactionErr != nil {
+				if cfg.AppEnv == "production" {
+					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr)
+					os.Exit(1)
+				}
+
+				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr)
+			} else {
+				router = appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
+					AuthStore:    authStore,
+					PostRepo:     posts.NewSQLRepository(db),
+					CommentRepo:  commentRepo,
+					ReactionRepo: reactionRepo,
+				})
+			}
 		}
 	}
 
