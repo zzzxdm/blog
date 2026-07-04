@@ -33,9 +33,42 @@ const editCategory = ref("");
 const editTags = ref("");
 const editCoverImage = ref("");
 const editSlug = ref("");
+const searchQuery = ref("");
+const sortMode = ref("latest");
 
 const selected = computed(() => submissions.value.find((item) => item.id === selectedId.value) || submissions.value[0]);
 const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).map((item) => item.trim()).filter(Boolean) || []);
+const visibleSubmissions = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  const riskRank: Record<string, number> = { 高: 3, 中: 2, 低: 1 };
+  const filtered = submissions.value.filter((item) => {
+    if (!keyword) {
+      return true;
+    }
+
+    return [
+      item.title,
+      item.summary,
+      item.authorName,
+      item.authorId,
+      item.category,
+      item.slug,
+      item.tags.join(" "),
+      item.riskLevel
+    ].join(" ").toLowerCase().includes(keyword);
+  });
+
+  return [...filtered].sort((left, right) => {
+    if (sortMode.value === "risk") {
+      return (riskRank[right.riskLevel] || 0) - (riskRank[left.riskLevel] || 0);
+    }
+    if (sortMode.value === "quality") {
+      return right.wordCount - left.wordCount;
+    }
+
+    return submissionTime(right) - submissionTime(left);
+  });
+});
 
 onMounted(load);
 
@@ -189,6 +222,10 @@ function formatDate(value?: string) {
   });
 }
 
+function submissionTime(item: Submission) {
+  return new Date(item.submittedAt || item.updatedAt || item.createdAt).getTime();
+}
+
 function statusText(value: Submission["status"]) {
   if (value === "submitted") {
     return "待审核";
@@ -242,7 +279,7 @@ function statusClass(value: Submission["status"]) {
       <div class="settings-stack">
         <section class="table-panel">
           <form class="table-toolbar" @submit.prevent="load">
-            <input class="input" type="search" placeholder="搜索投稿标题、投稿人、标签" aria-label="搜索投稿">
+            <input v-model="searchQuery" class="input" type="search" placeholder="搜索投稿标题、投稿人、标签" aria-label="搜索投稿">
             <select v-model="filterStatus" class="input" aria-label="投稿状态" @change="load">
               <option value="">全部状态</option>
               <option value="submitted">待审核</option>
@@ -250,10 +287,10 @@ function statusClass(value: Submission["status"]) {
               <option value="published">已发布</option>
               <option value="rejected">已拒绝</option>
             </select>
-            <select class="input" aria-label="排序">
-              <option>最近提交</option>
-              <option>高风险优先</option>
-              <option>高质量优先</option>
+            <select v-model="sortMode" class="input" aria-label="排序">
+              <option value="latest">最近提交</option>
+              <option value="risk">高风险优先</option>
+              <option value="quality">高质量优先</option>
             </select>
           </form>
 
@@ -270,7 +307,7 @@ function statusClass(value: Submission["status"]) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in submissions" :key="item.id">
+              <tr v-for="item in visibleSubmissions" :key="item.id">
                 <td>
                   <strong>{{ item.title }}</strong>
                   <div class="meta-row"><span>{{ item.category }}</span><span>{{ item.wordCount }} 字</span></div>
@@ -280,6 +317,9 @@ function statusClass(value: Submission["status"]) {
                 <td>{{ item.riskLevel }}</td>
                 <td>{{ formatDate(item.submittedAt) }}</td>
                 <td><button class="button-secondary" type="button" @click="selectedId = item.id">查看</button></td>
+              </tr>
+              <tr v-if="visibleSubmissions.length === 0">
+                <td colspan="6" class="muted">没有匹配的投稿。</td>
               </tr>
             </tbody>
           </table>

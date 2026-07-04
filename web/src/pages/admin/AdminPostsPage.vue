@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
@@ -19,6 +19,38 @@ const importing = ref(false);
 const error = ref("");
 const message = ref("");
 const importInput = ref<HTMLInputElement | null>(null);
+const searchQuery = ref("");
+const statusFilter = ref("");
+const sortMode = ref("updated");
+
+const visiblePosts = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  const filtered = posts.value.filter((post) => {
+    const matchesKeyword = !keyword || [
+      post.title,
+      post.summary,
+      post.authorName,
+      post.category,
+      post.slug,
+      post.tags.join(" ")
+    ].join(" ").toLowerCase().includes(keyword);
+    const matchesStatus = statusFilter.value === "" || post.status === statusFilter.value;
+
+    return matchesKeyword && matchesStatus;
+  });
+
+  return [...filtered].sort((left, right) => {
+    if (sortMode.value === "views") {
+      return right.viewCount - left.viewCount;
+    }
+    if (sortMode.value === "scheduled") {
+      const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
+      return leftTime - rightTime;
+    }
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+});
 
 onMounted(load);
 
@@ -190,17 +222,19 @@ function formatDate(value: string) {
 
     <section class="table-panel" aria-label="文章列表">
       <form class="table-toolbar" @submit.prevent="load">
-        <input class="input" type="search" placeholder="搜索标题、作者、标签" aria-label="搜索文章">
-        <select class="input" aria-label="文章状态">
-          <option>全部状态</option>
-          <option>已发布</option>
-          <option>草稿</option>
-          <option>待审核</option>
+        <input v-model="searchQuery" class="input" type="search" placeholder="搜索标题、作者、标签" aria-label="搜索文章">
+        <select v-model="statusFilter" class="input" aria-label="文章状态">
+          <option value="">全部状态</option>
+          <option value="published">已发布</option>
+          <option value="draft">草稿</option>
+          <option value="review">待审核</option>
+          <option value="scheduled">待发布</option>
+          <option value="archived">已归档</option>
         </select>
-        <select class="input" aria-label="排序">
-          <option>最近更新</option>
-          <option>最多阅读</option>
-          <option>定时发布</option>
+        <select v-model="sortMode" class="input" aria-label="排序">
+          <option value="updated">最近更新</option>
+          <option value="views">最多阅读</option>
+          <option value="scheduled">定时发布</option>
         </select>
       </form>
 
@@ -220,7 +254,7 @@ function formatDate(value: string) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="post in posts" :key="post.id">
+          <tr v-for="post in visiblePosts" :key="post.id">
             <td>
               <strong>{{ post.title }}</strong>
               <div class="meta-row">
@@ -235,6 +269,9 @@ function formatDate(value: string) {
             <td>{{ post.commentCount }}</td>
             <td>{{ formatDate(post.updatedAt) }}</td>
             <td><RouterLink class="button-secondary" :to="`/admin/editor?id=${post.id}`">编辑</RouterLink></td>
+          </tr>
+          <tr v-if="visiblePosts.length === 0">
+            <td colspan="7" class="muted">没有匹配的文章。</td>
           </tr>
         </tbody>
       </table>

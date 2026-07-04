@@ -26,11 +26,39 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const editAlt = ref("");
 const editCategory = ref("");
 const selectedAssetIds = ref<string[]>([]);
+const searchQuery = ref("");
+const typeFilter = ref("");
+const sortMode = ref("latest");
 
 const selected = computed(() => assets.value.find((item) => item.id === selectedId.value) || assets.value[0]);
 const selectedBatchAssets = computed(() => assets.value.filter((item) => selectedAssetIds.value.includes(item.id)));
 const deletableBatchAssets = computed(() => selectedBatchAssets.value.filter((item) => item.usageCount === 0));
 const blockedBatchCount = computed(() => selectedBatchAssets.value.length - deletableBatchAssets.value.length);
+const visibleAssets = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  const filtered = assets.value.filter((asset) => {
+    const matchesKeyword = !keyword || [
+      asset.fileName,
+      asset.alt,
+      asset.uploadedBy,
+      asset.category,
+      asset.url
+    ].join(" ").toLowerCase().includes(keyword);
+    const matchesType = typeFilter.value === "" || asset.type === typeFilter.value;
+
+    return matchesKeyword && matchesType;
+  });
+
+  return [...filtered].sort((left, right) => {
+    if (sortMode.value === "size") {
+      return sizeValue(right.sizeLabel) - sizeValue(left.sizeLabel);
+    }
+    if (sortMode.value === "usage") {
+      return right.usageCount - left.usageCount;
+    }
+    return new Date(right.uploadedAt).getTime() - new Date(left.uploadedAt).getTime();
+  });
+});
 
 onMounted(load);
 watch(selected, (asset) => {
@@ -236,6 +264,20 @@ function typeLabel(type: string) {
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("zh-CN");
 }
+
+function sizeValue(label: string) {
+  const value = Number.parseFloat(label);
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (label.includes("MB")) {
+    return value * 1024 * 1024;
+  }
+  if (label.includes("KB")) {
+    return value * 1024;
+  }
+  return value;
+}
 </script>
 
 <template>
@@ -254,17 +296,16 @@ function formatDate(value: string) {
     <section class="admin-grid-2">
       <div>
         <form class="media-toolbar" @submit.prevent="load">
-          <input class="input" type="search" placeholder="搜索文件名、alt 文本、上传人" aria-label="搜索媒体">
-          <select class="input" aria-label="文件类型">
-            <option>全部类型</option>
-            <option>图片</option>
-            <option>文档</option>
-            <option>视频</option>
+          <input v-model="searchQuery" class="input" type="search" placeholder="搜索文件名、alt 文本、上传人" aria-label="搜索媒体">
+          <select v-model="typeFilter" class="input" aria-label="文件类型">
+            <option value="">全部类型</option>
+            <option value="image">图片</option>
+            <option value="document">文档</option>
           </select>
-          <select class="input" aria-label="排序">
-            <option>最近上传</option>
-            <option>文件最大</option>
-            <option>使用最多</option>
+          <select v-model="sortMode" class="input" aria-label="排序">
+            <option value="latest">最近上传</option>
+            <option value="size">文件最大</option>
+            <option value="usage">使用最多</option>
           </select>
         </form>
 
@@ -278,7 +319,7 @@ function formatDate(value: string) {
           </p>
 
           <section class="media-grid" aria-label="媒体资源">
-            <article v-for="asset in assets" :key="asset.id" class="media-card" :class="{ 'is-selected': isBatchSelected(asset.id) }" @click="batchMode ? toggleBatchAsset(asset) : selectAsset(asset.id)">
+            <article v-for="asset in visibleAssets" :key="asset.id" class="media-card" :class="{ 'is-selected': isBatchSelected(asset.id) }" @click="batchMode ? toggleBatchAsset(asset) : selectAsset(asset.id)">
               <label v-if="batchMode" class="media-card-checkbox" @click.stop>
                 <input type="checkbox" :checked="isBatchSelected(asset.id)" @change="toggleBatchAsset(asset)">
               </label>
@@ -286,6 +327,7 @@ function formatDate(value: string) {
               <div v-else class="media-card-file">{{ typeLabel(asset.type) }}</div>
               <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>
             </article>
+            <p v-if="visibleAssets.length === 0" class="muted">没有匹配的媒体资源。</p>
           </section>
         </template>
       </div>
