@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+
+import { getSiteSettings, type SiteSettings } from "../shared/api";
 
 defineProps<{
   title: string;
@@ -10,6 +13,9 @@ defineProps<{
 }>();
 
 const route = useRoute();
+const siteSettings = ref<SiteSettings | null>(null);
+const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间笔记");
+const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
 
 const navItems = [
   { label: "查看站点", to: "/" },
@@ -28,6 +34,18 @@ const navItems = [
   { label: "设置", to: "/admin/settings" }
 ];
 
+onMounted(() => {
+  void loadSiteSettings();
+});
+
+async function loadSiteSettings() {
+  try {
+    siteSettings.value = await getSiteSettings();
+  } catch {
+    siteSettings.value = null;
+  }
+}
+
 function isActive(to: string) {
   if (to === "/") {
     return false;
@@ -40,7 +58,7 @@ function isActive(to: string) {
 <template>
   <div class="mobile-admin-bar">
     <RouterLink class="brand" to="/admin">
-      <span class="brand-mark">云</span>
+      <span class="brand-mark">{{ brandMark }}</span>
       <span>{{ mobileTitle || title }}</span>
     </RouterLink>
     <RouterLink v-if="primaryAction && primaryActionTo" class="button" :to="primaryActionTo">{{ primaryAction }}</RouterLink>
@@ -49,8 +67,8 @@ function isActive(to: string) {
   <div class="admin-shell">
     <aside class="admin-sidebar">
       <RouterLink class="admin-brand" to="/admin">
-        <span class="brand-mark">云</span>
-        <span>云间笔记后台</span>
+        <span class="brand-mark">{{ brandMark }}</span>
+        <span>{{ siteName }}后台</span>
       </RouterLink>
       <nav class="admin-nav" aria-label="后台导航">
         <RouterLink
