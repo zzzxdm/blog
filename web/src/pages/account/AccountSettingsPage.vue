@@ -76,6 +76,37 @@ async function save() {
   }
 }
 
+function changeAvatarText() {
+  if (!settings.value) {
+    return;
+  }
+
+  const value = window.prompt("头像文字", settings.value.avatarText || settings.value.displayName.slice(0, 1));
+  if (value === null) {
+    return;
+  }
+
+  const next = Array.from(value.trim()).slice(0, 2).join("");
+  if (!next) {
+    error.value = "头像文字不能为空";
+    return;
+  }
+
+  settings.value.avatarText = next;
+  message.value = "头像已更新，保存设置后生效。";
+  error.value = "";
+}
+
+function resetAvatarText() {
+  if (!settings.value) {
+    return;
+  }
+
+  settings.value.avatarText = Array.from(settings.value.displayName.trim() || "用")[0];
+  message.value = "头像已重置为昵称首字，保存设置后生效。";
+  error.value = "";
+}
+
 async function savePassword() {
   if (!currentPassword.value || !newPassword.value) {
     error.value = "请输入当前密码和新密码";
@@ -230,7 +261,7 @@ function formatDate(value: string) {
         <section class="panel">
           <div class="panel-title"><h2>公开资料</h2></div>
           <div class="settings-stack">
-            <div class="profile-hero"><span class="avatar">{{ settings.avatarText }}</span><div class="header-actions"><button class="button-secondary" type="button">更换头像</button><button class="button-secondary" type="button">移除</button></div></div>
+            <div class="profile-hero"><span class="avatar">{{ settings.avatarText }}</span><div class="header-actions"><button class="button-secondary" type="button" @click="changeAvatarText">更换头像</button><button class="button-secondary" type="button" @click="resetAvatarText">移除</button></div></div>
             <div class="field"><label for="display-name">昵称</label><input v-model="settings.displayName" class="input" id="display-name"></div>
             <div class="field"><label for="username">用户名</label><input v-model="settings.username" class="input" id="username"></div>
             <div class="field"><label for="bio">个人简介</label><textarea v-model="settings.bio" class="input" id="bio"></textarea></div>

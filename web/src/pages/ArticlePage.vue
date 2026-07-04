@@ -30,6 +30,7 @@ const avatarText = computed(() => post.value?.authorName.slice(0, 1) || "管");
 const comments = ref<Comment[]>([]);
 const commentTotal = ref(0);
 const commentBody = ref("");
+const commentsSort = ref<"newest" | "oldest">("newest");
 const commentsLoading = ref(false);
 const commentError = ref("");
 const commentNotice = ref("");
@@ -39,10 +40,26 @@ const relatedPosts = ref<Post[]>([]);
 const reaction = ref<ReactionSummary | null>(null);
 const reactionLoading = ref(false);
 const reactionError = ref("");
+const codeCopied = ref(false);
+const codeSnippet = `type PostStatus = "draft" | "submitted" | "scheduled" | "published" | "archived";
+
+interface Post {
+  title: string;
+  slug: string;
+  status: PostStatus;
+  publishedAt?: Date;
+}`;
 const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCount ?? 0);
 const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
 const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 34);
 const renderedPostContent = computed(() => renderMarkdown(post.value?.content ?? ""));
+const visibleComments = computed(() => {
+  return [...comments.value].sort((left, right) => {
+    const leftTime = new Date(left.createdAt).getTime();
+    const rightTime = new Date(right.createdAt).getTime();
+    return commentsSort.value === "newest" ? rightTime - leftTime : leftTime - rightTime;
+  });
+});
 
 function load() {
   const slug = String(route.params.slug || "");
@@ -149,6 +166,22 @@ async function loadRelatedPosts(slug: string) {
   } catch {
     relatedPosts.value = [];
   }
+}
+
+async function copyCode() {
+  try {
+    await navigator.clipboard.writeText(codeSnippet);
+    codeCopied.value = true;
+    window.setTimeout(() => {
+      codeCopied.value = false;
+    }, 1600);
+  } catch {
+    reactionError.value = "复制失败，请手动选择代码";
+  }
+}
+
+function toggleCommentsSort() {
+  commentsSort.value = commentsSort.value === "newest" ? "oldest" : "newest";
 }
 
 async function updateReaction(type: "like" | "dislike") {
@@ -344,16 +377,9 @@ watch(() => auth.user?.id, () => {
           <div class="code-block">
             <div class="code-header">
               <span>post-status.ts</span>
-              <button class="button-secondary" type="button">复制</button>
+              <button class="button-secondary" type="button" @click="copyCode">{{ codeCopied ? "已复制" : "复制" }}</button>
             </div>
-            <pre><code>type PostStatus = "draft" | "submitted" | "scheduled" | "published" | "archived";
-
-interface Post {
-  title: string;
-  slug: string;
-  status: PostStatus;
-  publishedAt?: Date;
-}</code></pre>
+            <pre><code>{{ codeSnippet }}</code></pre>
           </div>
 
           <h2 id="reading">阅读体验要克制</h2>
@@ -408,7 +434,7 @@ interface Post {
               <h2>评论</h2>
               <p>{{ commentTotal || post.commentCount }} 条讨论，评论提交后进入审核队列。</p>
             </div>
-            <button class="button-secondary" type="button">按时间排序</button>
+            <button class="button-secondary" type="button" @click="toggleCommentsSort">{{ commentsSort === "newest" ? "最新在前" : "最早在前" }}</button>
           </div>
           <div class="comment-box">
             <div class="author-row">
@@ -440,7 +466,7 @@ interface Post {
             <p v-if="commentsLoading" class="muted">正在加载评论...</p>
             <template v-else>
               <article
-                v-for="comment in comments"
+                v-for="comment in visibleComments"
                 :key="comment.id"
                 class="comment-item"
                 :class="{ reply: comment.parentId }"
@@ -465,7 +491,7 @@ interface Post {
                     {{ comment.liked ? "已赞" : "点赞" }} {{ comment.likeCount }}
                   </button>
                   <button type="button" @click="startReply(comment)">回复{{ comment.replyCount ? ` ${comment.replyCount}` : "" }}</button>
-                  <button v-if="comment.isMine" type="button">编辑</button>
+                  <RouterLink v-if="comment.isMine" to="/account/comments">管理</RouterLink>
                   <button v-else type="button" :disabled="commentActionId === comment.id" @click="reportCommentAction(comment)">举报</button>
                 </div>
               </article>

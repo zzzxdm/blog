@@ -13,8 +13,42 @@ const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, reject
 const loading = ref(false);
 const error = ref("");
 const status = ref("");
+const searchQuery = ref("");
+const sortMode = ref("updated");
 
 const returnedSubmission = computed(() => submissions.value.find((item) => item.status === "returned" && item.reviewNote));
+const visibleSubmissions = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  const filtered = submissions.value.filter((item) => {
+    if (!keyword) {
+      return true;
+    }
+
+    return [
+      item.title,
+      item.summary,
+      item.category,
+      item.slug,
+      item.reviewNote,
+      item.tags.join(" ")
+    ].join(" ").toLowerCase().includes(keyword);
+  });
+
+  return [...filtered].sort((left, right) => {
+    if (sortMode.value === "submitted") {
+      return dateValue(right.submittedAt || right.updatedAt) - dateValue(left.submittedAt || left.updatedAt);
+    }
+    if (sortMode.value === "published") {
+      const leftPublished = left.status === "published" ? 1 : 0;
+      const rightPublished = right.status === "published" ? 1 : 0;
+      if (leftPublished !== rightPublished) {
+        return rightPublished - leftPublished;
+      }
+      return dateValue(right.publishedAt || right.updatedAt) - dateValue(left.publishedAt || left.updatedAt);
+    }
+    return dateValue(right.updatedAt) - dateValue(left.updatedAt);
+  });
+});
 
 onMounted(load);
 
@@ -44,6 +78,10 @@ function formatDate(value?: string) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function dateValue(value?: string) {
+  return value ? new Date(value).getTime() : 0;
 }
 
 function statusText(value: Submission["status"]) {
@@ -91,7 +129,7 @@ function statusClass(value: Submission["status"]) {
 
     <section class="table-panel">
       <form class="table-toolbar" @submit.prevent="load">
-        <input class="input" type="search" placeholder="搜索投稿标题" aria-label="搜索投稿">
+        <input v-model="searchQuery" class="input" type="search" placeholder="搜索投稿标题" aria-label="搜索投稿">
         <select v-model="status" class="input" aria-label="投稿状态" @change="load">
           <option value="">全部状态</option>
           <option value="draft">草稿</option>
@@ -99,7 +137,11 @@ function statusClass(value: Submission["status"]) {
           <option value="returned">退回修改</option>
           <option value="published">已发布</option>
         </select>
-        <select class="input" aria-label="排序"><option>最近更新</option><option>最近提交</option><option>已发布优先</option></select>
+        <select v-model="sortMode" class="input" aria-label="排序">
+          <option value="updated">最近更新</option>
+          <option value="submitted">最近提交</option>
+          <option value="published">已发布优先</option>
+        </select>
       </form>
 
       <p v-if="loading" class="muted">正在加载投稿...</p>
@@ -110,7 +152,7 @@ function statusClass(value: Submission["status"]) {
           <tr><th>投稿</th><th>状态</th><th>分类</th><th>提交时间</th><th>审核意见</th><th>操作</th></tr>
         </thead>
         <tbody>
-          <tr v-for="item in submissions" :key="item.id">
+          <tr v-for="item in visibleSubmissions" :key="item.id">
             <td><strong>{{ item.title }}</strong><div class="meta-row"><span>版本 {{ item.version }}</span><span>{{ item.wordCount }} 字</span></div></td>
             <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
             <td>{{ item.category }}</td>
@@ -118,8 +160,11 @@ function statusClass(value: Submission["status"]) {
             <td>{{ item.reviewNote || (item.status === "submitted" ? "等待编辑审核" : "未提交审核") }}</td>
             <td>
               <RouterLink v-if="item.status === 'published' && item.publishedPostSlug" class="button-secondary" :to="`/posts/${item.publishedPostSlug}`">查看文章</RouterLink>
-              <RouterLink v-else class="button-secondary" to="/submit">{{ item.status === "draft" || item.status === "returned" ? "继续编辑" : "查看" }}</RouterLink>
+              <RouterLink v-else class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}`">{{ item.status === "draft" || item.status === "returned" ? "继续编辑" : "查看" }}</RouterLink>
             </td>
+          </tr>
+          <tr v-if="visibleSubmissions.length === 0">
+            <td colspan="6" class="muted">没有匹配的投稿。</td>
           </tr>
         </tbody>
       </table>

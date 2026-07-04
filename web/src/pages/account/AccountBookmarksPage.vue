@@ -11,6 +11,9 @@ import {
 const bookmarks = ref<BookmarkItem[]>([]);
 const loading = ref(false);
 const error = ref("");
+const searchQuery = ref("");
+const categoryFilter = ref("");
+const sortMode = ref("bookmarked");
 
 const engineeringCount = computed(() => bookmarks.value.filter((item) => item.category === "工程实践").length);
 const thisMonthCount = computed(() => {
@@ -19,6 +22,31 @@ const thisMonthCount = computed(() => {
     const date = new Date(item.bookmarkedAt);
     return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
   }).length;
+});
+const categoryOptions = computed(() => Array.from(new Set(bookmarks.value.map((item) => item.category))).filter(Boolean));
+const visibleBookmarks = computed(() => {
+  const keyword = searchQuery.value.trim().toLowerCase();
+  const filtered = bookmarks.value.filter((item) => {
+    const matchesKeyword = !keyword || [
+      item.title,
+      item.summary,
+      item.category,
+      item.tags.join(" ")
+    ].join(" ").toLowerCase().includes(keyword);
+    const matchesCategory = !categoryFilter.value || item.category === categoryFilter.value;
+
+    return matchesKeyword && matchesCategory;
+  });
+
+  return [...filtered].sort((left, right) => {
+    if (sortMode.value === "published") {
+      return new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
+    }
+    if (sortMode.value === "views") {
+      return right.viewCount - left.viewCount;
+    }
+    return new Date(right.bookmarkedAt).getTime() - new Date(left.bookmarkedAt).getTime();
+  });
 });
 
 onMounted(load);
@@ -64,21 +92,28 @@ function formatDate(value: string) {
       <div class="stat-card"><span>收藏文章</span><strong>{{ bookmarks.length }}</strong></div>
       <div class="stat-card"><span>本月新增</span><strong>{{ thisMonthCount }}</strong></div>
       <div class="stat-card"><span>工程实践</span><strong>{{ engineeringCount }}</strong></div>
-      <div class="stat-card"><span>待读</span><strong>0</strong></div>
+      <div class="stat-card"><span>当前显示</span><strong>{{ visibleBookmarks.length }}</strong></div>
     </section>
 
     <section class="panel">
       <form class="archive-toolbar" @submit.prevent="load">
-        <input class="input" type="search" placeholder="搜索收藏文章" aria-label="搜索收藏">
-        <select class="input" aria-label="收藏分类"><option>全部分类</option><option>工程实践</option><option>产品设计</option><option>内容治理</option></select>
-        <select class="input" aria-label="排序"><option>最近收藏</option><option>最近发布</option><option>阅读最多</option></select>
+        <input v-model="searchQuery" class="input" type="search" placeholder="搜索收藏文章" aria-label="搜索收藏">
+        <select v-model="categoryFilter" class="input" aria-label="收藏分类">
+          <option value="">全部分类</option>
+          <option v-for="item in categoryOptions" :key="item" :value="item">{{ item }}</option>
+        </select>
+        <select v-model="sortMode" class="input" aria-label="排序">
+          <option value="bookmarked">最近收藏</option>
+          <option value="published">最近发布</option>
+          <option value="views">阅读最多</option>
+        </select>
       </form>
 
       <p v-if="loading" class="muted">正在加载收藏...</p>
       <p v-else-if="error" class="error">{{ error }}</p>
 
       <div v-else class="article-list">
-        <article v-for="item in bookmarks" :key="item.slug" class="article-card">
+        <article v-for="item in visibleBookmarks" :key="item.slug" class="article-card">
           <img :src="item.coverImage" :alt="item.title">
           <div class="article-card-body">
             <div class="meta-row"><span class="tag">{{ item.category }}</span><span>收藏于 {{ formatDate(item.bookmarkedAt) }}</span></div>
@@ -91,7 +126,7 @@ function formatDate(value: string) {
             </div>
           </div>
         </article>
-        <p v-if="bookmarks.length === 0" class="muted">还没有收藏文章。</p>
+        <p v-if="visibleBookmarks.length === 0" class="muted">没有匹配的收藏文章。</p>
       </div>
     </section>
   </AccountLayout>
