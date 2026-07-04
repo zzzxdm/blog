@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>评论管理 - 云间笔记后台</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="mobile-admin-bar">
+      <a class="brand" href="./admin-posts.html">
+        <span class="brand-mark">云</span>
+        <span>评论管理</span>
+      </a>
+      <button class="button" type="button">批量通过</button>
+    </div>
+
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <a class="admin-brand" href="./admin-posts.html">
+          <span class="brand-mark">云</span>
+          <span>云间笔记后台</span>
+        </a>
+        <nav class="admin-nav" aria-label="后台导航">
+          <a href="./index.html">查看站点</a>
+          <a href="./admin-posts.html">文章</a>
+          <a href="./admin-submissions.html">投稿</a>
+          <a href="./editor.html">写作</a>
+          <a class="active" href="./admin-comments.html">评论</a>
+          <a href="./admin-users.html">用户</a>
+          <a href="./admin-messages.html">站内信</a>
+          <a href="./admin-media.html">媒体库</a>
+          <a href="./admin-navigation.html">导航</a>
+          <a href="./admin-stats.html">统计</a>
+          <a href="./admin-settings.html">设置</a>
+        </nav>
+      </aside>
+
+      <main class="admin-main">
+        <header class="admin-topbar">
+          <div>
+            <h1>评论管理</h1>
+            <p>审核用户评论、处理举报，并对异常用户进行禁言或封禁。</p>
+          </div>
+          <div class="header-actions">
+            <button class="button-secondary" type="button">导出</button>
+            <button class="button" type="button">批量通过</button>
+          </div>
+        </header>
+
+        <section class="stats-grid" aria-label="评论统计">
+          <div class="stat-card">
+            <span>待审核</span>
+            <strong>23</strong>
+          </div>
+          <div class="stat-card">
+            <span>今日新增</span>
+            <strong>58</strong>
+          </div>
+          <div class="stat-card">
+            <span>举报待处理</span>
+            <strong>6</strong>
+          </div>
+          <div class="stat-card">
+            <span>拦截垃圾评论</span>
+            <strong>142</strong>
+          </div>
+        </section>
+
+        <section class="table-panel" aria-label="评论列表">
+          <form class="table-toolbar">
+            <input class="input" type="search" placeholder="搜索评论内容、用户、文章" aria-label="搜索评论">
+            <select class="input" aria-label="评论状态">
+              <option>全部状态</option>
+              <option>待审核</option>
+              <option>已通过</option>
+              <option>已拒绝</option>
+              <option>举报中</option>
+            </select>
+            <select class="input" aria-label="排序">
+              <option>最新提交</option>
+              <option>举报优先</option>
+              <option>点赞最多</option>
+            </select>
+          </form>
+
+          <table>
+            <thead>
+              <tr>
+                <th>评论</th>
+                <th>用户</th>
+                <th>文章</th>
+                <th>状态</th>
+                <th>风险</th>
+                <th>时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>如果后续支持 Newsletter，是否建议把订阅用户和平台注册用户合并？</strong>
+                  <div class="meta-row">
+                    <span>IP：192.168.1.24</span>
+                    <span>回复主评论 #128</span>
+                  </div>
+                </td>
+                <td>
+                  林一
+                  <div class="meta-row">
+                    <span>已验证邮箱</span>
+                  </div>
+                </td>
+                <td>如何设计一个内容长期增长的博客系统</td>
+                <td><span class="status review">待审核</span></td>
+                <td>低</td>
+                <td>刚刚</td>
+                <td>
+                  <div class="header-actions">
+                    <button class="button-secondary" type="button">通过</button>
+                    <button class="button-secondary" type="button">拒绝</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>这条评论包含推广链接，需要人工确认是否保留。</strong>
+                  <div class="meta-row">
+                    <span>检测到外链</span>
+                    <span>被举报 3 次</span>
+                  </div>
+                </td>
+                <td>
+                  market_user
+                  <div class="meta-row">
+                    <span>新注册用户</span>
+                  </div>
+                </td>
+                <td>让旧文章继续被搜索引擎找到</td>
+                <td><span class="status review">举报中</span></td>
+                <td>高</td>
+                <td>12 分钟前</td>
+                <td>
+                  <div class="header-actions">
+                    <button class="button-secondary" type="button">删除</button>
+                    <button class="button-secondary" type="button">禁言</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>版本历史对于多人协作很重要，个人博客其实也需要。</strong>
+                  <div class="meta-row">
+                    <span>18 次点赞</span>
+                  </div>
+                </td>
+                <td>
+                  林一
+                  <div class="meta-row">
+                    <span>42 条评论</span>
+                  </div>
+                </td>
+                <td>为什么博客后台需要文章版本历史</td>
+                <td><span class="status published">已通过</span></td>
+                <td>低</td>
+                <td>昨天</td>
+                <td>
+                  <div class="header-actions">
+                    <button class="button-secondary" type="button">置顶</button>
+                    <button class="button-secondary" type="button">删除</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>重复刷屏内容，已被系统自动折叠。</strong>
+                  <div class="meta-row">
+                    <span>同 IP 5 分钟内提交 8 次</span>
+                  </div>
+                </td>
+                <td>
+                  noise_2048
+                  <div class="meta-row">
+                    <span>未验证邮箱</span>
+                  </div>
+                </td>
+                <td>Redis 和 PostgreSQL 在博客中的分工</td>
+                <td><span class="status banned">垃圾评论</span></td>
+                <td>高</td>
+                <td>今天 09:18</td>
+                <td>
+                  <div class="header-actions">
+                    <button class="button-secondary" type="button">封禁</button>
+                    <button class="button-secondary" type="button">查看</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

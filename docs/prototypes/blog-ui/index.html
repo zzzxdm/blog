@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>云间笔记 - 博客首页原型</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav">
+        <a class="brand" href="./index.html" aria-label="云间笔记首页">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a class="active" href="./index.html">首页</a>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./archive.html">归档 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./archive.html">全部文章</a>
+              <a href="./archive.html">工程实践</a>
+              <a href="./archive.html">产品设计</a>
+              <a href="./archive.html">内容运营</a>
+            </div>
+          </div>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./topics.html">专题 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./topics.html">博客系统</a>
+              <a href="./topics.html">Vue3 内容站</a>
+              <a href="./topics.html">写作工作流</a>
+              <a href="./topics.html">资源清单</a>
+            </div>
+          </div>
+          <a href="./submit.html">投稿</a>
+          <a href="./account.html">我的</a>
+          <a href="./admin-posts.html">后台</a>
+        </nav>
+        <div class="header-actions">
+          <button class="icon-button" data-search-open type="button" aria-label="搜索">⌕</button>
+          <button class="icon-button" aria-label="切换深色模式">◐</button>
+          <a class="button-secondary" href="./login.html">登录</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="section-heading">
+        <div>
+          <h1>今天值得读</h1>
+          <p>技术、产品、工程实践和长期写作的沉淀。</p>
+        </div>
+        <div class="meta-row">
+          <span>128 篇文章</span>
+          <span>24 个专题</span>
+          <span>每周更新</span>
+        </div>
+      </section>
+
+      <section class="hero-grid" aria-label="精选内容">
+        <article class="feature">
+          <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80" alt="桌面上的代码编辑器和开发设备">
+          <div class="feature-content">
+            <div class="meta-row">
+              <span class="tag">工程实践</span>
+              <span>12 分钟阅读</span>
+              <span>2026-07-04</span>
+            </div>
+            <h1><a href="./article.html">如何设计一个内容长期增长的博客系统</a></h1>
+            <p>从内容模型、发布流程、SEO、缓存、搜索和数据治理出发，搭一套真正能长期维护的博客基础设施。</p>
+            <a class="button" href="./article.html">阅读全文</a>
+          </div>
+        </article>
+
+        <aside class="side-stack" aria-label="本周精选">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>本周精选</h2>
+              <a class="tag amber" href="./archive.html">更多</a>
+            </div>
+            <ol class="rank-list">
+              <li>
+                <span class="rank-number">1</span>
+                <a href="./article.html">
+                  <strong>Vue3 内容站的缓存与 SEO 边界</strong>
+                  <span>性能优化 · 8 分钟</span>
+                </a>
+              </li>
+              <li>
+                <span class="rank-number">2</span>
+                <a href="./article.html">
+                  <strong>为什么博客后台需要文章版本历史</strong>
+                  <span>内容治理 · 6 分钟</span>
+                </a>
+              </li>
+              <li>
+                <span class="rank-number">3</span>
+                <a href="./article.html">
+                  <strong>把 Markdown 写作体验做到顺手</strong>
+                  <span>编辑器 · 9 分钟</span>
+                </a>
+              </li>
+            </ol>
+          </section>
+
+        </aside>
+      </section>
+
+      <section class="article-layout home-latest-layout" aria-label="最新文章">
+        <div>
+          <div class="section-heading">
+            <div>
+              <h2>最新文章</h2>
+              <p>按发布时间排序，适合快速浏览最近更新。</p>
+            </div>
+            <a class="button-secondary" href="./archive.html">查看归档</a>
+          </div>
+
+          <div class="article-list">
+            <article class="article-card">
+              <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80" alt="笔记本电脑上的产品分析页面">
+              <div class="article-card-body">
+                <div class="meta-row">
+                  <span class="tag">产品设计</span>
+                  <span>10 分钟阅读</span>
+                </div>
+                <h3><a href="./article.html">从首页到文章页，博客的信息架构怎么排</a></h3>
+                <p>首页负责分发，文章页负责阅读，归档页负责找回内容。三者的密度和交互应该完全不同。</p>
+                <div class="meta-row">
+                  <span>2026-07-03</span>
+                  <span>2,184 次阅读</span>
+                  <span>18 条评论</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="article-card">
+              <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=900&q=80" alt="服务器机房和网络设备">
+              <div class="article-card-body">
+                <div class="meta-row">
+                  <span class="tag rust">架构</span>
+                  <span>14 分钟阅读</span>
+                </div>
+                <h3><a href="./article.html">Redis 和 PostgreSQL 在博客中的分工</a></h3>
+                <p>PostgreSQL 保存事实并承担全文搜索，Redis 负责热点读取和削峰，边界清楚后系统更容易维护。</p>
+                <div class="meta-row">
+                  <span>2026-07-01</span>
+                  <span>3,019 次阅读</span>
+                  <span>25 条评论</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="article-card">
+              <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=900&q=80" alt="团队围绕电脑讨论界面设计">
+              <div class="article-card-body">
+                <div class="meta-row">
+                  <span class="tag amber">运营</span>
+                  <span>7 分钟阅读</span>
+                </div>
+                <h3><a href="./article.html">RSS 是博客最稳定的分发入口</a></h3>
+                <p>早期先保留 RSS，把邮件订阅和推送能力放到内容稳定增长后再开启。</p>
+                <div class="meta-row">
+                  <span>2026-06-29</span>
+                  <span>1,624 次阅读</span>
+                  <span>9 条评论</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <aside class="sidebar">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>专题</h2>
+            </div>
+            <div class="tag-cloud">
+              <a class="tag" href="./topics.html">Vue3</a>
+              <a class="tag rust" href="./topics.html">系统架构</a>
+              <a class="tag amber" href="./topics.html">写作工作流</a>
+              <a class="tag" href="./topics.html">SEO</a>
+              <a class="tag rust" href="./topics.html">数据库</a>
+              <a class="tag amber" href="./topics.html">内容运营</a>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title">
+              <h2>开放投稿</h2>
+              <span class="tag">审核制</span>
+            </div>
+            <p style="margin: 0 0 14px; color: var(--muted);">登录用户可以提交原创文章，审核通过后发布到站点。</p>
+            <a class="button" href="./submit.html">开始投稿</a>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title">
+              <h2>站点状态</h2>
+            </div>
+            <ul class="link-list">
+              <li>
+                <strong>本月更新</strong>
+                <span>12 篇文章 · 3 个专题</span>
+              </li>
+              <li>
+                <strong>热门分类</strong>
+                <span>工程实践、产品设计、内容系统</span>
+              </li>
+              <li>
+                <strong>读者反馈</strong>
+                <span>评论审核通过率 92%</span>
+              </li>
+            </ul>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <site-footbar></site-footbar>
+    <script src="./footbar.js"></script>
+    <site-search></site-search>
+    <site-backtop></site-backtop>
+    <script src="./site-widgets.js"></script>
+  </body>
+</html>

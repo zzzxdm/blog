@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>导航管理 - 云间笔记后台</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="mobile-admin-bar">
+      <a class="brand" href="./admin-navigation.html">
+        <span class="brand-mark">云</span>
+        <span>导航管理</span>
+      </a>
+      <button class="button" type="button">保存</button>
+    </div>
+
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <a class="admin-brand" href="./admin-posts.html">
+          <span class="brand-mark">云</span>
+          <span>云间笔记后台</span>
+        </a>
+        <nav class="admin-nav" aria-label="后台导航">
+          <a href="./index.html">查看站点</a>
+          <a href="./admin-posts.html">文章</a>
+          <a href="./admin-submissions.html">投稿</a>
+          <a href="./editor.html">写作</a>
+          <a href="./admin-comments.html">评论</a>
+          <a href="./admin-users.html">用户</a>
+          <a href="./admin-messages.html">站内信</a>
+          <a href="./admin-media.html">媒体库</a>
+          <a class="active" href="./admin-navigation.html">导航</a>
+          <a href="./admin-stats.html">统计</a>
+          <a href="./admin-settings.html">设置</a>
+        </nav>
+      </aside>
+
+      <main class="admin-main">
+        <header class="admin-topbar">
+          <div>
+            <h1>导航管理</h1>
+            <p>配置前台顶部菜单、底部菜单、社交链接和常用重定向。</p>
+          </div>
+          <div class="header-actions">
+            <button class="button-secondary" type="button">预览站点</button>
+            <button class="button" type="button">保存导航</button>
+          </div>
+        </header>
+
+        <section class="admin-grid-2">
+          <div class="settings-stack">
+            <section class="panel">
+              <div class="panel-title">
+                <h2>顶部导航</h2>
+                <button class="button-secondary" type="button">添加菜单</button>
+              </div>
+              <div class="nav-builder">
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="首页" aria-label="菜单名称">
+                  <input class="input" value="/" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="归档" aria-label="菜单名称">
+                  <input class="input" value="/archive" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="专题" aria-label="菜单名称">
+                  <input class="input" value="/topics" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="关于" aria-label="菜单名称">
+                  <input class="input" value="/about" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h2>底部导航</h2>
+                <button class="button-secondary" type="button">添加菜单</button>
+              </div>
+              <div class="nav-builder">
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="RSS" aria-label="菜单名称">
+                  <input class="input" value="/rss.xml" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="友情链接" aria-label="菜单名称">
+                  <input class="input" value="/friends" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+                <article class="nav-item">
+                  <span class="drag-handle">≡</span>
+                  <input class="input" value="隐私政策" aria-label="菜单名称">
+                  <input class="input" value="/privacy" aria-label="菜单链接">
+                  <button class="button-secondary" type="button">删除</button>
+                </article>
+              </div>
+            </section>
+          </div>
+
+          <aside class="settings-stack">
+            <section class="panel">
+              <div class="panel-title">
+                <h2>菜单设置</h2>
+              </div>
+              <div class="settings-stack">
+                <div class="setting-row">
+                  <div>
+                    <strong>移动端折叠菜单</strong>
+                    <div class="meta-row">
+                      <span>窄屏时隐藏横向导航</span>
+                    </div>
+                  </div>
+                  <span class="switch"></span>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>外链新窗口打开</strong>
+                    <div class="meta-row">
+                      <span>对外部链接自动添加安全属性</span>
+                    </div>
+                  </div>
+                  <span class="switch"></span>
+                </div>
+                <div class="setting-row">
+                  <div>
+                    <strong>显示登录入口</strong>
+                    <div class="meta-row">
+                      <span>前台顶部展示用户入口</span>
+                    </div>
+                  </div>
+                  <span class="switch"></span>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h2>社交链接</h2>
+              </div>
+              <div class="settings-stack">
+                <div class="field">
+                  <label for="github">GitHub</label>
+                  <input class="input" id="github" value="https://github.com/example">
+                </div>
+                <div class="field">
+                  <label for="email">联系邮箱</label>
+                  <input class="input" id="email" value="hello@example.com">
+                </div>
+                <div class="field">
+                  <label for="rss">RSS</label>
+                  <input class="input" id="rss" value="/rss.xml">
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h2>重定向</h2>
+                <span class="tag rust">12 条</span>
+              </div>
+              <ul class="link-list">
+                <li>
+                  <strong>/old-blog-design</strong>
+                  <span>301 到 /posts/blog-system-design</span>
+                </li>
+                <li>
+                  <strong>/newsletter</strong>
+                  <span>302 到 /topics/content-growth</span>
+                </li>
+              </ul>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

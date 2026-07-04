@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>文章归档 - 云间笔记</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav">
+        <a class="brand" href="./index.html" aria-label="云间笔记首页">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="./index.html">首页</a>
+          <div class="nav-menu-item">
+            <a class="active nav-parent" href="./archive.html">归档 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./archive.html">全部文章</a>
+              <a href="./archive.html">工程实践</a>
+              <a href="./archive.html">产品设计</a>
+              <a href="./archive.html">内容运营</a>
+            </div>
+          </div>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./topics.html">专题 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./topics.html">博客系统</a>
+              <a href="./topics.html">Vue3 内容站</a>
+              <a href="./topics.html">写作工作流</a>
+              <a href="./topics.html">资源清单</a>
+            </div>
+          </div>
+          <a href="./submit.html">投稿</a>
+          <a href="./account.html">我的</a>
+          <a href="./admin-posts.html">后台</a>
+        </nav>
+        <div class="header-actions">
+          <button class="icon-button" data-search-open type="button" aria-label="搜索">⌕</button>
+          <button class="icon-button" aria-label="切换深色模式">◐</button>
+          <a class="button-secondary" href="./login.html">登录</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="section-heading">
+        <div>
+          <h1>文章归档</h1>
+          <p>按专题、标签和关键词查找内容。</p>
+        </div>
+        <div class="meta-row">
+          <span>128 篇文章</span>
+          <span>24 个专题</span>
+          <span>16,840 次阅读</span>
+        </div>
+      </section>
+
+      <form class="archive-toolbar">
+        <input class="input" type="search" placeholder="搜索标题、摘要或标签" aria-label="搜索文章">
+        <select class="input" aria-label="选择分类">
+          <option>全部分类</option>
+          <option>工程实践</option>
+          <option>产品设计</option>
+          <option>内容运营</option>
+        </select>
+        <select class="input" aria-label="排序方式">
+          <option>最新发布</option>
+          <option>阅读最多</option>
+          <option>评论最多</option>
+        </select>
+      </form>
+
+      <div class="archive-viewbar">
+        <div class="meta-row">
+          <span data-page-indicator>第 1 页</span>
+          <span>共 128 篇文章</span>
+          <span>每页 12 篇</span>
+        </div>
+        <div class="view-toggle" aria-label="归档展示方式">
+          <button class="active" type="button" data-archive-view-button="grid">卡片</button>
+          <button type="button" data-archive-view-button="list">列表</button>
+        </div>
+      </div>
+
+      <section class="compact-grid archive-view" data-archive-view="grid" aria-label="文章卡片列表">
+        <article class="compact-card">
+          <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80" alt="电脑屏幕上的产品数据图表">
+          <div class="compact-card-body">
+            <div class="meta-row">
+              <span class="tag">产品设计</span>
+              <span>10 分钟</span>
+            </div>
+            <h3><a href="./article.html">从首页到文章页，博客的信息架构怎么排</a></h3>
+            <p>首页、文章页、归档页承担不同任务，不能用同一种布局解决。</p>
+            <div class="meta-row">
+              <span>2026-07-03</span>
+              <span>2,184 阅读</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="compact-card">
+          <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=900&q=80" alt="服务器机房">
+          <div class="compact-card-body">
+            <div class="meta-row">
+              <span class="tag rust">架构</span>
+              <span>14 分钟</span>
+            </div>
+            <h3><a href="./article.html">Redis 和 PostgreSQL 在博客中的分工</a></h3>
+            <p>把全文搜索、缓存和事实数据拆开，系统边界会更清楚。</p>
+            <div class="meta-row">
+              <span>2026-07-01</span>
+              <span>3,019 阅读</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="compact-card">
+          <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=900&q=80" alt="团队讨论写作和产品界面">
+          <div class="compact-card-body">
+            <div class="meta-row">
+              <span class="tag amber">运营</span>
+              <span>7 分钟</span>
+            </div>
+            <h3><a href="./article.html">Newsletter 不是附加功能</a></h3>
+            <p>订阅关系是内容系统最重要的长期资产之一。</p>
+            <div class="meta-row">
+              <span>2026-06-29</span>
+              <span>1,624 阅读</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="compact-card">
+          <img src="https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=900&q=80" alt="代码编辑器中的 JavaScript 文件">
+          <div class="compact-card-body">
+            <div class="meta-row">
+              <span class="tag">Vue3</span>
+              <span>8 分钟</span>
+            </div>
+            <h3><a href="./article.html">Vue3 内容站的缓存与 SEO 边界</a></h3>
+            <p>客户端渲染、接口缓存和服务端 meta 需要明确边界。</p>
+            <div class="meta-row">
+              <span>2026-06-25</span>
+              <span>4,120 阅读</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="compact-card">
+          <img src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80" alt="桌面上的笔记本和手写草稿">
+          <div class="compact-card-body">
+            <div class="meta-row">
+              <span class="tag rust">写作工作流</span>
+              <span>6 分钟</span>
+            </div>
+            <h3><a href="./article.html">为什么博客后台需要文章版本历史</a></h3>
+            <p>版本记录不是复杂功能，而是内容资产的基本保险。</p>
+            <div class="meta-row">
+              <span>2026-06-18</span>
+              <span>1,988 阅读</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="compact-card">
+          <img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80" alt="安静的工作空间和窗外自然光">
+          <div class="compact-card-body">
+            <div class="meta-row">
+              <span class="tag amber">SEO</span>
+              <span>9 分钟</span>
+            </div>
+            <h3><a href="./article.html">让旧文章继续被搜索引擎找到</a></h3>
+            <p>重定向、canonical、Sitemap 和结构化数据是长期流量基础。</p>
+            <div class="meta-row">
+              <span>2026-06-12</span>
+              <span>2,470 阅读</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="archive-list archive-view" data-archive-view="list" aria-label="文章列表" hidden>
+        <article class="archive-list-item">
+          <div class="archive-list-main">
+            <div class="meta-row">
+              <span class="tag">产品设计</span>
+              <span>2026-07-03</span>
+              <span>10 分钟阅读</span>
+            </div>
+            <h3><a href="./article.html">从首页到文章页，博客的信息架构怎么排</a></h3>
+            <p>首页、文章页、归档页承担不同任务，不能用同一种布局解决。</p>
+          </div>
+          <div class="archive-list-side">
+            <span>2,184 阅读</span>
+            <span>18 评论</span>
+          </div>
+        </article>
+
+        <article class="archive-list-item">
+          <div class="archive-list-main">
+            <div class="meta-row">
+              <span class="tag rust">架构</span>
+              <span>2026-07-01</span>
+              <span>14 分钟阅读</span>
+            </div>
+            <h3><a href="./article.html">Redis 和 PostgreSQL 在博客中的分工</a></h3>
+            <p>把全文搜索、缓存和事实数据拆开，系统边界会更清楚。</p>
+          </div>
+          <div class="archive-list-side">
+            <span>3,019 阅读</span>
+            <span>25 评论</span>
+          </div>
+        </article>
+
+        <article class="archive-list-item">
+          <div class="archive-list-main">
+            <div class="meta-row">
+              <span class="tag amber">运营</span>
+              <span>2026-06-29</span>
+              <span>7 分钟阅读</span>
+            </div>
+            <h3><a href="./article.html">Newsletter 不是附加功能</a></h3>
+            <p>订阅关系是内容系统最重要的长期资产之一。</p>
+          </div>
+          <div class="archive-list-side">
+            <span>1,624 阅读</span>
+            <span>9 评论</span>
+          </div>
+        </article>
+
+        <article class="archive-list-item">
+          <div class="archive-list-main">
+            <div class="meta-row">
+              <span class="tag">Vue3</span>
+              <span>2026-06-25</span>
+              <span>8 分钟阅读</span>
+            </div>
+            <h3><a href="./article.html">Vue3 内容站的缓存与 SEO 边界</a></h3>
+            <p>客户端渲染、接口缓存和服务端 meta 需要明确边界。</p>
+          </div>
+          <div class="archive-list-side">
+            <span>4,120 阅读</span>
+            <span>31 评论</span>
+          </div>
+        </article>
+
+        <article class="archive-list-item">
+          <div class="archive-list-main">
+            <div class="meta-row">
+              <span class="tag rust">写作工作流</span>
+              <span>2026-06-18</span>
+              <span>6 分钟阅读</span>
+            </div>
+            <h3><a href="./article.html">为什么博客后台需要文章版本历史</a></h3>
+            <p>版本记录不是复杂功能，而是内容资产的基本保险。</p>
+          </div>
+          <div class="archive-list-side">
+            <span>1,988 阅读</span>
+            <span>12 评论</span>
+          </div>
+        </article>
+      </section>
+
+      <nav class="pagination" aria-label="归档分页">
+        <a class="page-button disabled" data-page-link data-page-prev href="./archive.html?page=1">←</a>
+        <a class="page-button current" data-page-link data-page-number="1" href="./archive.html?page=1">1</a>
+        <a class="page-button" data-page-link data-page-number="2" href="./archive.html?page=2">2</a>
+        <a class="page-button" data-page-link data-page-number="3" href="./archive.html?page=3">3</a>
+        <span class="page-button">...</span>
+        <a class="page-button" data-page-link data-page-number="11" href="./archive.html?page=11">11</a>
+        <a class="page-button" data-page-link data-page-next href="./archive.html?page=2">→</a>
+      </nav>
+    </main>
+    <site-footbar></site-footbar>
+    <script src="./footbar.js"></script>
+    <site-search></site-search>
+    <site-backtop></site-backtop>
+    <script src="./site-widgets.js"></script>
+  </body>
+</html>
