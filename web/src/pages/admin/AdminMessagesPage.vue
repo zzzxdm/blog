@@ -6,6 +6,8 @@ import {
   createAdminMessage,
   exportAdminMessages,
   getAdminMessages,
+  getAdminUsers,
+  type ManagedUser,
   type MessageStats,
   type MessageType,
   type StationMessage
@@ -21,6 +23,8 @@ const error = ref("");
 const message = ref("");
 const selectedId = ref("");
 
+const messageScope = ref("single");
+const targetRole = ref("author");
 const recipientId = ref("user_linyi");
 const recipientName = ref("林一");
 const messageType = ref<MessageType>("admin");
@@ -87,20 +91,27 @@ async function send() {
 
   try {
     const scheduleValue = scheduleOpen.value ? new Date(scheduledAt.value).toISOString() : "";
-    await createAdminMessage({
-      recipientId: recipientId.value,
-      recipientName: recipientName.value,
-      type: messageType.value,
-      priority: priority.value,
-      title: title.value,
-      body: body.value,
-      targetType: "admin-message",
-      targetTitle: targetTitle.value,
-      scheduledAt: scheduleValue || undefined
-    });
+    const recipients = await resolveRecipients();
+    if (!recipients.length) {
+      throw new Error("没有匹配的接收人");
+    }
+
+    for (const recipient of recipients) {
+      await createAdminMessage({
+        recipientId: recipient.id,
+        recipientName: recipient.name,
+        type: messageType.value,
+        priority: priority.value,
+        title: title.value,
+        body: body.value,
+        targetType: "admin-message",
+        targetTitle: targetTitle.value,
+        scheduledAt: scheduleValue || undefined
+      });
+    }
     message.value = scheduleValue && new Date(scheduleValue) > new Date()
-      ? `站内信已定时到 ${formatTime(scheduleValue)}。`
-      : "站内信已发送。";
+      ? `已定时 ${recipients.length} 条站内信到 ${formatTime(scheduleValue)}。`
+      : `已发送 ${recipients.length} 条站内信。`;
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信发送失败";
@@ -122,6 +133,22 @@ async function exportMessages() {
   } finally {
     exporting.value = false;
   }
+}
+
+async function resolveRecipients() {
+  if (messageScope.value === "single") {
+    return [{ id: recipientId.value.trim(), name: recipientName.value.trim() || recipientId.value.trim() }].filter((item) => item.id);
+  }
+
+  const result = await getAdminUsers();
+  return result.items
+    .filter((user) => canReceiveMessage(user))
+    .filter((user) => messageScope.value === "all" || user.role === targetRole.value)
+    .map((user) => ({ id: user.id, name: user.displayName }));
+}
+
+function canReceiveMessage(user: ManagedUser) {
+  return user.status !== "deleted" && user.status !== "banned";
 }
 
 function toggleSchedule() {
@@ -288,9 +315,10 @@ function nextScheduleValue() {
             <h2>发送站内信</h2>
           </div>
           <form class="message-compose" @submit.prevent="send">
-            <div class="field"><label for="message-scope">接收范围</label><select class="input" id="message-scope"><option>指定用户</option><option>全部注册用户</option><option>按角色发送</option><option>按用户筛选条件发送</option></select></div>
-            <div class="field"><label for="message-recipient">接收人 ID</label><input v-model="recipientId" class="input" id="message-recipient"></div>
-            <div class="field"><label for="message-recipient-name">接收人名称</label><input v-model="recipientName" class="input" id="message-recipient-name"></div>
+            <div class="field"><label for="message-scope">接收范围</label><select v-model="messageScope" class="input" id="message-scope"><option value="single">指定用户</option><option value="all">全部注册用户</option><option value="role">按角色发送</option></select></div>
+            <div v-if="messageScope === 'single'" class="field"><label for="message-recipient">接收人 ID</label><input v-model="recipientId" class="input" id="message-recipient"></div>
+            <div v-if="messageScope === 'single'" class="field"><label for="message-recipient-name">接收人名称</label><input v-model="recipientName" class="input" id="message-recipient-name"></div>
+            <div v-if="messageScope === 'role'" class="field"><label for="message-role">接收角色</label><select v-model="targetRole" class="input" id="message-role"><option value="user">注册用户</option><option value="author">作者</option><option value="editor">编辑</option><option value="admin">管理员</option></select></div>
             <div class="field"><label for="message-type">消息类型</label><select v-model="messageType" class="input" id="message-type"><option value="admin">管理员消息</option><option value="review">投稿审核</option><option value="system">站点公告</option><option value="account">系统事件</option></select></div>
             <div class="field"><label for="message-priority">优先级</label><select v-model="priority" class="input" id="message-priority"><option value="normal">普通</option><option value="important">重要</option><option value="urgent">紧急</option></select></div>
             <div class="field"><label for="message-title">标题</label><input v-model="title" class="input" id="message-title"></div>
