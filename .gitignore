@@ -26,6 +26,7 @@ Thumbs.db
 .idea/
 .vscode/
 .codex/
+.codegraph
 
 # Go
 *.test
