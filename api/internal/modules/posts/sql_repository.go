@@ -167,6 +167,27 @@ func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Post, er
 	return post, nil
 }
 
+func (repo *SQLRepository) RecordView(ctx context.Context, slug string) (Post, error) {
+	result, err := repo.db.ExecContext(ctx, `
+		UPDATE posts
+		SET view_count = view_count + 1
+		WHERE slug = $1
+			AND status = 'published'
+	`, slug)
+	if err != nil {
+		return Post{}, fmt.Errorf("record post view: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Post{}, fmt.Errorf("read post view rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Post{}, ErrNotFound
+	}
+
+	return repo.GetBySlug(ctx, slug)
+}
+
 func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Post, error) {
 	title := strings.TrimSpace(input.Title)
 	content := strings.TrimSpace(input.Content)

@@ -53,3 +53,7 @@ type PublishInput struct {
 type Publisher interface {
 	Publish(ctx context.Context, input PublishInput) (Post, error)
 }
+
+type ViewRecorder interface {
+	RecordView(ctx context.Context, slug string) (Post, error)
+}

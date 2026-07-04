@@ -76,6 +76,20 @@ func (repo *MemoryRepository) GetBySlug(_ context.Context, slug string) (Post, e
 	return Post{}, ErrNotFound
 }
 
+func (repo *MemoryRepository) RecordView(_ context.Context, slug string) (Post, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	for index := range repo.posts {
+		if repo.posts[index].Slug == slug {
+			repo.posts[index].ViewCount++
+			return repo.posts[index], nil
+		}
+	}
+
+	return Post{}, ErrNotFound
+}
+
 func (repo *MemoryRepository) Publish(_ context.Context, input PublishInput) (Post, error) {
 	title := strings.TrimSpace(input.Title)
 	content := strings.TrimSpace(input.Content)

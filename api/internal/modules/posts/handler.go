@@ -36,7 +36,7 @@ func (handler *Handler) Search(ctx *gin.Context) {
 }
 
 func (handler *Handler) GetBySlug(ctx *gin.Context) {
-	post, err := handler.repo.GetBySlug(ctx.Request.Context(), ctx.Param("slug"))
+	post, err := handler.getPostForPublicView(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
@@ -48,6 +48,15 @@ func (handler *Handler) GetBySlug(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, post)
+}
+
+func (handler *Handler) getPostForPublicView(ctx *gin.Context) (Post, error) {
+	slug := ctx.Param("slug")
+	if recorder, ok := handler.repo.(ViewRecorder); ok {
+		return recorder.RecordView(ctx.Request.Context(), slug)
+	}
+
+	return handler.repo.GetBySlug(ctx.Request.Context(), slug)
 }
 
 func (handler *Handler) list(ctx *gin.Context, forceKeyword bool) {
