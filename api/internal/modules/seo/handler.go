@@ -2,35 +2,41 @@ package seo
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
 	"strings"
 
+	"blog/api/internal/modules/operations"
 	"blog/api/internal/modules/posts"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	postRepo  posts.Repository
-	publicURL string
-	template  *template.Template
+	postRepo     posts.Repository
+	settingsRepo settingsReader
+	publicURL    string
+	template     *template.Template
 }
 
-const siteName = "云间笔记"
+type settingsReader interface {
+	GetSettings(ctx context.Context) (operations.Settings, error)
+}
 
-func NewHandler(postRepo posts.Repository, publicURL string) *Handler {
+func NewHandler(postRepo posts.Repository, settingsRepo settingsReader, publicURL string) *Handler {
 	return &Handler{
-		postRepo:  postRepo,
-		publicURL: strings.TrimRight(defaultString(publicURL, "http://localhost:5173"), "/"),
-		template:  template.Must(template.New("article").Parse(articleTemplate)),
+		postRepo:     postRepo,
+		settingsRepo: settingsRepo,
+		publicURL:    strings.TrimRight(defaultString(publicURL, "http://localhost:5173"), "/"),
+		template:     template.Must(template.New("article").Parse(articleTemplate)),
 	}
 }
 
-func RegisterRoutes(router gin.IRouter, postRepo posts.Repository, publicURL string) {
-	handler := NewHandler(postRepo, publicURL)
+func RegisterRoutes(router gin.IRouter, postRepo posts.Repository, settingsRepo settingsReader, publicURL string) {
+	handler := NewHandler(postRepo, settingsRepo, publicURL)
 
 	router.GET("/posts/:slug", handler.Article)
 }
@@ -49,6 +55,7 @@ func (handler *Handler) Article(ctx *gin.Context) {
 
 	canonical := handler.publicURL + "/posts/" + post.Slug
 	description := defaultString(post.Summary, post.Title)
+	siteName := handler.siteName(ctx)
 	jsonLD, err := json.Marshal(articleStructuredData{
 		Context:       "https://schema.org",
 		Type:          "BlogPosting",
@@ -91,6 +98,19 @@ func (handler *Handler) Article(ctx *gin.Context) {
 	}
 
 	ctx.Data(http.StatusOK, "text/html; charset=utf-8", body.Bytes())
+}
+
+func (handler *Handler) siteName(ctx *gin.Context) string {
+	if handler.settingsRepo == nil {
+		return "云间笔记"
+	}
+
+	settings, err := handler.settingsRepo.GetSettings(ctx.Request.Context())
+	if err != nil {
+		return "云间笔记"
+	}
+
+	return defaultString(settings.SiteName, "云间笔记")
 }
 
 type articlePageData struct {

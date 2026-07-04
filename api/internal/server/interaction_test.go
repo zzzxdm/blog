@@ -455,6 +455,20 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		t.Fatalf("expected public settings without admin security fields, got status=%d body=%q", publicSettingsRec.Code, publicSettingsRec.Body.String())
 	}
 
+	rssReq := httptest.NewRequest(http.MethodGet, "/rss.xml", nil)
+	rssRec := httptest.NewRecorder()
+	router.ServeHTTP(rssRec, rssReq)
+	if rssRec.Code != http.StatusOK || !strings.Contains(rssRec.Body.String(), "<title>云间笔记 Pro</title>") {
+		t.Fatalf("expected rss to use updated site name, got status=%d body=%q", rssRec.Code, rssRec.Body.String())
+	}
+
+	seoReq := httptest.NewRequest(http.MethodGet, "/posts/blog-system-design", nil)
+	seoRec := httptest.NewRecorder()
+	router.ServeHTTP(seoRec, seoReq)
+	if seoRec.Code != http.StatusOK || !strings.Contains(seoRec.Body.String(), " - 云间笔记 Pro</title>") {
+		t.Fatalf("expected seo page to use updated site name, got status=%d body=%q", seoRec.Code, seoRec.Body.String())
+	}
+
 	testMailReq := httptest.NewRequest(http.MethodPost, "/api/admin/settings/test-mail", nil)
 	for _, cookie := range adminCookies {
 		testMailReq.AddCookie(cookie)

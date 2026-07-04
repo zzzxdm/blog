@@ -88,8 +88,8 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 
 	router.Use(auth.Middleware(repos.AuthStore))
 	router.Use(auditAdminOperations(repos.OperationsRepo))
-	feeds.RegisterRoutes(router, repos.PostRepo, cfg.PublicURL)
-	seo.RegisterRoutes(router, repos.PostRepo, cfg.PublicURL)
+	feeds.RegisterRoutes(router, repos.PostRepo, repos.OperationsRepo, cfg.PublicURL)
+	seo.RegisterRoutes(router, repos.PostRepo, repos.OperationsRepo, cfg.PublicURL)
 
 	api := router.Group("/api")
 

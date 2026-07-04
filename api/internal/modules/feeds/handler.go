@@ -1,30 +1,38 @@
 package feeds
 
 import (
+	"context"
 	"encoding/xml"
 	"net/http"
 	"strings"
 	"time"
 
+	"blog/api/internal/modules/operations"
 	"blog/api/internal/modules/posts"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	postRepo  posts.Repository
-	publicURL string
+	postRepo     posts.Repository
+	settingsRepo settingsReader
+	publicURL    string
 }
 
-func NewHandler(postRepo posts.Repository, publicURL string) *Handler {
+type settingsReader interface {
+	GetSettings(ctx context.Context) (operations.Settings, error)
+}
+
+func NewHandler(postRepo posts.Repository, settingsRepo settingsReader, publicURL string) *Handler {
 	return &Handler{
-		postRepo:  postRepo,
-		publicURL: strings.TrimRight(defaultString(publicURL, "http://localhost:5173"), "/"),
+		postRepo:     postRepo,
+		settingsRepo: settingsRepo,
+		publicURL:    strings.TrimRight(defaultString(publicURL, "http://localhost:5173"), "/"),
 	}
 }
 
-func RegisterRoutes(router gin.IRouter, postRepo posts.Repository, publicURL string) {
-	handler := NewHandler(postRepo, publicURL)
+func RegisterRoutes(router gin.IRouter, postRepo posts.Repository, settingsRepo settingsReader, publicURL string) {
+	handler := NewHandler(postRepo, settingsRepo, publicURL)
 
 	router.GET("/rss.xml", handler.RSS)
 	router.GET("/feed.xml", handler.RSS)
@@ -38,14 +46,15 @@ func (handler *Handler) RSS(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, "failed to load rss")
 		return
 	}
+	siteName, siteDescription := handler.siteInfo(ctx)
 
 	feed := rssFeed{
 		Version: "2.0",
 		Atom:    "http://www.w3.org/2005/Atom",
 		Channel: rssChannel{
-			Title:       "云间笔记",
+			Title:       siteName,
 			Link:        handler.publicURL + "/",
-			Description: "技术、产品、工程实践和长期写作的沉淀。",
+			Description: siteDescription,
 			Language:    "zh-CN",
 			LastBuild:   time.Now().Format(time.RFC1123Z),
 			AtomLink: atomLink{
@@ -70,6 +79,19 @@ func (handler *Handler) RSS(ctx *gin.Context) {
 
 	ctx.Header("Content-Type", "application/rss+xml; charset=utf-8")
 	ctx.XML(http.StatusOK, feed)
+}
+
+func (handler *Handler) siteInfo(ctx *gin.Context) (string, string) {
+	if handler.settingsRepo == nil {
+		return "云间笔记", "技术、产品、工程实践和长期写作的沉淀。"
+	}
+
+	settings, err := handler.settingsRepo.GetSettings(ctx.Request.Context())
+	if err != nil {
+		return "云间笔记", "技术、产品、工程实践和长期写作的沉淀。"
+	}
+
+	return defaultString(settings.SiteName, "云间笔记"), defaultString(settings.SiteDescription, "技术、产品、工程实践和长期写作的沉淀。")
 }
 
 func (handler *Handler) Sitemap(ctx *gin.Context) {
