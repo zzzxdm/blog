@@ -20,6 +20,7 @@ import {
   type Category,
   type Tag
 } from "../../shared/api";
+import { renderMarkdown } from "../../shared/markdown";
 
 const route = useRoute();
 
@@ -50,7 +51,7 @@ const status = ref<AdminPostStatus>("draft");
 const visibility = ref<AdminPostVisibility>("public");
 const scheduledAt = ref(nextScheduleValue());
 
-const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
+const renderedPreviewContent = computed(() => renderMarkdown(content.value));
 const description = computed(() => current.value ? `自动保存于 ${new Date(current.value.updatedAt).toLocaleTimeString("zh-CN")}，当前版本 ${current.value.version}。` : "新文章草稿。");
 
 onMounted(() => {
@@ -387,13 +388,9 @@ function toDateTimeLocal(value: string) {
           <textarea ref="editorArea" v-model="content" class="markdown-area" aria-label="Markdown 编辑区"></textarea>
 
           <article ref="previewArea" class="preview-area">
-            <h1>{{ title }}</h1>
-            <p>{{ summary }}</p>
-            <template v-for="line in previewLines" :key="line">
-              <h2 v-if="line.startsWith('## ')">{{ line.slice(3) }}</h2>
-              <blockquote v-else-if="line.startsWith('>')">{{ line.replace(/^>\s?/, "") }}</blockquote>
-              <p v-else-if="!line.startsWith('# ')">{{ line }}</p>
-            </template>
+            <h1>{{ title || "未命名文章" }}</h1>
+            <p v-if="summary">{{ summary }}</p>
+            <div v-html="renderedPreviewContent"></div>
           </article>
         </div>
       </div>

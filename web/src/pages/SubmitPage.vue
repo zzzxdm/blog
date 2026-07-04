@@ -15,6 +15,7 @@ import {
   type SubmissionPayload,
   type Tag
 } from "../shared/api";
+import { renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
 
 const auth = useAuthStore();
@@ -40,7 +41,7 @@ const coverImage = ref("https://images.unsplash.com/photo-1519389950473-47ba0277
 const content = ref("");
 
 const tags = computed(() => tagsText.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean));
-const previewLines = computed(() => content.value.split(/\n+/).map((item) => item.trim()).filter(Boolean));
+const renderedPreviewContent = computed(() => renderMarkdown(content.value));
 const status = computed(() => current.value?.status || "draft");
 const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
 const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交文章草稿，审核通过后会发布到站点。");
@@ -305,15 +306,8 @@ function statusClass(value: string) {
 
           <article class="preview-area">
             <h1>{{ title || "未命名投稿" }}</h1>
-            <p>{{ summary }}</p>
-            <template v-for="line in previewLines" :key="line">
-              <h2 v-if="line.startsWith('## ')" :id="line.slice(3)">{{ line.slice(3) }}</h2>
-              <blockquote v-else-if="line.startsWith('>')">{{ line.replace(/^>\s?/, "") }}</blockquote>
-              <ul v-else-if="line.startsWith('- ')">
-                <li>{{ line.slice(2) }}</li>
-              </ul>
-              <p v-else-if="!line.startsWith('# ')">{{ line }}</p>
-            </template>
+            <p v-if="summary">{{ summary }}</p>
+            <div v-html="renderedPreviewContent"></div>
           </article>
         </div>
       </div>
