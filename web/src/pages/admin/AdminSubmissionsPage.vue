@@ -5,7 +5,10 @@ import AdminLayout from "../../components/AdminLayout.vue";
 import {
   getAdminSubmissions,
   reviewSubmission,
+  updateAdminSubmission,
+  updateAdminUserRole,
   type Submission,
+  type SubmissionPayload,
   type SubmissionStats
 } from "../../shared/api";
 
@@ -15,11 +18,21 @@ const selectedId = ref("");
 const filterStatus = ref("submitted");
 const loading = ref(false);
 const acting = ref(false);
+const editing = ref(false);
+const savingEdit = ref(false);
+const upgradingAuthor = ref(false);
 const error = ref("");
 const message = ref("");
 const reviewNote = ref("内容结构清楚，可以发布。建议把标题和摘要再压缩一点。");
 const publishSlug = ref("");
 const publishCategory = ref("工程实践");
+const editTitle = ref("");
+const editSummary = ref("");
+const editContent = ref("");
+const editCategory = ref("");
+const editTags = ref("");
+const editCoverImage = ref("");
+const editSlug = ref("");
 
 const selected = computed(() => submissions.value.find((item) => item.id === selectedId.value) || submissions.value[0]);
 const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).map((item) => item.trim()).filter(Boolean) || []);
@@ -28,11 +41,14 @@ onMounted(load);
 
 watch(selected, (item) => {
   if (!item) {
+    editing.value = false;
     return;
   }
   reviewNote.value = item.reviewNote || "内容结构清楚，可以发布。建议把标题和摘要再压缩一点。";
   publishSlug.value = item.slug;
   publishCategory.value = item.category;
+  seedEdit(item);
+  editing.value = false;
 });
 
 async function load() {
@@ -75,6 +91,88 @@ async function review(action: "approve" | "return" | "reject") {
     error.value = err instanceof Error ? err.message : "审核操作失败";
   } finally {
     acting.value = false;
+  }
+}
+
+function seedEdit(item: Submission) {
+  editTitle.value = item.title;
+  editSummary.value = item.summary;
+  editContent.value = item.content;
+  editCategory.value = item.category;
+  editTags.value = item.tags.join(", ");
+  editCoverImage.value = item.coverImage;
+  editSlug.value = item.slug;
+}
+
+function beginEdit() {
+  if (!selected.value) {
+    return;
+  }
+
+  seedEdit(selected.value);
+  editing.value = true;
+}
+
+function cancelEdit() {
+  if (selected.value) {
+    seedEdit(selected.value);
+  }
+  editing.value = false;
+}
+
+function editPayload(): SubmissionPayload {
+  return {
+    title: editTitle.value,
+    summary: editSummary.value,
+    content: editContent.value,
+    category: editCategory.value,
+    tags: editTags.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean),
+    coverImage: editCoverImage.value,
+    slug: editSlug.value,
+    submit: false
+  };
+}
+
+async function saveEdit() {
+  if (!selected.value) {
+    return;
+  }
+
+  savingEdit.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const updated = await updateAdminSubmission(selected.value.id, editPayload());
+    selectedId.value = updated.id;
+    publishSlug.value = updated.slug;
+    publishCategory.value = updated.category;
+    message.value = `已保存《${updated.title}》的审核修订。`;
+    editing.value = false;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "投稿修订保存失败";
+  } finally {
+    savingEdit.value = false;
+  }
+}
+
+async function upgradeAuthor() {
+  if (!selected.value) {
+    return;
+  }
+
+  upgradingAuthor.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const user = await updateAdminUserRole(selected.value.authorId, "author");
+    message.value = `已将 ${user.displayName} 升级为作者。`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "作者升级失败";
+  } finally {
+    upgradingAuthor.value = false;
   }
 }
 
@@ -194,9 +292,26 @@ function statusClass(value: Submission["status"]) {
               <span>{{ selected.category }}</span>
               <span>{{ selected.wordCount }} 字</span>
             </div>
-            <button class="button-secondary" type="button">编辑内容</button>
+            <button class="button-secondary" type="button" :disabled="savingEdit" @click="editing ? cancelEdit() : beginEdit()">{{ editing ? "退出编辑" : "编辑内容" }}</button>
           </div>
-          <article class="preview-area" style="min-height: 420px;">
+          <form v-if="editing" class="settings-stack" @submit.prevent="saveEdit">
+            <div class="admin-grid-2">
+              <div class="field"><label for="edit-title">标题</label><input v-model="editTitle" class="input" id="edit-title"></div>
+              <div class="field"><label for="edit-slug">Slug</label><input v-model="editSlug" class="input" id="edit-slug"></div>
+            </div>
+            <div class="field"><label for="edit-summary">摘要</label><textarea v-model="editSummary" class="input" id="edit-summary"></textarea></div>
+            <div class="field"><label for="edit-content">正文</label><textarea v-model="editContent" class="input" id="edit-content" style="min-height: 260px;"></textarea></div>
+            <div class="admin-grid-2">
+              <div class="field"><label for="edit-category">分类</label><input v-model="editCategory" class="input" id="edit-category"></div>
+              <div class="field"><label for="edit-tags">标签</label><input v-model="editTags" class="input" id="edit-tags"></div>
+            </div>
+            <div class="field"><label for="edit-cover">封面图 URL</label><input v-model="editCoverImage" class="input" id="edit-cover"></div>
+            <div class="header-actions">
+              <button class="button" type="submit" :disabled="savingEdit || !editTitle">{{ savingEdit ? "保存中..." : "保存修订" }}</button>
+              <button class="button-secondary" type="button" :disabled="savingEdit" @click="cancelEdit">取消</button>
+            </div>
+          </form>
+          <article v-else class="preview-area" style="min-height: 420px;">
             <h1>{{ selected.title }}</h1>
             <p>{{ selected.summary }}</p>
             <p v-for="paragraph in previewParagraphs" :key="paragraph">{{ paragraph }}</p>
@@ -245,7 +360,7 @@ function statusClass(value: Submission["status"]) {
                 <div class="meta-row"><span>评论审核模块会补充质量指标</span></div>
               </div>
             </div>
-            <button class="button-secondary" type="button">升级为作者</button>
+            <button class="button-secondary" type="button" :disabled="upgradingAuthor" @click="upgradeAuthor">{{ upgradingAuthor ? "升级中..." : "升级为作者" }}</button>
           </div>
         </section>
 

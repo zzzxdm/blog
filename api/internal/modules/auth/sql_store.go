@@ -198,6 +198,28 @@ func (store *SQLStore) InviteUser(request InviteUserRequest) (User, string, erro
 	return user, resetToken, nil
 }
 
+func (store *SQLStore) UpdateRole(userID string, role string) (User, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if !validRole(role) {
+		return User{}, ErrInvalidRole
+	}
+
+	result, err := store.db.ExecContext(context.Background(), "UPDATE users SET role = $2 WHERE id = $1", userID, role)
+	if err != nil {
+		return User{}, fmt.Errorf("update user role: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return User{}, fmt.Errorf("read user role rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return User{}, ErrInvalidSession
+	}
+
+	return store.userByID(context.Background(), userID)
+}
+
 func (store *SQLStore) UserBySession(token string) (User, error) {
 	var user User
 	err := store.db.QueryRowContext(context.Background(), `

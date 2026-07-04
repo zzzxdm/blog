@@ -26,6 +26,7 @@ type Repository interface {
 	Submit(ctx context.Context, submissionID string, userID string) (Submission, error)
 	AdminList(ctx context.Context, query ListQuery) (ListResult, error)
 	Get(ctx context.Context, submissionID string) (Submission, error)
+	AdminUpdate(ctx context.Context, submissionID string, request SaveRequest) (Submission, error)
 	Review(ctx context.Context, submissionID string, reviewer auth.User, request ReviewRequest, publishedPostSlug string) (Submission, error)
 }
 
@@ -196,6 +197,29 @@ func (repo *MemoryRepository) Get(_ context.Context, submissionID string) (Submi
 	if index < 0 {
 		return Submission{}, ErrSubmissionNotFound
 	}
+
+	return normalizeSubmission(repo.submissions[index]), nil
+}
+
+func (repo *MemoryRepository) AdminUpdate(_ context.Context, submissionID string, request SaveRequest) (Submission, error) {
+	if err := validateSave(request, false); err != nil {
+		return Submission{}, err
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	index := repo.findLocked(submissionID)
+	if index < 0 {
+		return Submission{}, ErrSubmissionNotFound
+	}
+	if repo.submissions[index].Status == StatusPublished {
+		return Submission{}, ErrForbidden
+	}
+
+	repo.submissions[index] = applySave(repo.submissions[index], request)
+	repo.submissions[index].UpdatedAt = repo.now()
+	repo.submissions[index].Version++
 
 	return normalizeSubmission(repo.submissions[index]), nil
 }

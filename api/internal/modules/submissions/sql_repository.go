@@ -222,6 +222,47 @@ func (repo *SQLRepository) Get(ctx context.Context, submissionID string) (Submis
 	return items[0], nil
 }
 
+func (repo *SQLRepository) AdminUpdate(ctx context.Context, submissionID string, request SaveRequest) (Submission, error) {
+	if err := validateSave(request, false); err != nil {
+		return Submission{}, err
+	}
+
+	current, err := repo.Get(ctx, submissionID)
+	if err != nil {
+		return Submission{}, err
+	}
+	if current.Status == StatusPublished {
+		return Submission{}, ErrForbidden
+	}
+
+	updated := applySave(current, request)
+	if _, err := repo.db.ExecContext(ctx, `
+		UPDATE submissions
+		SET title = $2,
+			summary = $3,
+			content = $4,
+			category = $5,
+			tags = $6,
+			cover_image = $7,
+			slug = $8,
+			updated_at = now(),
+			version = version + 1
+		WHERE id = $1
+	`, submissionID,
+		updated.Title,
+		updated.Summary,
+		updated.Content,
+		updated.Category,
+		updated.Tags,
+		updated.CoverImage,
+		updated.Slug,
+	); err != nil {
+		return Submission{}, fmt.Errorf("admin update submission: %w", err)
+	}
+
+	return repo.Get(ctx, submissionID)
+}
+
 func (repo *SQLRepository) Review(ctx context.Context, submissionID string, reviewer auth.User, request ReviewRequest, publishedPostSlug string) (Submission, error) {
 	action := strings.ToLower(strings.TrimSpace(request.Action))
 	if action != ActionApprove && action != ActionReturn && action != ActionReject {

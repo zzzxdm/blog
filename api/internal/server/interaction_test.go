@@ -147,6 +147,24 @@ func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
 
 	adminCookies := loginForTest(t, router, "admin@example.com", "password")
 
+	updateSubmissionReq := httptest.NewRequest(http.MethodPut, "/api/admin/submissions/"+created.ID, bytes.NewBufferString(`{
+		"title":"管理员修订后的测试投稿",
+		"summary":"管理员在审核台修订摘要后再发布。",
+		"content":"这篇投稿已经由管理员修订正文，发布时应该使用修订后的内容。",
+		"category":"工程实践",
+		"tags":["投稿","审核","修订"],
+		"slug":"approved-submission-test"
+	}`))
+	updateSubmissionReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		updateSubmissionReq.AddCookie(cookie)
+	}
+	updateSubmissionRec := httptest.NewRecorder()
+	router.ServeHTTP(updateSubmissionRec, updateSubmissionReq)
+	if updateSubmissionRec.Code != http.StatusOK || !strings.Contains(updateSubmissionRec.Body.String(), "管理员修订后的测试投稿") || !strings.Contains(updateSubmissionRec.Body.String(), `"version":2`) {
+		t.Fatalf("expected admin submission update, got status=%d body=%q", updateSubmissionRec.Code, updateSubmissionRec.Body.String())
+	}
+
 	reviewReq := httptest.NewRequest(http.MethodPost, "/api/admin/submissions/"+created.ID+"/review", bytes.NewBufferString(`{
 		"action":"approve",
 		"note":"内容结构清楚，可以发布。",
@@ -170,7 +188,7 @@ func TestSubmissionReviewPublishesPostAndCreatesMessage(t *testing.T) {
 	postReq := httptest.NewRequest(http.MethodGet, "/api/posts/approved-submission-test", nil)
 	postRec := httptest.NewRecorder()
 	router.ServeHTTP(postRec, postReq)
-	if postRec.Code != http.StatusOK || !strings.Contains(postRec.Body.String(), "审核通过后公开的测试投稿") {
+	if postRec.Code != http.StatusOK || !strings.Contains(postRec.Body.String(), "管理员修订后的测试投稿") || !strings.Contains(postRec.Body.String(), "修订后的内容") {
 		t.Fatalf("expected published post, got status=%d body=%q", postRec.Code, postRec.Body.String())
 	}
 
@@ -742,6 +760,25 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 	router.ServeHTTP(writerLoginRec, writerLoginReq)
 	if writerLoginRec.Code != http.StatusOK || !strings.Contains(writerLoginRec.Body.String(), `"role":"author"`) {
 		t.Fatalf("expected invited author login, got status=%d body=%q", writerLoginRec.Code, writerLoginRec.Body.String())
+	}
+
+	upgradeRoleReq := httptest.NewRequest(http.MethodPut, "/api/admin/users/user_linyi/role", bytes.NewBufferString(`{"role":"author"}`))
+	upgradeRoleReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		upgradeRoleReq.AddCookie(cookie)
+	}
+	upgradeRoleRec := httptest.NewRecorder()
+	router.ServeHTTP(upgradeRoleRec, upgradeRoleReq)
+	if upgradeRoleRec.Code != http.StatusOK || !strings.Contains(upgradeRoleRec.Body.String(), `"role":"author"`) {
+		t.Fatalf("expected existing user upgraded to author, got status=%d body=%q", upgradeRoleRec.Code, upgradeRoleRec.Body.String())
+	}
+
+	upgradedLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"linyi@example.com","password":"new-password"}`))
+	upgradedLoginReq.Header.Set("Content-Type", "application/json")
+	upgradedLoginRec := httptest.NewRecorder()
+	router.ServeHTTP(upgradedLoginRec, upgradedLoginReq)
+	if upgradedLoginRec.Code != http.StatusOK || !strings.Contains(upgradedLoginRec.Body.String(), `"role":"author"`) {
+		t.Fatalf("expected upgraded user login role author, got status=%d body=%q", upgradedLoginRec.Code, upgradedLoginRec.Body.String())
 	}
 
 	usersExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/users/export", nil)

@@ -26,6 +26,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, authStore auth.Store) {
 	router.GET("/admin/users", handler.List)
 	router.GET("/admin/users/export", handler.Export)
 	router.POST("/admin/users/invitations", handler.Invite)
+	router.PUT("/admin/users/:id/role", handler.UpdateRole)
 	router.PUT("/admin/users/:id/status", handler.UpdateStatus)
 	router.POST("/admin/users/:id/password-reset", handler.RequestPasswordReset)
 	router.GET("/account/settings", handler.GetAccount)
@@ -137,6 +138,45 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, user)
+}
+
+func (handler *Handler) UpdateRole(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+	if handler.authStore == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "role update is unavailable"})
+		return
+	}
+
+	var request RoleRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user role payload"})
+		return
+	}
+
+	updated, err := handler.authStore.UpdateRole(ctx.Param("id"), request.Role)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidSession) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		if errors.Is(err, auth.ErrInvalidRole) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user role"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user role"})
+		return
+	}
+
+	managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user role"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, managed)
 }
 
 func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {

@@ -848,6 +848,13 @@ export async function getAdminSubmissions(status = ""): Promise<SubmissionListRe
   return request<SubmissionListResponse>(`/admin/submissions${query}`);
 }
 
+export async function updateAdminSubmission(id: string, payload: SubmissionPayload): Promise<Submission> {
+  return request<Submission>(`/admin/submissions/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function reviewSubmission(id: string, payload: ReviewPayload): Promise<Submission> {
   return request<Submission>(`/admin/submissions/${encodeURIComponent(id)}/review`, {
     method: "POST",
@@ -1010,6 +1017,13 @@ export async function inviteAdminUser(payload: { email: string; displayName: str
   return request<AdminInvitationResponse>("/admin/users/invitations", {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function updateAdminUserRole(id: string, role: string): Promise<ManagedUser> {
+  return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ role })
   });
 }
 

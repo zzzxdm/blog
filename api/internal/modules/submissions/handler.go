@@ -36,6 +36,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Re
 	router.POST("/submissions/:id/submit", handler.Submit)
 
 	router.GET("/admin/submissions", handler.AdminList)
+	router.PUT("/admin/submissions/:id", handler.AdminUpdate)
 	router.POST("/admin/submissions/:id/review", handler.Review)
 }
 
@@ -139,6 +140,26 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) AdminUpdate(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request SaveRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission payload"})
+		return
+	}
+
+	submission, err := handler.repo.AdminUpdate(ctx.Request.Context(), ctx.Param("id"), request)
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, submission)
 }
 
 func (handler *Handler) Review(ctx *gin.Context) {

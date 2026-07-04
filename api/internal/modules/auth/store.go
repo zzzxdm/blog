@@ -16,6 +16,7 @@ var (
 	ErrEmailExists        = errors.New("email already exists")
 	ErrInvalidSession     = errors.New("invalid session")
 	ErrInvalidToken       = errors.New("invalid token")
+	ErrInvalidRole        = errors.New("invalid role")
 )
 
 type session struct {
@@ -33,6 +34,7 @@ type Store interface {
 	Authenticate(email string, password string) (User, string, error)
 	Register(request RegisterRequest) (User, string, error)
 	InviteUser(request InviteUserRequest) (User, string, error)
+	UpdateRole(userID string, role string) (User, error)
 	UserBySession(token string) (User, error)
 	ChangePassword(userID string, currentPassword string, newPassword string) error
 	RequestEmailVerification(userID string) (string, error)
@@ -85,6 +87,36 @@ func NewMemoryStore() *MemoryStore {
 		Role:          "admin",
 		Status:        "active",
 		AvatarText:    "管",
+		EmailVerified: true,
+	}, "password")
+
+	store.mustSeed(User{
+		ID:            "user_chen",
+		Email:         "chen@example.com",
+		DisplayName:   "陈默",
+		Role:          "user",
+		Status:        "active",
+		AvatarText:    "陈",
+		EmailVerified: true,
+	}, "password")
+
+	store.mustSeed(User{
+		ID:            "user_market",
+		Email:         "market@example.com",
+		DisplayName:   "market_user",
+		Role:          "user",
+		Status:        "muted",
+		AvatarText:    "m",
+		EmailVerified: true,
+	}, "password")
+
+	store.mustSeed(User{
+		ID:            "user_noise",
+		Email:         "noise@example.com",
+		DisplayName:   "noise_2048",
+		Role:          "user",
+		Status:        "banned",
+		AvatarText:    "n",
 		EmailVerified: true,
 	}, "password")
 
@@ -215,6 +247,26 @@ func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, string, e
 	}
 
 	return user, resetToken, nil
+}
+
+func (store *MemoryStore) UpdateRole(userID string, role string) (User, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if !validRole(role) {
+		return User{}, ErrInvalidRole
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	user, ok := store.usersByID[userID]
+	if !ok {
+		return User{}, ErrInvalidSession
+	}
+
+	user.Role = role
+	store.usersByID[userID] = user
+
+	return user, nil
 }
 
 func (store *MemoryStore) UserBySession(token string) (User, error) {
@@ -464,6 +516,15 @@ func normalizeRole(role string) string {
 		return strings.ToLower(strings.TrimSpace(role))
 	default:
 		return "author"
+	}
+}
+
+func validRole(role string) bool {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "user", "author", "editor", "admin":
+		return true
+	default:
+		return false
 	}
 }
 

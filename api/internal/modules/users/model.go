@@ -50,6 +50,10 @@ type StatusRequest struct {
 	Status string `json:"status"`
 }
 
+type RoleRequest struct {
+	Role string `json:"role"`
+}
+
 type AccountSettings struct {
 	DisplayName              string    `json:"displayName"`
 	Username                 string    `json:"username"`
