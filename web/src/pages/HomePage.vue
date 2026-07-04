@@ -3,11 +3,32 @@ import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { usePostsStore } from "../stores/posts";
-import { getSiteSettings, type Post, type SiteSettings } from "../shared/api";
+import {
+  getCategories,
+  getSiteSettings,
+  getTags,
+  type Category,
+  type Post,
+  type SiteSettings,
+  type Tag
+} from "../shared/api";
+
+type TopicLink = {
+  key: string;
+  label: string;
+  count: number;
+  tone: "" | "rust" | "amber";
+  to: {
+    path: string;
+    query: Record<string, string>;
+  };
+};
 
 const posts = usePostsStore();
 const siteSettings = ref<SiteSettings | null>(null);
-const featuredTopicCount = 4;
+const categories = ref<Category[]>([]);
+const tags = ref<Tag[]>([]);
+const topicLinkLimit = 6;
 
 const allPosts = computed(() => posts.list?.items ?? []);
 const featurePost = computed(() => allPosts.value[0] ?? null);
@@ -26,14 +47,52 @@ const monthlyPostCount = computed(() => {
   return count || Math.min(allPosts.value.length, posts.list?.total ?? 0);
 });
 const categorySummary = computed(() => {
+  const categoryNames = categories.value
+    .filter((item) => item.name)
+    .sort((left, right) => right.postCount - left.postCount || left.sortOrder - right.sortOrder)
+    .slice(0, 3)
+    .map((item) => item.name);
+
+  if (categoryNames.length) {
+    return categoryNames.join("、");
+  }
+
   const names = [...new Set(allPosts.value.map((post) => post.category).filter(Boolean))];
   return names.slice(0, 3).join("、") || "持续更新";
 });
 const totalCommentCount = computed(() => allPosts.value.reduce((sum, post) => sum + post.commentCount, 0));
+const topicLinks = computed<TopicLink[]>(() => {
+  const taxonomyLinks = [
+    ...categories.value
+      .filter((item) => item.name)
+      .map((item) => ({
+        key: `category-${item.id}`,
+        label: item.name,
+        count: item.postCount,
+        to: { path: "/archive", query: { category: item.name } }
+      })),
+    ...tags.value
+      .filter((item) => item.name)
+      .map((item) => ({
+        key: `tag-${item.id}`,
+        label: item.name,
+        count: item.postCount,
+        to: { path: "/archive", query: { tag: item.name } }
+      }))
+  ];
+
+  const sources = taxonomyLinks.length ? taxonomyLinks : postTopicLinks();
+  return sources
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, "zh-CN"))
+    .slice(0, topicLinkLimit)
+    .map((item, index) => ({ ...item, tone: topicTone(index) }));
+});
+const featuredTopicCount = computed(() => categories.value.length + tags.value.length || topicLinks.value.length);
 
 onMounted(() => {
   void posts.loadList({ page: 1, pageSize: 12 });
   void loadSiteSettings();
+  void loadTaxonomies();
 });
 
 async function loadSiteSettings() {
@@ -42,6 +101,55 @@ async function loadSiteSettings() {
   } catch {
     siteSettings.value = null;
   }
+}
+
+async function loadTaxonomies() {
+  try {
+    const [categoryResult, tagResult] = await Promise.all([getCategories(), getTags()]);
+    categories.value = categoryResult.items;
+    tags.value = tagResult.items;
+  } catch {
+    categories.value = [];
+    tags.value = [];
+  }
+}
+
+function postTopicLinks() {
+  const grouped = new Map<string, Omit<TopicLink, "tone">>();
+
+  allPosts.value.forEach((post) => {
+    addTopic(grouped, `category:${post.category}`, post.category, { category: post.category });
+
+    post.tags.forEach((tag) => {
+      addTopic(grouped, `tag:${tag}`, tag, { tag });
+    });
+  });
+
+  return [...grouped.values()];
+}
+
+function addTopic(
+  grouped: Map<string, Omit<TopicLink, "tone">>,
+  key: string,
+  label: string,
+  query: Record<string, string>
+) {
+  if (!label) {
+    return;
+  }
+
+  const current = grouped.get(key);
+  if (current) {
+    current.count += 1;
+    return;
+  }
+
+  grouped.set(key, {
+    key,
+    label,
+    count: 1,
+    to: { path: "/archive", query }
+  });
 }
 
 function formatDate(value: string) {
@@ -58,6 +166,18 @@ function tagTone(post: Post, index = 0) {
   }
 
   if (post.category === "运营" || index % 3 === 2) {
+    return "amber";
+  }
+
+  return "";
+}
+
+function topicTone(index: number): "" | "rust" | "amber" {
+  if (index % 3 === 1) {
+    return "rust";
+  }
+
+  if (index % 3 === 2) {
     return "amber";
   }
 
@@ -157,12 +277,15 @@ function tagTone(post: Post, index = 0) {
               <h2>专题</h2>
             </div>
             <div class="tag-cloud">
-              <RouterLink class="tag" to="/topics?topic=vue3-content">Vue3</RouterLink>
-              <RouterLink class="tag rust" to="/topics?topic=blog-system">系统架构</RouterLink>
-              <RouterLink class="tag amber" to="/topics?topic=writing-workflow">写作工作流</RouterLink>
-              <RouterLink class="tag" to="/archive?tag=SEO">SEO</RouterLink>
-              <RouterLink class="tag rust" to="/topics?topic=resource-list">数据库</RouterLink>
-              <RouterLink class="tag amber" to="/archive?category=运营">内容运营</RouterLink>
+              <RouterLink
+                v-for="topic in topicLinks"
+                :key="topic.key"
+                class="tag"
+                :class="topic.tone"
+                :to="topic.to"
+              >
+                {{ topic.label }}
+              </RouterLink>
             </div>
           </section>
 
