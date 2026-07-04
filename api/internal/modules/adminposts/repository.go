@@ -24,6 +24,7 @@ type Repository interface {
 	Get(ctx context.Context, id string) (AdminPost, error)
 	Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error)
 	Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error)
+	PublishDue(ctx context.Context, publisher posts.Publisher, now time.Time) (int, error)
 	ListRevisions(ctx context.Context, id string) (RevisionListResult, error)
 	RestoreRevision(ctx context.Context, id string, revisionID string) (AdminPost, error)
 }
@@ -129,8 +130,13 @@ func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveReq
 	if item.Visibility == "" {
 		item.Visibility = VisibilityPublic
 	}
-	if item.Status == StatusScheduled && item.ScheduledAt == nil {
-		return AdminPost{}, ErrInvalidPost
+	if item.Status == StatusScheduled {
+		if item.ScheduledAt == nil || strings.TrimSpace(item.Content) == "" {
+			return AdminPost{}, ErrInvalidPost
+		}
+		if item.Visibility != VisibilityPublic {
+			return AdminPost{}, ErrPostNotPublic
+		}
 	}
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
@@ -193,6 +199,46 @@ func (repo *MemoryRepository) Publish(ctx context.Context, id string, publisher 
 	repo.items[item.ID] = item
 
 	return clonePost(item), nil
+}
+
+func (repo *MemoryRepository) PublishDue(ctx context.Context, publisher posts.Publisher, now time.Time) (int, error) {
+	if publisher == nil {
+		return 0, ErrInvalidPost
+	}
+
+	repo.mu.RLock()
+	ids := make([]string, 0)
+	for _, item := range repo.items {
+		if isDueScheduledPost(item, now) {
+			ids = append(ids, item.ID)
+		}
+	}
+	repo.mu.RUnlock()
+
+	publishedCount := 0
+	var firstErr error
+	for _, id := range ids {
+		item, err := repo.Get(ctx, id)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !isDueScheduledPost(item, now) {
+			continue
+		}
+
+		if _, err := repo.Publish(ctx, id, publisher); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		publishedCount++
+	}
+
+	return publishedCount, firstErr
 }
 
 func (repo *MemoryRepository) ListRevisions(_ context.Context, id string) (RevisionListResult, error) {
@@ -369,6 +415,13 @@ func parseScheduledAt(value string) (*time.Time, error) {
 	}
 
 	return &parsed, nil
+}
+
+func isDueScheduledPost(item AdminPost, now time.Time) bool {
+	return item.Status == StatusScheduled &&
+		item.ScheduledAt != nil &&
+		!item.ScheduledAt.After(now) &&
+		normalizeVisibility(item.Visibility) == VisibilityPublic
 }
 
 func normalizeVisibility(visibility string) string {

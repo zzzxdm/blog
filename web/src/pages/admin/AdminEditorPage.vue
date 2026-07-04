@@ -201,6 +201,11 @@ async function publish() {
 }
 
 async function schedulePost() {
+  if (visibility.value !== "public") {
+    error.value = "非公开文章暂不支持定时发布到公开站点。";
+    message.value = "";
+    return;
+  }
   if (!scheduledAt.value) {
     error.value = "请选择发布时间。";
     message.value = "";

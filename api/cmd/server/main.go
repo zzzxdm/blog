@@ -29,7 +29,16 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	router := appserver.NewRouter(cfg)
+	var authStore auth.Store = auth.NewMemoryStore()
+	var postRepo posts.Repository = posts.NewMemoryRepository()
+	var commentRepo comments.Repository = comments.NewMemoryRepository()
+	var reactionRepo reactions.Repository = reactions.NewMemoryRepository()
+	var messageRepo messages.Repository = messages.NewMemoryRepository()
+	var submissionRepo submissions.Repository = submissions.NewMemoryRepository()
+	var operationsRepo operations.Repository = operations.NewMemoryRepository()
+	var userRepo users.Repository = users.NewMemoryRepository()
+	var adminPostRepo adminposts.Repository = adminposts.NewMemoryRepository()
+	var taxonomyRepo taxonomies.Repository = taxonomies.NewMemoryRepository()
 
 	db, err := database.Open(ctx, cfg)
 	if err != nil {
@@ -54,14 +63,14 @@ func main() {
 		} else {
 			cancelMigrate()
 			setupCtx, cancelSetup := context.WithTimeout(ctx, 10*time.Second)
-			authStore, authErr := auth.NewSQLStore(setupCtx, db)
-			commentRepo, commentErr := comments.NewSQLRepository(setupCtx, db)
-			reactionRepo, reactionErr := reactions.NewSQLRepository(setupCtx, db)
-			messageRepo, messageErr := messages.NewSQLRepository(setupCtx, db)
-			submissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
-			operationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
-			userRepo, userErr := users.NewSQLRepository(setupCtx, db)
-			adminPostRepo, adminPostErr := adminposts.NewSQLRepository(setupCtx, db)
+			sqlAuthStore, authErr := auth.NewSQLStore(setupCtx, db)
+			sqlCommentRepo, commentErr := comments.NewSQLRepository(setupCtx, db)
+			sqlReactionRepo, reactionErr := reactions.NewSQLRepository(setupCtx, db)
+			sqlMessageRepo, messageErr := messages.NewSQLRepository(setupCtx, db)
+			sqlSubmissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
+			sqlOperationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
+			sqlUserRepo, userErr := users.NewSQLRepository(setupCtx, db)
+			sqlAdminPostRepo, adminPostErr := adminposts.NewSQLRepository(setupCtx, db)
 			cancelSetup()
 
 			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil || userErr != nil || adminPostErr != nil {
@@ -72,20 +81,37 @@ func main() {
 
 				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr, "admin_posts", adminPostErr)
 			} else {
-				router = appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
-					AuthStore:      authStore,
-					PostRepo:       posts.NewSQLRepository(db),
-					CommentRepo:    commentRepo,
-					ReactionRepo:   reactionRepo,
-					MessageRepo:    messageRepo,
-					SubmissionRepo: submissionRepo,
-					OperationsRepo: operationsRepo,
-					UserRepo:       userRepo,
-					AdminPostRepo:  adminPostRepo,
-					TaxonomyRepo:   taxonomies.NewSQLRepository(db),
-				})
+				authStore = sqlAuthStore
+				postRepo = posts.NewSQLRepository(db)
+				commentRepo = sqlCommentRepo
+				reactionRepo = sqlReactionRepo
+				messageRepo = sqlMessageRepo
+				submissionRepo = sqlSubmissionRepo
+				operationsRepo = sqlOperationsRepo
+				userRepo = sqlUserRepo
+				adminPostRepo = sqlAdminPostRepo
+				taxonomyRepo = taxonomies.NewSQLRepository(db)
 			}
 		}
+	}
+
+	router := appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
+		AuthStore:      authStore,
+		PostRepo:       postRepo,
+		CommentRepo:    commentRepo,
+		ReactionRepo:   reactionRepo,
+		MessageRepo:    messageRepo,
+		SubmissionRepo: submissionRepo,
+		OperationsRepo: operationsRepo,
+		UserRepo:       userRepo,
+		AdminPostRepo:  adminPostRepo,
+		TaxonomyRepo:   taxonomyRepo,
+	})
+
+	schedulerCtx, stopScheduler := context.WithCancel(context.Background())
+	defer stopScheduler()
+	if publisher, ok := postRepo.(posts.Publisher); ok {
+		adminposts.StartScheduledPublisher(schedulerCtx, adminPostRepo, publisher, time.Minute)
 	}
 
 	server := &http.Server{
@@ -105,6 +131,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
+	stopScheduler()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

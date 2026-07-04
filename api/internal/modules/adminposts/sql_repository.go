@@ -121,8 +121,13 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	if item.Visibility == "" {
 		item.Visibility = VisibilityPublic
 	}
-	if item.Status == StatusScheduled && item.ScheduledAt == nil {
-		return AdminPost{}, ErrInvalidPost
+	if item.Status == StatusScheduled {
+		if item.ScheduledAt == nil || strings.TrimSpace(item.Content) == "" {
+			return AdminPost{}, ErrInvalidPost
+		}
+		if item.Visibility != VisibilityPublic {
+			return AdminPost{}, ErrPostNotPublic
+		}
 	}
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
@@ -181,6 +186,57 @@ func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher pos
 	}
 
 	return clonePost(item), nil
+}
+
+func (repo *SQLRepository) PublishDue(ctx context.Context, publisher posts.Publisher, now time.Time) (int, error) {
+	if publisher == nil {
+		return 0, ErrInvalidPost
+	}
+
+	rows, err := repo.db.QueryContext(ctx, "SELECT data FROM admin_posts WHERE status = $1 ORDER BY updated_at ASC, id ASC", StatusScheduled)
+	if err != nil {
+		return 0, fmt.Errorf("query scheduled admin posts: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0)
+	for rows.Next() {
+		item, err := scanAdminPost(rows)
+		if err != nil {
+			return 0, err
+		}
+		if isDueScheduledPost(item, now) {
+			ids = append(ids, item.ID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate scheduled admin posts: %w", err)
+	}
+
+	publishedCount := 0
+	var firstErr error
+	for _, id := range ids {
+		item, err := repo.Get(ctx, id)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if !isDueScheduledPost(item, now) {
+			continue
+		}
+
+		if _, err := repo.Publish(ctx, id, publisher); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		publishedCount++
+	}
+
+	return publishedCount, firstErr
 }
 
 func (repo *SQLRepository) ListRevisions(ctx context.Context, id string) (RevisionListResult, error) {

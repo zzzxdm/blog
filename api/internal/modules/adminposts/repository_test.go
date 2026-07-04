@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"blog/api/internal/modules/posts"
 )
 
 func TestParseScheduledAt(t *testing.T) {
@@ -51,6 +53,27 @@ func TestMemoryRepositorySaveScheduledRequiresScheduledAt(t *testing.T) {
 	}
 }
 
+func TestMemoryRepositorySaveScheduledRequiresPublicVisibility(t *testing.T) {
+	repo := &MemoryRepository{
+		items:  map[string]AdminPost{},
+		nextID: 1,
+		now: func() time.Time {
+			return time.Date(2026, 7, 5, 10, 0, 0, 0, time.UTC)
+		},
+	}
+
+	_, err := repo.Save(context.Background(), "", SaveRequest{
+		Title:       "定时发布文章",
+		Content:     "需要公开后才能定时发布。",
+		Status:      StatusScheduled,
+		Visibility:  VisibilityPrivate,
+		ScheduledAt: time.Date(2026, 7, 5, 12, 0, 0, 0, time.UTC).Format(time.RFC3339),
+	})
+	if !errors.Is(err, ErrPostNotPublic) {
+		t.Fatalf("Save private scheduled returned %v, want %v", err, ErrPostNotPublic)
+	}
+}
+
 func TestMemoryRepositorySaveScheduledStoresScheduledAtAndStats(t *testing.T) {
 	now := time.Date(2026, 7, 5, 10, 0, 0, 0, time.UTC)
 	scheduledAt := now.Add(2 * time.Hour)
@@ -84,6 +107,75 @@ func TestMemoryRepositorySaveScheduledStoresScheduledAtAndStats(t *testing.T) {
 	}
 }
 
+func TestMemoryRepositoryPublishDuePublishesOnlyDuePublicScheduledPosts(t *testing.T) {
+	now := time.Date(2026, 7, 5, 10, 0, 0, 0, time.UTC)
+	due := now.Add(-time.Minute)
+	future := now.Add(time.Minute)
+	publisher := &recordingPublisher{}
+	repo := &MemoryRepository{
+		items: map[string]AdminPost{
+			"due": {
+				ID:          "due",
+				Slug:        "due-post",
+				Title:       "到期文章",
+				Content:     "到期后应该发布。",
+				Status:      StatusScheduled,
+				Visibility:  VisibilityPublic,
+				ScheduledAt: &due,
+				AuthorName:  "管理员",
+				UpdatedAt:   now,
+			},
+			"future": {
+				ID:          "future",
+				Slug:        "future-post",
+				Title:       "未来文章",
+				Content:     "还没到发布时间。",
+				Status:      StatusScheduled,
+				Visibility:  VisibilityPublic,
+				ScheduledAt: &future,
+				AuthorName:  "管理员",
+				UpdatedAt:   now,
+			},
+			"private": {
+				ID:          "private",
+				Slug:        "private-post",
+				Title:       "私密文章",
+				Content:     "私密文章不能发布到公开站点。",
+				Status:      StatusScheduled,
+				Visibility:  VisibilityPrivate,
+				ScheduledAt: &due,
+				AuthorName:  "管理员",
+				UpdatedAt:   now,
+			},
+		},
+		now: func() time.Time {
+			return now
+		},
+	}
+
+	count, err := repo.PublishDue(context.Background(), publisher, now)
+	if err != nil {
+		t.Fatalf("PublishDue returned error: %v", err)
+	}
+	if count != 1 || len(publisher.inputs) != 1 {
+		t.Fatalf("PublishDue published %d items and recorded %d inputs, want 1", count, len(publisher.inputs))
+	}
+
+	published, err := repo.Get(context.Background(), "due")
+	if err != nil {
+		t.Fatalf("Get due returned error: %v", err)
+	}
+	if published.Status != StatusPublished || published.PublishedPostSlug != "due-post" {
+		t.Fatalf("due post = %+v, want published with slug due-post", published)
+	}
+
+	futurePost, _ := repo.Get(context.Background(), "future")
+	privatePost, _ := repo.Get(context.Background(), "private")
+	if futurePost.Status != StatusScheduled || privatePost.Status != StatusScheduled {
+		t.Fatalf("future/private posts should remain scheduled, got future=%s private=%s", futurePost.Status, privatePost.Status)
+	}
+}
+
 func TestCountStatsIncludesScheduled(t *testing.T) {
 	stats := countStats([]AdminPost{
 		{Status: StatusPublished},
@@ -95,4 +187,17 @@ func TestCountStatsIncludesScheduled(t *testing.T) {
 	if stats.Published != 1 || stats.Draft != 1 || stats.Review != 1 || stats.Scheduled != 1 || stats.Total != 4 {
 		t.Fatalf("countStats = %+v", stats)
 	}
+}
+
+type recordingPublisher struct {
+	inputs []posts.PublishInput
+}
+
+func (publisher *recordingPublisher) Publish(_ context.Context, input posts.PublishInput) (posts.Post, error) {
+	publisher.inputs = append(publisher.inputs, input)
+	return posts.Post{
+		Slug:         input.Slug,
+		ViewCount:    12,
+		CommentCount: 3,
+	}, nil
 }
