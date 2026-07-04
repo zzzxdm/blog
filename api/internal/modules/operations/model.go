@@ -134,6 +134,8 @@ type ContentSuggestion struct {
 }
 
 type Stats struct {
+	Range       string              `json:"range"`
+	RangeLabel  string              `json:"rangeLabel"`
 	Metrics     []Metric            `json:"metrics"`
 	Trend       []BarPoint          `json:"trend"`
 	TopPosts    []TopPost           `json:"topPosts"`

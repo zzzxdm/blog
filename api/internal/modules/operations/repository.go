@@ -27,7 +27,7 @@ type Repository interface {
 	GetMedia(ctx context.Context, id string) (MediaAsset, error)
 	UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error)
 	DeleteMedia(ctx context.Context, id string) (MediaAsset, error)
-	GetStats(ctx context.Context) (Stats, error)
+	GetStats(ctx context.Context, rangeKey string) (Stats, error)
 	ListAuditLogs(ctx context.Context, query AuditLogQuery) (AuditLogListResult, error)
 	RecordAuditLog(ctx context.Context, item AuditLog) error
 }
@@ -171,11 +171,12 @@ func (repo *MemoryRepository) DeleteMedia(_ context.Context, id string) (MediaAs
 	return MediaAsset{}, ErrMediaNotFound
 }
 
-func (repo *MemoryRepository) GetStats(_ context.Context) (Stats, error) {
+func (repo *MemoryRepository) GetStats(_ context.Context, rangeKey string) (Stats, error) {
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
-	return cloneStats(repo.stats), nil
+	stats := cloneStats(repo.stats)
+	return statsForRange(stats, rangeKey), nil
 }
 
 func (repo *MemoryRepository) ListAuditLogs(_ context.Context, query AuditLogQuery) (AuditLogListResult, error) {
@@ -397,6 +398,8 @@ func seedMedia() []MediaAsset {
 
 func seedStats() Stats {
 	return Stats{
+		Range:      "30d",
+		RangeLabel: "最近 30 天",
 		Metrics: []Metric{
 			{Label: "PV", Value: "86.4k", Delta: "较上期 +18%"},
 			{Label: "UV", Value: "24.7k", Delta: "较上期 +9%"},
@@ -431,6 +434,86 @@ func seedStats() Stats {
 			{Title: "搜索词“评论审核”增长明显", Body: "可以补一篇用户评论系统设计。"},
 			{Title: "专题页带来 18% 收藏", Body: "建议继续完善专题导航。"},
 		},
+	}
+}
+
+func statsForRange(stats Stats, rangeKey string) Stats {
+	switch normalizeStatsRange(rangeKey) {
+	case "7d":
+		stats.Range = "7d"
+		stats.RangeLabel = "最近 7 天"
+		stats.Metrics = []Metric{
+			{Label: "PV", Value: "18.2k", Delta: "较上周 +6%"},
+			{Label: "UV", Value: "5.8k", Delta: "较上周 +4%"},
+			{Label: "平均阅读", Value: "4:02", Delta: "提升 18 秒"},
+			{Label: "RSS 访问", Value: "96", Delta: "转化率 2.1%"},
+		}
+		stats.Trend = []BarPoint{
+			{Label: "周一", Value: "2.1k", Percent: 58},
+			{Label: "周二", Value: "2.4k", Percent: 66},
+			{Label: "周三", Value: "3.2k", Percent: 88, Tone: "rust"},
+			{Label: "周四", Value: "2.8k", Percent: 77},
+			{Label: "周五", Value: "2.5k", Percent: 69, Tone: "amber"},
+			{Label: "周六", Value: "1.9k", Percent: 52},
+			{Label: "周日", Value: "1.3k", Percent: 36},
+		}
+		stats.SearchTerms = []SearchTerm{
+			{Term: "站内信", Count: 214},
+			{Term: "投稿审核", Count: 196},
+			{Term: "Vue3 博客", Count: 151},
+		}
+		stats.Suggestions = []ContentSuggestion{
+			{Title: "投稿审核相关搜索上升", Body: "可以补充一篇投稿流程说明。"},
+			{Title: "站内信功能关注度提升", Body: "建议完善账号通知文档。"},
+		}
+	case "ytd":
+		stats.Range = "ytd"
+		stats.RangeLabel = "今年"
+		stats.Metrics = []Metric{
+			{Label: "PV", Value: "642.8k", Delta: "同比 +31%"},
+			{Label: "UV", Value: "168.4k", Delta: "同比 +22%"},
+			{Label: "平均阅读", Value: "4:36", Delta: "提升 44 秒"},
+			{Label: "RSS 访问", Value: "3,284", Delta: "转化率 3.4%"},
+		}
+		stats.Trend = []BarPoint{
+			{Label: "1月", Value: "62k", Percent: 54},
+			{Label: "2月", Value: "58k", Percent: 50},
+			{Label: "3月", Value: "79k", Percent: 69, Tone: "amber"},
+			{Label: "4月", Value: "93k", Percent: 81},
+			{Label: "5月", Value: "112k", Percent: 97, Tone: "rust"},
+			{Label: "6月", Value: "104k", Percent: 90},
+			{Label: "7月", Value: "86k", Percent: 75},
+		}
+		stats.TopPosts = []TopPost{
+			{Title: "如何设计一个内容长期增长的博客系统", Views: "48,210", Bookmarks: 1204, Comments: 184, RSSRate: "4.6%"},
+			{Title: "Vue3 内容站的缓存与 SEO 边界", Views: "41,884", Bookmarks: 986, Comments: 128, RSSRate: "3.9%"},
+			{Title: "Redis 和 PostgreSQL 在博客中的分工", Views: "33,406", Bookmarks: 712, Comments: 93, RSSRate: "3.1%"},
+		}
+		stats.SearchTerms = []SearchTerm{
+			{Term: "博客系统设计", Count: 7294},
+			{Term: "Vue3 SEO", Count: 6180},
+			{Term: "PostgreSQL 全文搜索", Count: 4112},
+		}
+		stats.Suggestions = []ContentSuggestion{
+			{Title: "架构类文章全年表现稳定", Body: "可以将数据库、缓存、搜索整理成系列专题。"},
+			{Title: "Vue3 SEO 长尾流量持续增长", Body: "建议补充 SSR 和预渲染边界文章。"},
+		}
+	default:
+		stats.Range = "30d"
+		stats.RangeLabel = "最近 30 天"
+	}
+
+	return stats
+}
+
+func normalizeStatsRange(rangeKey string) string {
+	switch strings.ToLower(strings.TrimSpace(rangeKey)) {
+	case "7d", "7":
+		return "7d"
+	case "ytd", "year":
+		return "ytd"
+	default:
+		return "30d"
 	}
 }
 

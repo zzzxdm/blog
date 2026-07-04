@@ -630,13 +630,23 @@ func TestAdminOperationsAPIs(t *testing.T) {
 		t.Fatalf("expected stats response, got status=%d body=%q", statsRec.Code, statsRec.Body.String())
 	}
 
-	statsExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats/export", nil)
+	statsRangeReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats?range=7d", nil)
+	for _, cookie := range adminCookies {
+		statsRangeReq.AddCookie(cookie)
+	}
+	statsRangeRec := httptest.NewRecorder()
+	router.ServeHTTP(statsRangeRec, statsRangeReq)
+	if statsRangeRec.Code != http.StatusOK || !strings.Contains(statsRangeRec.Body.String(), `"range":"7d"`) || !strings.Contains(statsRangeRec.Body.String(), "最近 7 天") {
+		t.Fatalf("expected ranged stats response, got status=%d body=%q", statsRangeRec.Code, statsRangeRec.Body.String())
+	}
+
+	statsExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/stats/export?range=7d", nil)
 	for _, cookie := range adminCookies {
 		statsExportReq.AddCookie(cookie)
 	}
 	statsExportRec := httptest.NewRecorder()
 	router.ServeHTTP(statsExportRec, statsExportReq)
-	if statsExportRec.Code != http.StatusOK || !strings.Contains(statsExportRec.Body.String(), `"scope":"stats"`) || !strings.Contains(statsExportRec.Body.String(), `"label":"PV"`) {
+	if statsExportRec.Code != http.StatusOK || !strings.Contains(statsExportRec.Body.String(), `"scope":"stats"`) || !strings.Contains(statsExportRec.Body.String(), `"range":"7d"`) {
 		t.Fatalf("expected stats export, got status=%d body=%q", statsExportRec.Code, statsExportRec.Body.String())
 	}
 

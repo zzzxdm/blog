@@ -325,7 +325,7 @@ func (handler *Handler) GetStats(ctx *gin.Context) {
 		return
 	}
 
-	stats, err := handler.repo.GetStats(ctx.Request.Context())
+	stats, err := handler.repo.GetStats(ctx.Request.Context(), ctx.Query("range"))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
 		return
@@ -339,7 +339,7 @@ func (handler *Handler) ExportStats(ctx *gin.Context) {
 		return
 	}
 
-	stats, err := handler.repo.GetStats(ctx.Request.Context())
+	stats, err := handler.repo.GetStats(ctx.Request.Context(), ctx.Query("range"))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export stats"})
 		return

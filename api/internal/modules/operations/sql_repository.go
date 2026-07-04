@@ -183,8 +183,8 @@ func (repo *SQLRepository) DeleteMedia(ctx context.Context, id string) (MediaAss
 	return asset, nil
 }
 
-func (repo *SQLRepository) GetStats(_ context.Context) (Stats, error) {
-	return cloneStats(seedStats()), nil
+func (repo *SQLRepository) GetStats(_ context.Context, rangeKey string) (Stats, error) {
+	return statsForRange(cloneStats(seedStats()), rangeKey), nil
 }
 
 func (repo *SQLRepository) ListAuditLogs(ctx context.Context, query AuditLogQuery) (AuditLogListResult, error) {

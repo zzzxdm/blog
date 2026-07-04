@@ -10,6 +10,8 @@ import {
 import { downloadJson, exportFileName } from "../../shared/download";
 
 const stats = ref<AdminStats>({
+  range: "30d",
+  rangeLabel: "最近 30 天",
   metrics: [],
   trend: [],
   topPosts: [],
@@ -20,6 +22,7 @@ const stats = ref<AdminStats>({
 const loading = ref(false);
 const exporting = ref(false);
 const error = ref("");
+const range = ref("30d");
 
 onMounted(load);
 
@@ -28,7 +31,7 @@ async function load() {
   error.value = "";
 
   try {
-    stats.value = await getAdminStats();
+    stats.value = await getAdminStats(range.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "统计数据加载失败";
   } finally {
@@ -41,7 +44,7 @@ async function exportReport() {
   error.value = "";
 
   try {
-    downloadJson(exportFileName("stats-report"), await exportAdminStats());
+    downloadJson(exportFileName(`stats-report-${range.value}`), await exportAdminStats(range.value));
   } catch (err) {
     error.value = err instanceof Error ? err.message : "统计报表导出失败";
   } finally {
@@ -54,10 +57,10 @@ async function exportReport() {
   <AdminLayout title="数据统计" description="查看访问趋势、热门内容、搜索词、来源渠道和评论互动。" mobile-title="数据统计" primary-action="导出">
     <template #actions>
       <div class="header-actions">
-        <select class="input" aria-label="时间范围">
-          <option>最近 30 天</option>
-          <option>最近 7 天</option>
-          <option>今年</option>
+        <select v-model="range" class="input" aria-label="时间范围" @change="load">
+          <option value="30d">最近 30 天</option>
+          <option value="7d">最近 7 天</option>
+          <option value="ytd">今年</option>
         </select>
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportReport">{{ exporting ? "导出中..." : "导出报表" }}</button>
       </div>
@@ -78,7 +81,7 @@ async function exportReport() {
           <section class="chart-card">
             <div class="panel-title">
               <h2>访问趋势</h2>
-              <span class="tag">PV / UV</span>
+              <span class="tag">{{ stats.rangeLabel }}</span>
             </div>
             <div class="bar-chart">
               <div v-for="point in stats.trend" :key="point.label" class="bar-row">

@@ -398,6 +398,8 @@ export interface ContentSuggestion {
 }
 
 export interface AdminStats {
+  range: string;
+  rangeLabel: string;
   metrics: StatMetric[];
   trend: BarPoint[];
   topPosts: TopPostStat[];
@@ -994,12 +996,14 @@ export async function deleteAdminMedia(id: string): Promise<{ ok: boolean; asset
   });
 }
 
-export async function getAdminStats(): Promise<AdminStats> {
-  return request<AdminStats>("/admin/stats");
+export async function getAdminStats(range = "30d"): Promise<AdminStats> {
+  const query = toQuery({ range });
+  return request<AdminStats>(`/admin/stats${query}`);
 }
 
-export async function exportAdminStats(): Promise<AdminStatsExport> {
-  return request<AdminStatsExport>("/admin/stats/export");
+export async function exportAdminStats(range = "30d"): Promise<AdminStatsExport> {
+  const query = toQuery({ range });
+  return request<AdminStatsExport>(`/admin/stats/export${query}`);
 }
 
 export async function getAdminAuditLogs(params: AuditLogParams = {}): Promise<AuditLogListResponse> {
