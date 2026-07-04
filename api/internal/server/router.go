@@ -43,17 +43,20 @@ type Repositories struct {
 	TaxonomyRepo   taxonomies.Repository
 }
 
-type authSessionSettingsReader struct {
+type authSecuritySettingsReader struct {
 	repo operations.Repository
 }
 
-func (reader authSessionSettingsReader) SessionSettings(ctx context.Context) (auth.SessionSettings, error) {
+func (reader authSecuritySettingsReader) SecuritySettings(ctx context.Context) (auth.SecuritySettings, error) {
 	settings, err := reader.repo.GetSettings(ctx)
 	if err != nil {
-		return auth.SessionSettings{}, err
+		return auth.SecuritySettings{}, err
 	}
 
-	return auth.SessionSettings{SessionDays: settings.SessionDays}, nil
+	return auth.SecuritySettings{
+		SessionDays:      settings.SessionDays,
+		LoginFailureLock: settings.LoginFailureLock,
+	}, nil
 }
 
 func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engine {
@@ -116,7 +119,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		})
 	})
 
-	auth.RegisterRoutesWithSettings(api, repos.AuthStore, authSessionSettingsReader{repo: repos.OperationsRepo})
+	auth.RegisterRoutesWithSettings(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo})
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
 	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)

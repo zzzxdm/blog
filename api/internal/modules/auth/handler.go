@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,34 +17,48 @@ const (
 	defaultSessionDays = 7
 	minSessionDays     = 1
 	maxSessionDays     = 90
+	loginFailureLimit  = 5
+	loginLockDuration  = 15 * time.Minute
 )
 
 type Handler struct {
-	store    Store
-	settings SessionSettingsReader
+	store         Store
+	settings      SecuritySettingsReader
+	loginFailures map[string]loginFailure
+	loginMu       sync.Mutex
 }
 
-type SessionSettings struct {
-	SessionDays int
+type SecuritySettings struct {
+	SessionDays      int
+	LoginFailureLock bool
 }
 
-type SessionSettingsReader interface {
-	SessionSettings(ctx context.Context) (SessionSettings, error)
+type SecuritySettingsReader interface {
+	SecuritySettings(ctx context.Context) (SecuritySettings, error)
+}
+
+type loginFailure struct {
+	Count       int
+	LockedUntil time.Time
 }
 
 func NewHandler(store Store) *Handler {
 	return NewHandlerWithSettings(store, nil)
 }
 
-func NewHandlerWithSettings(store Store, settings SessionSettingsReader) *Handler {
-	return &Handler{store: store, settings: settings}
+func NewHandlerWithSettings(store Store, settings SecuritySettingsReader) *Handler {
+	return &Handler{
+		store:         store,
+		settings:      settings,
+		loginFailures: map[string]loginFailure{},
+	}
 }
 
 func RegisterRoutes(router gin.IRouter, store Store) {
 	RegisterRoutesWithSettings(router, store, nil)
 }
 
-func RegisterRoutesWithSettings(router gin.IRouter, store Store, settings SessionSettingsReader) {
+func RegisterRoutesWithSettings(router gin.IRouter, store Store, settings SecuritySettingsReader) {
 	handler := NewHandlerWithSettings(store, settings)
 
 	router.POST("/auth/login", handler.Login)
@@ -119,9 +134,20 @@ func (handler *Handler) Login(ctx *gin.Context) {
 		return
 	}
 
+	security := handler.configuredSecuritySettings(ctx)
+	if security.LoginFailureLock && handler.isLoginLocked(request.Email, time.Now()) {
+		ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked"})
+		return
+	}
+
 	user, token, err := handler.store.Authenticate(request.Email, request.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
+			if security.LoginFailureLock && handler.recordLoginFailure(request.Email, time.Now()) {
+				ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked"})
+				return
+			}
+
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 			return
 		}
@@ -130,7 +156,8 @@ func (handler *Handler) Login(ctx *gin.Context) {
 		return
 	}
 
-	sessionDays := handler.configuredSessionDays(ctx)
+	handler.clearLoginFailure(request.Email)
+	sessionDays := clampSessionDays(security.SessionDays)
 	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
 		return
@@ -163,7 +190,7 @@ func (handler *Handler) Register(ctx *gin.Context) {
 		return
 	}
 
-	sessionDays := handler.configuredSessionDays(ctx)
+	sessionDays := clampSessionDays(handler.configuredSecuritySettings(ctx).SessionDays)
 	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
 		return
@@ -391,17 +418,69 @@ func (handler *Handler) ResetPassword(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-func (handler *Handler) configuredSessionDays(ctx *gin.Context) int {
+func (handler *Handler) configuredSecuritySettings(ctx *gin.Context) SecuritySettings {
 	if handler.settings == nil {
-		return defaultSessionDays
+		return SecuritySettings{SessionDays: defaultSessionDays}
 	}
 
-	settings, err := handler.settings.SessionSettings(ctx.Request.Context())
+	settings, err := handler.settings.SecuritySettings(ctx.Request.Context())
 	if err != nil {
-		return defaultSessionDays
+		return SecuritySettings{SessionDays: defaultSessionDays}
 	}
 
-	return clampSessionDays(settings.SessionDays)
+	settings.SessionDays = clampSessionDays(settings.SessionDays)
+	return settings
+}
+
+func (handler *Handler) isLoginLocked(email string, now time.Time) bool {
+	key := normalizeEmail(email)
+	if key == "" {
+		return false
+	}
+
+	handler.loginMu.Lock()
+	defer handler.loginMu.Unlock()
+
+	failure := handler.loginFailures[key]
+	if failure.LockedUntil.IsZero() {
+		return false
+	}
+	if failure.LockedUntil.After(now) {
+		return true
+	}
+
+	delete(handler.loginFailures, key)
+	return false
+}
+
+func (handler *Handler) recordLoginFailure(email string, now time.Time) bool {
+	key := normalizeEmail(email)
+	if key == "" {
+		return false
+	}
+
+	handler.loginMu.Lock()
+	defer handler.loginMu.Unlock()
+
+	failure := handler.loginFailures[key]
+	failure.Count++
+	if failure.Count >= loginFailureLimit {
+		failure.LockedUntil = now.Add(loginLockDuration)
+	}
+	handler.loginFailures[key] = failure
+
+	return !failure.LockedUntil.IsZero() && failure.LockedUntil.After(now)
+}
+
+func (handler *Handler) clearLoginFailure(email string) {
+	key := normalizeEmail(email)
+	if key == "" {
+		return
+	}
+
+	handler.loginMu.Lock()
+	delete(handler.loginFailures, key)
+	handler.loginMu.Unlock()
 }
 
 func clampSessionDays(days int) int {
