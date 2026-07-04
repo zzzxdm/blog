@@ -30,3 +30,23 @@ Default URLs:
 - Web: `http://localhost:5173`
 - API: `http://localhost:8080/api/health`
 
+Default development accounts:
+
+- Admin: `admin@example.com` / `password`
+- User: `linyi@example.com` / `password`
+
+## Verification
+
+Backend:
+
+```bash
+cd api
+go test ./...
+```
+
+Frontend:
+
+```bash
+cd web
+npm run build
+```
