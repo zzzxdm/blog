@@ -185,6 +185,9 @@ func normalizeAccountSettings(settings AccountSettings, user auth.User) AccountS
 	settings.AvatarText = firstRune(settings.DisplayName)
 	settings.TwoFactor = false
 	settings.LoginAlert = false
+	settings.NotifyReview = true
+	settings.NotifyComment = false
+	settings.NotifyAnnouncement = true
 	settings.EmailNotification = false
 	settings.ProfileCompleteness = profileCompleteness(settings)
 	settings.SecurityLevel = securityLevel(settings)
@@ -232,7 +235,7 @@ func accountFromUser(user ManagedUser) AccountSettings {
 		TwoFactor:                false,
 		LoginAlert:               false,
 		NotifyReview:             true,
-		NotifyComment:            true,
+		NotifyComment:            false,
 		NotifyAnnouncement:       true,
 		EmailNotification:        false,
 		PublicProfile:            true,

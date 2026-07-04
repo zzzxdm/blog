@@ -293,9 +293,9 @@ function formatDate(value: string) {
         <section class="panel">
           <div class="panel-title"><h2>消息偏好</h2><RouterLink class="button-secondary" to="/account/messages">查看站内信</RouterLink></div>
           <div class="settings-stack">
-            <label class="setting-row"><div><strong>投稿审核结果</strong><div class="meta-row"><span>通过、退回、拒绝都会发送站内信</span></div></div><input v-model="settings.notifyReview" type="checkbox"></label>
-            <label class="setting-row"><div><strong>评论回复</strong><div class="meta-row"><span>有人回复或点赞你的评论时提醒</span></div></div><input v-model="settings.notifyComment" type="checkbox"></label>
-            <label class="setting-row"><div><strong>站点公告</strong><div class="meta-row"><span>接收维护、规则和功能更新</span></div></div><input v-model="settings.notifyAnnouncement" type="checkbox"></label>
+            <label class="setting-row"><div><strong>固定接收投稿审核结果</strong><div class="meta-row"><span>通过、退回、拒绝都会发送站内信</span></div></div><input v-model="settings.notifyReview" type="checkbox" disabled></label>
+            <label class="setting-row"><div><strong>评论回复提醒预留</strong><div class="meta-row"><span>回复和点赞通知接入后启用</span></div></div><input v-model="settings.notifyComment" type="checkbox" disabled></label>
+            <label class="setting-row"><div><strong>固定接收站点公告</strong><div class="meta-row"><span>维护、规则和功能更新通过站内信发送</span></div></div><input v-model="settings.notifyAnnouncement" type="checkbox" disabled></label>
             <label class="setting-row"><div><strong>邮件提醒偏好预留</strong><div class="meta-row"><span>邮件服务接入后同步重要账号事件</span></div></div><input v-model="settings.emailNotification" type="checkbox" disabled></label>
           </div>
         </section>
