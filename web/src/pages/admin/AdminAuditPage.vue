@@ -73,6 +73,7 @@ function actionText(value: string) {
     "comments.export": "导出评论",
     "messages.export": "导出站内信",
     "users.export": "导出用户",
+    "user.invite": "邀请用户",
     "user.password_reset": "重置用户密码",
     "navigation.update": "更新导航",
     "media.create": "上传媒体",
@@ -159,6 +160,7 @@ function formatDate(value: string) {
           <option value="comments.export">导出评论</option>
           <option value="messages.export">导出站内信</option>
           <option value="users.export">导出用户</option>
+          <option value="user.invite">邀请用户</option>
           <option value="user.password_reset">重置用户密码</option>
           <option value="post.publish">发布文章</option>
           <option value="post.restore">恢复版本</option>

@@ -501,6 +501,13 @@ export interface AdminPasswordResetResponse {
   delivery: string;
 }
 
+export interface AdminInvitationResponse {
+  ok: boolean;
+  user: ManagedUser;
+  resetToken?: string;
+  delivery: string;
+}
+
 export interface AccountSettings {
   displayName: string;
   username: string;
@@ -997,6 +1004,13 @@ export async function getAdminUsers(): Promise<UserListResponse> {
 
 export async function exportAdminUsers(): Promise<AdminUsersExport> {
   return request<AdminUsersExport>("/admin/users/export");
+}
+
+export async function inviteAdminUser(payload: { email: string; displayName: string; role: string }): Promise<AdminInvitationResponse> {
+  return request<AdminInvitationResponse>("/admin/users/invitations", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function updateAdminUserStatus(id: string, status: ManagedUser["status"]): Promise<ManagedUser> {

@@ -3,6 +3,7 @@ package users
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"blog/api/internal/modules/auth"
@@ -24,6 +25,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, authStore auth.Store) {
 
 	router.GET("/admin/users", handler.List)
 	router.GET("/admin/users/export", handler.Export)
+	router.POST("/admin/users/invitations", handler.Invite)
 	router.PUT("/admin/users/:id/status", handler.UpdateStatus)
 	router.POST("/admin/users/:id/password-reset", handler.RequestPasswordReset)
 	router.GET("/account/settings", handler.GetAccount)
@@ -61,6 +63,50 @@ func (handler *Handler) Export(ctx *gin.Context) {
 		"items":      result.Items,
 		"total":      result.Total,
 		"stats":      result.Stats,
+	})
+}
+
+func (handler *Handler) Invite(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+	if handler.authStore == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "user invitation is unavailable"})
+		return
+	}
+
+	var request auth.InviteUserRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid invitation payload"})
+		return
+	}
+	if strings.TrimSpace(request.Email) == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+		return
+	}
+
+	invited, token, err := handler.authStore.InviteUser(request)
+	if err != nil {
+		if errors.Is(err, auth.ErrEmailExists) {
+			ctx.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to invite user"})
+		return
+	}
+
+	managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), invited)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync invited user"})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, InvitationResult{
+		OK:         true,
+		User:       managed,
+		ResetToken: token,
+		Delivery:   "dev-response",
 	})
 }
 

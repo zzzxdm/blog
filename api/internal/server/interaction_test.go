@@ -702,6 +702,48 @@ func TestUsersAndAccountSettingsAPIs(t *testing.T) {
 		t.Fatalf("expected admin users list, got status=%d body=%q", adminListRec.Code, adminListRec.Body.String())
 	}
 
+	inviteReq := httptest.NewRequest(http.MethodPost, "/api/admin/users/invitations", bytes.NewBufferString(`{"email":"writer@example.com","displayName":"特约作者","role":"author"}`))
+	inviteReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range adminCookies {
+		inviteReq.AddCookie(cookie)
+	}
+	inviteRec := httptest.NewRecorder()
+	router.ServeHTTP(inviteRec, inviteReq)
+	if inviteRec.Code != http.StatusCreated || !strings.Contains(inviteRec.Body.String(), `"role":"author"`) || !strings.Contains(inviteRec.Body.String(), `"delivery":"dev-response"`) {
+		t.Fatalf("expected author invited, got status=%d body=%q", inviteRec.Code, inviteRec.Body.String())
+	}
+
+	var invitation struct {
+		ResetToken string `json:"resetToken"`
+		User       struct {
+			ID    string `json:"id"`
+			Email string `json:"email"`
+			Role  string `json:"role"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(inviteRec.Body.Bytes(), &invitation); err != nil {
+		t.Fatalf("decode invitation: %v", err)
+	}
+	if invitation.ResetToken == "" || invitation.User.Email != "writer@example.com" || invitation.User.Role != "author" {
+		t.Fatalf("expected invitation token and author user, got %+v", invitation)
+	}
+
+	resetInvitedReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", bytes.NewBufferString(`{"token":"`+invitation.ResetToken+`","newPassword":"writer-password"}`))
+	resetInvitedReq.Header.Set("Content-Type", "application/json")
+	resetInvitedRec := httptest.NewRecorder()
+	router.ServeHTTP(resetInvitedRec, resetInvitedReq)
+	if resetInvitedRec.Code != http.StatusOK || !strings.Contains(resetInvitedRec.Body.String(), `"ok":true`) {
+		t.Fatalf("expected invited author password reset, got status=%d body=%q", resetInvitedRec.Code, resetInvitedRec.Body.String())
+	}
+
+	writerLoginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"email":"writer@example.com","password":"writer-password"}`))
+	writerLoginReq.Header.Set("Content-Type", "application/json")
+	writerLoginRec := httptest.NewRecorder()
+	router.ServeHTTP(writerLoginRec, writerLoginReq)
+	if writerLoginRec.Code != http.StatusOK || !strings.Contains(writerLoginRec.Body.String(), `"role":"author"`) {
+		t.Fatalf("expected invited author login, got status=%d body=%q", writerLoginRec.Code, writerLoginRec.Body.String())
+	}
+
 	usersExportReq := httptest.NewRequest(http.MethodGet, "/api/admin/users/export", nil)
 	for _, cookie := range adminCookies {
 		usersExportReq.AddCookie(cookie)

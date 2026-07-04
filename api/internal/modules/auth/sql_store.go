@@ -124,6 +124,80 @@ func (store *SQLStore) Register(request RegisterRequest) (User, string, error) {
 	return user, token, nil
 }
 
+func (store *SQLStore) InviteUser(request InviteUserRequest) (User, string, error) {
+	normalizedEmail := normalizeEmail(request.Email)
+	displayName := strings.TrimSpace(request.DisplayName)
+	if displayName == "" {
+		displayName = strings.Split(normalizedEmail, "@")[0]
+	}
+	if normalizedEmail == "" {
+		return User{}, "", ErrInvalidCredentials
+	}
+
+	tx, err := store.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return User{}, "", err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var exists bool
+	if err := tx.QueryRowContext(context.Background(), `SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)`, normalizedEmail).Scan(&exists); err != nil {
+		return User{}, "", fmt.Errorf("check invitation email: %w", err)
+	}
+	if exists {
+		return User{}, "", ErrEmailExists
+	}
+
+	tempPassword, err := randomToken()
+	if err != nil {
+		return User{}, "", err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, "", err
+	}
+
+	user := User{
+		ID:            uniqueUserID(normalizedEmail),
+		Email:         normalizedEmail,
+		DisplayName:   displayName,
+		Role:          normalizeRole(request.Role),
+		Status:        "active",
+		AvatarText:    firstRune(displayName),
+		EmailVerified: false,
+	}
+
+	if _, err := tx.ExecContext(context.Background(), `
+		INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, user.ID, user.Email, user.DisplayName, user.Role, user.Status, user.AvatarText, user.EmailVerified, string(hash)); err != nil {
+		return User{}, "", fmt.Errorf("insert invited user: %w", err)
+	}
+
+	resetToken, err := randomToken()
+	if err != nil {
+		return User{}, "", err
+	}
+	if _, err := tx.ExecContext(context.Background(), `
+		INSERT INTO password_reset_tokens (token, user_id, expires_at)
+		VALUES ($1, $2, $3)
+	`, resetToken, user.ID, store.now().Add(30*time.Minute)); err != nil {
+		return User{}, "", fmt.Errorf("insert invitation reset token: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return User{}, "", err
+	}
+	committed = true
+
+	return user, resetToken, nil
+}
+
 func (store *SQLStore) UserBySession(token string) (User, error) {
 	var user User
 	err := store.db.QueryRowContext(context.Background(), `

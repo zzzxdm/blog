@@ -39,6 +39,13 @@ type PasswordResetResult struct {
 	Delivery   string      `json:"delivery"`
 }
 
+type InvitationResult struct {
+	OK         bool        `json:"ok"`
+	User       ManagedUser `json:"user"`
+	ResetToken string      `json:"resetToken,omitempty"`
+	Delivery   string      `json:"delivery"`
+}
+
 type StatusRequest struct {
 	Status string `json:"status"`
 }

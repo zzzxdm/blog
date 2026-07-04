@@ -32,6 +32,7 @@ type authToken struct {
 type Store interface {
 	Authenticate(email string, password string) (User, string, error)
 	Register(request RegisterRequest) (User, string, error)
+	InviteUser(request InviteUserRequest) (User, string, error)
 	UserBySession(token string) (User, error)
 	ChangePassword(userID string, currentPassword string, newPassword string) error
 	RequestEmailVerification(userID string) (string, error)
@@ -163,6 +164,57 @@ func (store *MemoryStore) Register(request RegisterRequest) (User, string, error
 	}
 
 	return user, token, nil
+}
+
+func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, string, error) {
+	normalizedEmail := normalizeEmail(request.Email)
+	displayName := strings.TrimSpace(request.DisplayName)
+	if displayName == "" {
+		displayName = strings.Split(normalizedEmail, "@")[0]
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if normalizedEmail == "" {
+		return User{}, "", ErrInvalidCredentials
+	}
+	if _, ok := store.usersByEmail[normalizedEmail]; ok {
+		return User{}, "", ErrEmailExists
+	}
+
+	resetToken, err := randomToken()
+	if err != nil {
+		return User{}, "", err
+	}
+	tempPassword, err := randomToken()
+	if err != nil {
+		return User{}, "", err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, "", err
+	}
+
+	user := User{
+		ID:            uniqueUserID(normalizedEmail),
+		Email:         normalizedEmail,
+		DisplayName:   displayName,
+		Role:          normalizeRole(request.Role),
+		Status:        "active",
+		AvatarText:    firstRune(displayName),
+		EmailVerified: false,
+	}
+
+	store.usersByID[user.ID] = user
+	store.usersByEmail[normalizedEmail] = user.ID
+	store.passwordHashes[user.ID] = hash
+	store.resetTokens[resetToken] = authToken{
+		UserID:    user.ID,
+		ExpiresAt: store.now().Add(30 * time.Minute),
+	}
+
+	return user, resetToken, nil
 }
 
 func (store *MemoryStore) UserBySession(token string) (User, error) {
@@ -404,6 +456,15 @@ func firstRune(value string) string {
 	}
 
 	return "用"
+}
+
+func normalizeRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "admin", "editor", "author":
+		return strings.ToLower(strings.TrimSpace(role))
+	default:
+		return "author"
+	}
 }
 
 func sessionInfo(token string, item session, current bool) SessionInfo {

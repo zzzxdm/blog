@@ -21,6 +21,12 @@ type RegisterRequest struct {
 	DisplayName string `json:"displayName"`
 }
 
+type InviteUserRequest struct {
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+	Role        string `json:"role"`
+}
+
 type PasswordChangeRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`

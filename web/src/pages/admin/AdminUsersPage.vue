@@ -5,6 +5,7 @@ import AdminLayout from "../../components/AdminLayout.vue";
 import {
   exportAdminUsers,
   getAdminUsers,
+  inviteAdminUser,
   requestAdminUserPasswordReset,
   updateAdminUserStatus,
   type ManagedUser,
@@ -16,10 +17,15 @@ const users = ref<ManagedUser[]>([]);
 const stats = ref<UserStats>({ total: 0, emailVerified: 0, authors: 0, muted: 0, banned: 0 });
 const loading = ref(false);
 const exporting = ref(false);
+const inviting = ref(false);
 const actingId = ref("");
 const resettingId = ref("");
 const error = ref("");
 const message = ref("");
+const inviteOpen = ref(false);
+const inviteEmail = ref("");
+const inviteName = ref("");
+const inviteRole = ref("author");
 
 onMounted(load);
 
@@ -66,6 +72,30 @@ async function exportUsers() {
     error.value = err instanceof Error ? err.message : "用户导出失败";
   } finally {
     exporting.value = false;
+  }
+}
+
+async function inviteUser() {
+  inviting.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const result = await inviteAdminUser({
+      email: inviteEmail.value,
+      displayName: inviteName.value,
+      role: inviteRole.value
+    });
+    inviteEmail.value = "";
+    inviteName.value = "";
+    inviteRole.value = "author";
+    inviteOpen.value = false;
+    message.value = result.resetToken ? `已邀请 ${result.user.displayName}，首次设置密码 token：${result.resetToken}` : `已邀请 ${result.user.displayName}。`;
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "邀请失败";
+  } finally {
+    inviting.value = false;
   }
 }
 
@@ -119,7 +149,7 @@ function formatDate(value: string) {
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportUsers">{{ exporting ? "导出中..." : "导出用户" }}</button>
-        <button class="button" type="button">邀请作者</button>
+        <button class="button" type="button" @click="inviteOpen = !inviteOpen">{{ inviteOpen ? "收起邀请" : "邀请作者" }}</button>
       </div>
     </template>
 
@@ -132,6 +162,21 @@ function formatDate(value: string) {
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="muted">{{ message }}</p>
+
+    <section v-if="inviteOpen" class="panel">
+      <div class="panel-title"><h2>邀请作者</h2><span class="tag">作者账号</span></div>
+      <form class="settings-stack" @submit.prevent="inviteUser">
+        <div class="admin-grid-2">
+          <div class="field"><label for="invite-email">邮箱</label><input v-model="inviteEmail" class="input" id="invite-email" type="email" autocomplete="off"></div>
+          <div class="field"><label for="invite-name">昵称</label><input v-model="inviteName" class="input" id="invite-name" autocomplete="off"></div>
+        </div>
+        <div class="field"><label for="invite-role">角色</label><select v-model="inviteRole" class="input" id="invite-role"><option value="author">作者</option><option value="editor">编辑</option></select></div>
+        <div class="header-actions">
+          <button class="button" type="submit" :disabled="inviting || !inviteEmail">{{ inviting ? "邀请中..." : "发送邀请" }}</button>
+          <button class="button-secondary" type="button" :disabled="inviting" @click="inviteOpen = false">取消</button>
+        </div>
+      </form>
+    </section>
 
     <section class="table-panel" aria-label="用户列表">
       <form class="table-toolbar" @submit.prevent="load">

@@ -18,6 +18,7 @@ var (
 type Repository interface {
 	List(ctx context.Context) (UserListResult, error)
 	Get(ctx context.Context, userID string) (ManagedUser, error)
+	EnsureFromAuth(ctx context.Context, user auth.User) (ManagedUser, error)
 	UpdateStatus(ctx context.Context, userID string, status string) (ManagedUser, error)
 	GetAccount(ctx context.Context, user auth.User) (AccountSettings, error)
 	UpdateAccount(ctx context.Context, user auth.User, settings AccountSettings) (AccountSettings, error)
@@ -70,6 +71,40 @@ func (repo *MemoryRepository) Get(_ context.Context, userID string) (ManagedUser
 	}
 
 	return user, nil
+}
+
+func (repo *MemoryRepository) EnsureFromAuth(_ context.Context, user auth.User) (ManagedUser, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	managed, ok := repo.users[user.ID]
+	if !ok {
+		managed = ManagedUser{
+			ID:            user.ID,
+			Email:         user.Email,
+			DisplayName:   user.DisplayName,
+			Role:          user.Role,
+			Status:        user.Status,
+			AvatarText:    user.AvatarText,
+			EmailVerified: user.EmailVerified,
+			RegisteredAt:  repo.now(),
+			LastLoginAt:   repo.now(),
+		}
+	} else {
+		managed.Email = user.Email
+		managed.DisplayName = user.DisplayName
+		managed.Role = user.Role
+		managed.Status = user.Status
+		managed.AvatarText = user.AvatarText
+		managed.EmailVerified = user.EmailVerified
+	}
+
+	repo.users[user.ID] = managed
+	if _, ok := repo.accounts[user.ID]; !ok {
+		repo.accounts[user.ID] = accountFromUser(managed)
+	}
+
+	return managed, nil
 }
 
 func (repo *MemoryRepository) UpdateStatus(_ context.Context, userID string, status string) (ManagedUser, error) {
