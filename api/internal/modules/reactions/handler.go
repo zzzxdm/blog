@@ -30,6 +30,9 @@ func RegisterRoutes(router gin.IRouter, repo Repository, postRepo posts.Reposito
 
 func (handler *Handler) Get(ctx *gin.Context) {
 	user, _ := auth.CurrentUser(ctx)
+	if !handler.ensurePostExists(ctx) {
+		return
+	}
 
 	summary, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("slug"), user.ID)
 	if err != nil {
@@ -43,6 +46,9 @@ func (handler *Handler) Get(ctx *gin.Context) {
 func (handler *Handler) SetReaction(ctx *gin.Context) {
 	user, ok := auth.RequireUser(ctx)
 	if !ok {
+		return
+	}
+	if !handler.ensurePostExists(ctx) {
 		return
 	}
 
@@ -71,6 +77,9 @@ func (handler *Handler) SetBookmark(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !handler.ensurePostExists(ctx) {
+		return
+	}
 
 	var request BookmarkRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -85,6 +94,25 @@ func (handler *Handler) SetBookmark(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, summary)
+}
+
+func (handler *Handler) ensurePostExists(ctx *gin.Context) bool {
+	if handler.postRepo == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post repository is unavailable"})
+		return false
+	}
+
+	if _, err := handler.postRepo.GetBySlug(ctx.Request.Context(), ctx.Param("slug")); err != nil {
+		if errors.Is(err, posts.ErrNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return false
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load post"})
+		return false
+	}
+
+	return true
 }
 
 type BookmarkItem struct {
