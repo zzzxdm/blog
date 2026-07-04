@@ -1,5 +1,126 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+
 import AdminLayout from "../../components/AdminLayout.vue";
+import {
+  getAdminComments,
+  getAdminMessages,
+  getAdminPosts,
+  getAdminStats,
+  getAdminSubmissions,
+  type AdminPostStats,
+  type AdminStats,
+  type Comment,
+  type MessageStats,
+  type StationMessage,
+  type Submission,
+  type SubmissionStats
+} from "../../shared/api";
+
+interface TodoItem {
+  title: string;
+  source: string;
+  status: string;
+  tone: string;
+  time: string;
+  actionLabel: string;
+  actionTo: string;
+}
+
+const postStats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, monthlyViews: "0", total: 0 });
+const submissionStats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const messageStats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, total: 0 });
+const stats = ref<AdminStats | null>(null);
+const submissions = ref<Submission[]>([]);
+const comments = ref<Comment[]>([]);
+const messages = ref<StationMessage[]>([]);
+const loading = ref(false);
+const error = ref("");
+
+const todos = computed<TodoItem[]>(() => {
+  const items: TodoItem[] = [];
+  const submission = submissions.value[0];
+  const comment = comments.value[0];
+  const message = messages.value[0];
+
+  if (submission) {
+    items.push({
+      title: submission.title,
+      source: "投稿审核",
+      status: "待审核",
+      tone: "review",
+      time: formatTime(submission.submittedAt || submission.updatedAt),
+      actionLabel: "查看",
+      actionTo: "/admin/submissions"
+    });
+  }
+  if (comment) {
+    items.push({
+      title: comment.body,
+      source: "评论审核",
+      status: comment.riskLevel === "高" ? "高风险" : "待审核",
+      tone: comment.riskLevel === "高" ? "banned" : "review",
+      time: formatTime(comment.createdAt),
+      actionLabel: "处理",
+      actionTo: "/admin/comments"
+    });
+  }
+  if (message) {
+    items.push({
+      title: message.title,
+      source: "站内信",
+      status: message.status === "unread" ? "未读" : "已发送",
+      tone: message.status === "unread" ? "draft" : "published",
+      time: formatTime(message.createdAt),
+      actionLabel: "编辑",
+      actionTo: "/admin/messages"
+    });
+  }
+
+  return items;
+});
+
+onMounted(load);
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const [postsResponse, submissionsResponse, commentsResponse, messagesResponse, statsResponse] = await Promise.all([
+      getAdminPosts(),
+      getAdminSubmissions("submitted"),
+      getAdminComments("pending"),
+      getAdminMessages(),
+      getAdminStats()
+    ]);
+
+    postStats.value = postsResponse.stats;
+    submissionStats.value = submissionsResponse.stats;
+    submissions.value = submissionsResponse.items.slice(0, 1);
+    comments.value = commentsResponse.items.slice(0, 1);
+    messages.value = messagesResponse.items.slice(0, 1);
+    messageStats.value = messagesResponse.stats;
+    stats.value = statsResponse;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "后台概览加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function formatTime(value?: string) {
+  if (!value) {
+    return "未记录";
+  }
+
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 </script>
 
 <template>
@@ -11,107 +132,94 @@ import AdminLayout from "../../components/AdminLayout.vue";
       </div>
     </template>
 
-    <section class="stats-grid" aria-label="后台核心指标">
-      <div class="stat-card">
-        <span>已发布文章</span>
-        <strong>96</strong>
-      </div>
-      <div class="stat-card">
-        <span>待审核投稿</span>
-        <strong>12</strong>
-      </div>
-      <div class="stat-card">
-        <span>待审评论</span>
-        <strong>23</strong>
-      </div>
-      <div class="stat-card">
-        <span>本月阅读</span>
-        <strong>16.8k</strong>
-      </div>
-    </section>
+    <p v-if="loading" class="muted">正在加载后台概览...</p>
+    <p v-else-if="error" class="error">{{ error }}</p>
 
-    <section class="admin-grid-2">
-      <section class="table-panel">
-        <div class="panel-title" style="padding: 16px 16px 0;">
-          <h2>待办事项</h2>
-          <RouterLink class="button-secondary" to="/admin/submissions">处理投稿</RouterLink>
+    <template v-else>
+      <section class="stats-grid" aria-label="后台核心指标">
+        <div class="stat-card">
+          <span>已发布文章</span>
+          <strong>{{ postStats.published }}</strong>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>事项</th>
-              <th>来源</th>
-              <th>状态</th>
-              <th>时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>用户评论系统应该怎么设计</td>
-              <td>投稿审核</td>
-              <td><span class="status review">待审核</span></td>
-              <td>今天 15:42</td>
-              <td><RouterLink class="button-secondary" to="/admin/submissions">查看</RouterLink></td>
-            </tr>
-            <tr>
-              <td>推广链接评论被举报 3 次</td>
-              <td>评论举报</td>
-              <td><span class="status banned">高风险</span></td>
-              <td>12 分钟前</td>
-              <td><RouterLink class="button-secondary" to="/admin/comments">处理</RouterLink></td>
-            </tr>
-            <tr>
-              <td>媒体库上传服务维护公告</td>
-              <td>站内信</td>
-              <td><span class="status draft">定时中</span></td>
-              <td>今晚 20:00</td>
-              <td><RouterLink class="button-secondary" to="/admin/messages">编辑</RouterLink></td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="stat-card">
+          <span>待审核投稿</span>
+          <strong>{{ submissionStats.submitted }}</strong>
+        </div>
+        <div class="stat-card">
+          <span>未读站内信</span>
+          <strong>{{ messageStats.unread }}</strong>
+        </div>
+        <div class="stat-card">
+          <span>本月阅读</span>
+          <strong>{{ postStats.monthlyViews }}</strong>
+        </div>
       </section>
 
-      <aside class="settings-stack">
-        <section class="panel">
-          <div class="panel-title">
-            <h2>系统状态</h2>
-            <span class="status published">正常</span>
+      <section class="admin-grid-2">
+        <section class="table-panel">
+          <div class="panel-title" style="padding: 16px 16px 0;">
+            <h2>待办事项</h2>
+            <RouterLink class="button-secondary" to="/admin/submissions">处理投稿</RouterLink>
           </div>
-          <ul class="link-list">
-            <li>
-              <strong>PostgreSQL</strong>
-              <span>等待本地数据库环境验证迁移</span>
-            </li>
-            <li>
-              <strong>Redis</strong>
-              <span>会话、限流和任务队列待接入</span>
-            </li>
-            <li>
-              <strong>媒体存储</strong>
-              <span>开发期本地，生产期 S3 / OSS</span>
-            </li>
-          </ul>
+          <table>
+            <thead>
+              <tr>
+                <th>事项</th>
+                <th>来源</th>
+                <th>状态</th>
+                <th>时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in todos" :key="`${item.source}-${item.title}`">
+                <td>{{ item.title }}</td>
+                <td>{{ item.source }}</td>
+                <td><span class="status" :class="item.tone">{{ item.status }}</span></td>
+                <td>{{ item.time }}</td>
+                <td><RouterLink class="button-secondary" :to="item.actionTo">{{ item.actionLabel }}</RouterLink></td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="todos.length === 0" class="muted" style="padding: 0 16px 16px;">暂无待办事项。</p>
         </section>
 
-        <section class="panel">
-          <div class="panel-title">
-            <h2>最近操作</h2>
-          </div>
-          <div class="timeline">
-            <article class="timeline-item">
-              <strong>管理员 发布了文章</strong>
-              <p>如何设计一个内容长期增长的博客系统</p>
-              <div class="meta-row"><span>今天 15:20</span></div>
-            </article>
-            <article class="timeline-item">
-              <strong>管理员 更新了导航</strong>
-              <p>增加“投稿”和“我的”入口。</p>
-              <div class="meta-row"><span>昨天 18:36</span></div>
-            </article>
-          </div>
-        </section>
-      </aside>
-    </section>
+        <aside class="settings-stack">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>系统状态</h2>
+              <span class="status published">正常</span>
+            </div>
+            <ul class="link-list">
+              <li>
+                <strong>PostgreSQL</strong>
+                <span>已接入迁移和 SQL 仓储，本机等待数据库环境验证迁移</span>
+              </li>
+              <li>
+                <strong>Redis</strong>
+                <span>会话、限流和任务队列待接入</span>
+              </li>
+              <li>
+                <strong>媒体存储</strong>
+                <span>开发期本地，生产期 S3 / OSS</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title">
+              <h2>最近操作</h2>
+            </div>
+            <div class="timeline">
+              <article v-for="post in stats?.topPosts.slice(0, 2)" :key="post.title" class="timeline-item">
+                <strong>热门内容更新</strong>
+                <p>{{ post.title }}</p>
+                <div class="meta-row"><span>{{ post.views }} 次阅读</span><span>{{ post.comments }} 条评论</span></div>
+              </article>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </template>
   </AdminLayout>
 </template>
