@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -40,6 +41,19 @@ type Repositories struct {
 	UserRepo       users.Repository
 	AdminPostRepo  adminposts.Repository
 	TaxonomyRepo   taxonomies.Repository
+}
+
+type authSessionSettingsReader struct {
+	repo operations.Repository
+}
+
+func (reader authSessionSettingsReader) SessionSettings(ctx context.Context) (auth.SessionSettings, error) {
+	settings, err := reader.repo.GetSettings(ctx)
+	if err != nil {
+		return auth.SessionSettings{}, err
+	}
+
+	return auth.SessionSettings{SessionDays: settings.SessionDays}, nil
 }
 
 func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engine {
@@ -102,7 +116,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		})
 	})
 
-	auth.RegisterRoutes(api, repos.AuthStore)
+	auth.RegisterRoutesWithSettings(api, repos.AuthStore, authSessionSettingsReader{repo: repos.OperationsRepo})
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
 	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)

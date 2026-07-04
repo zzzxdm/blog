@@ -1,28 +1,50 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	SessionCookieName = "blog_session"
-	currentUserKey    = "currentUser"
+	SessionCookieName  = "blog_session"
+	currentUserKey     = "currentUser"
+	defaultSessionDays = 7
+	minSessionDays     = 1
+	maxSessionDays     = 90
 )
 
 type Handler struct {
-	store Store
+	store    Store
+	settings SessionSettingsReader
+}
+
+type SessionSettings struct {
+	SessionDays int
+}
+
+type SessionSettingsReader interface {
+	SessionSettings(ctx context.Context) (SessionSettings, error)
 }
 
 func NewHandler(store Store) *Handler {
-	return &Handler{store: store}
+	return NewHandlerWithSettings(store, nil)
+}
+
+func NewHandlerWithSettings(store Store, settings SessionSettingsReader) *Handler {
+	return &Handler{store: store, settings: settings}
 }
 
 func RegisterRoutes(router gin.IRouter, store Store) {
-	handler := NewHandler(store)
+	RegisterRoutesWithSettings(router, store, nil)
+}
+
+func RegisterRoutesWithSettings(router gin.IRouter, store Store, settings SessionSettingsReader) {
+	handler := NewHandlerWithSettings(store, settings)
 
 	router.POST("/auth/login", handler.Login)
 	router.POST("/auth/register", handler.Register)
@@ -108,7 +130,13 @@ func (handler *Handler) Login(ctx *gin.Context) {
 		return
 	}
 
-	setSessionCookie(ctx, token)
+	sessionDays := handler.configuredSessionDays(ctx)
+	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
+		return
+	}
+
+	setSessionCookie(ctx, token, sessionDays)
 	ctx.JSON(http.StatusOK, gin.H{"user": user})
 }
 
@@ -135,7 +163,13 @@ func (handler *Handler) Register(ctx *gin.Context) {
 		return
 	}
 
-	setSessionCookie(ctx, token)
+	sessionDays := handler.configuredSessionDays(ctx)
+	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
+		return
+	}
+
+	setSessionCookie(ctx, token, sessionDays)
 
 	verificationToken, err := handler.store.RequestEmailVerification(user.ID)
 	if err != nil {
@@ -357,9 +391,37 @@ func (handler *Handler) ResetPassword(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-func setSessionCookie(ctx *gin.Context, token string) {
+func (handler *Handler) configuredSessionDays(ctx *gin.Context) int {
+	if handler.settings == nil {
+		return defaultSessionDays
+	}
+
+	settings, err := handler.settings.SessionSettings(ctx.Request.Context())
+	if err != nil {
+		return defaultSessionDays
+	}
+
+	return clampSessionDays(settings.SessionDays)
+}
+
+func clampSessionDays(days int) int {
+	if days < minSessionDays {
+		return defaultSessionDays
+	}
+	if days > maxSessionDays {
+		return maxSessionDays
+	}
+
+	return days
+}
+
+func sessionExpiry(days int) time.Time {
+	return time.Now().Add(time.Duration(clampSessionDays(days)) * 24 * time.Hour)
+}
+
+func setSessionCookie(ctx *gin.Context, token string, days int) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(SessionCookieName, token, 7*24*60*60, "/", "", false, true)
+	ctx.SetCookie(SessionCookieName, token, clampSessionDays(days)*24*60*60, "/", "", false, true)
 }
 
 func clearSessionCookie(ctx *gin.Context) {

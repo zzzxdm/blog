@@ -36,6 +36,7 @@ type Store interface {
 	InviteUser(request InviteUserRequest) (User, string, error)
 	UpdateRole(userID string, role string) (User, error)
 	UserBySession(token string) (User, error)
+	SetSessionExpiry(token string, expiresAt time.Time) error
 	ChangePassword(userID string, currentPassword string, newPassword string) error
 	RequestEmailVerification(userID string) (string, error)
 	VerifyEmail(token string) (User, error)
@@ -280,6 +281,20 @@ func (store *MemoryStore) UserBySession(token string) (User, error) {
 	}
 
 	return user, nil
+}
+
+func (store *MemoryStore) SetSessionExpiry(token string, expiresAt time.Time) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	item, ok := store.sessions[token]
+	if !ok {
+		return ErrInvalidSession
+	}
+
+	item.ExpiresAt = expiresAt
+	store.sessions[token] = item
+	return nil
 }
 
 func (store *MemoryStore) ChangePassword(userID string, currentPassword string, newPassword string) error {

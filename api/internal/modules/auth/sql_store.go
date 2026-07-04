@@ -239,6 +239,23 @@ func (store *SQLStore) UserBySession(token string) (User, error) {
 	return user, nil
 }
 
+func (store *SQLStore) SetSessionExpiry(token string, expiresAt time.Time) error {
+	result, err := store.db.ExecContext(context.Background(), "UPDATE sessions SET expires_at = $2 WHERE token = $1", token, expiresAt)
+	if err != nil {
+		return fmt.Errorf("update session expiry: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read session expiry rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrInvalidSession
+	}
+
+	return nil
+}
+
 func (store *SQLStore) ChangePassword(userID string, currentPassword string, newPassword string) error {
 	var hash string
 	err := store.db.QueryRowContext(context.Background(), "SELECT password_hash FROM users WHERE id = $1", userID).Scan(&hash)
