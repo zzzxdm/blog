@@ -340,7 +340,7 @@ function sizeValue(label: string) {
         <section class="upload-zone" :aria-busy="uploading" @dragover.prevent @drop.prevent="handleDrop">
           <div>
             <strong>{{ uploading ? "正在上传文件" : "拖拽文件到这里上传" }}</strong>
-            <p>支持 JPG、PNG、WebP、GIF 和 PDF。图片会自动生成响应式尺寸。</p>
+            <p>支持 JPG、PNG、WebP、GIF 和 PDF。图片会记录宽高和替代文本。</p>
             <button class="button" type="button" :disabled="uploading" @click="openPicker">选择文件</button>
           </div>
         </section>
