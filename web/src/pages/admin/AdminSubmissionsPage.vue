@@ -287,6 +287,12 @@ function userStatusText(value?: ManagedUser["status"]) {
 
 <template>
   <AdminLayout title="投稿审核" description="审核登录用户提交的文章，确认质量后发布到正式内容库。" mobile-title="投稿审核" primary-action="通过发布">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="acting || !selected" @click="review('approve')">
+        {{ acting ? "发布中..." : "通过发布" }}
+      </button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="acting || !selected" @click="review('return')">退回修改</button>

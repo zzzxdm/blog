@@ -61,7 +61,9 @@ function isActive(to: string) {
       <span class="brand-mark">{{ brandMark }}</span>
       <span>{{ mobileTitle || title }}</span>
     </RouterLink>
-    <RouterLink v-if="primaryAction && primaryActionTo" class="button" :to="primaryActionTo">{{ primaryAction }}</RouterLink>
+    <slot name="mobile-action">
+      <RouterLink v-if="primaryAction && primaryActionTo" class="button" :to="primaryActionTo">{{ primaryAction }}</RouterLink>
+    </slot>
   </div>
 
   <div class="admin-shell">

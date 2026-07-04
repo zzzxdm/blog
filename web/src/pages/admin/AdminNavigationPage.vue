@@ -152,6 +152,10 @@ function normalizeItemOrder(items: NavItem[]) {
 
 <template>
   <AdminLayout title="导航管理" description="配置前台顶部菜单、底部菜单、社交链接和常用重定向。" mobile-title="导航管理" primary-action="保存">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="saving || !navigation" @click="save">{{ saving ? "保存中..." : "保存" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <a class="button-secondary" href="/" target="_blank" rel="noreferrer">预览站点</a>

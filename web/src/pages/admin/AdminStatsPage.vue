@@ -55,6 +55,10 @@ async function exportReport() {
 
 <template>
   <AdminLayout title="数据统计" description="查看访问趋势、热门内容、搜索词、来源渠道和评论互动。" mobile-title="数据统计" primary-action="导出">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="exporting" @click="exportReport">{{ exporting ? "导出中..." : "导出" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <select v-model="range" class="input" aria-label="时间范围" @change="load">

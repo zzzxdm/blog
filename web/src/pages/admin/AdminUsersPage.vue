@@ -176,6 +176,10 @@ function formatDate(value: string) {
 
 <template>
   <AdminLayout title="用户管理" description="管理注册用户、作者账号、禁言状态和评论行为。" mobile-title="用户管理" primary-action="邀请作者">
+    <template #mobile-action>
+      <button class="button" type="button" @click="inviteOpen = !inviteOpen">{{ inviteOpen ? "收起" : "邀请" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportUsers">{{ exporting ? "导出中..." : "导出用户" }}</button>

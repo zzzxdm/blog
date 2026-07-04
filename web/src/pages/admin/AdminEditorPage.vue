@@ -305,6 +305,12 @@ function formatDate(value: string) {
 
 <template>
   <AdminLayout title="编辑文章" :description="description" mobile-title="写作" primary-action="发布">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="saving || visibility !== 'public'" title="私密和会员可见文章暂不支持发布到公开站点" @click="publish">
+        {{ saving ? "发布中..." : "发布" }}
+      </button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <RouterLink v-if="current?.publishedPostSlug" class="button-secondary" :to="`/posts/${current.publishedPostSlug}`">预览</RouterLink>

@@ -95,6 +95,10 @@ async function runBackup() {
 
 <template>
   <AdminLayout title="系统设置" description="配置站点基础信息、评论策略、邮件服务、安全和备份。" mobile-title="系统设置" primary-action="保存">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="saving || !settings" @click="save">{{ saving ? "保存中..." : "保存" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" @click="load">重新加载</button>

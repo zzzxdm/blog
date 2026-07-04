@@ -164,6 +164,12 @@ function statusClass(value: Comment["status"]) {
 
 <template>
   <AdminLayout title="评论管理" description="审核用户评论、处理举报，并对异常用户进行禁言或封禁。" mobile-title="评论管理" primary-action="批量通过">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="bulkActing || !approvableComments.length" @click="approveVisiblePending">
+        {{ bulkActing ? "处理中..." : `通过 ${approvableComments.length}` }}
+      </button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportComments">{{ exporting ? "导出中..." : "导出" }}</button>

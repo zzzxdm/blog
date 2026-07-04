@@ -282,6 +282,10 @@ function sizeValue(label: string) {
 
 <template>
   <AdminLayout title="媒体库" description="管理文章封面、正文图片、附件和图片替代文本。" mobile-title="媒体库" primary-action="上传">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="uploading" @click="openPicker">{{ uploading ? "上传中..." : "上传" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" @click="toggleBatchMode">{{ batchMode ? "退出批量" : "批量选择" }}</button>

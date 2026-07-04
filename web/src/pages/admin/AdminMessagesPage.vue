@@ -224,6 +224,10 @@ function nextScheduleValue() {
 
 <template>
   <AdminLayout title="站内信管理" description="向用户发送审核结果、站点公告和定向运营消息。" mobile-title="站内信管理" primary-action="发送">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="sending" @click="send">{{ sending ? "发送中..." : "发送" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportMessages">{{ exporting ? "导出中..." : "导出记录" }}</button>

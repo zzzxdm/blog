@@ -135,6 +135,10 @@ function formatDate(value: string) {
 
 <template>
   <AdminLayout title="操作日志" description="追踪后台关键写操作、操作者、资源、访问来源和处理结果。" mobile-title="操作日志" primary-action="刷新">
+    <template #mobile-action>
+      <button class="button" type="button" :disabled="loading" @click="load">{{ loading ? "刷新中..." : "刷新" }}</button>
+    </template>
+
     <template #actions>
       <div class="header-actions">
         <select v-model="resourceType" class="input" aria-label="资源类型" @change="applyFilters">
