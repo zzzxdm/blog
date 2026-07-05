@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import { forgotPassword, getSiteSettings, resetPassword, type SiteSettings } from "../shared/api";
+import { ApiError, forgotPassword, getSiteSettings, resetPassword, type SiteSettings } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
@@ -16,6 +16,8 @@ const displayName = ref("");
 const resetToken = ref("");
 const newPassword = ref("");
 const message = ref("");
+const errorMessage = ref("");
+const errorTitle = ref("操作失败");
 const siteSettings = ref<SiteSettings | null>(null);
 const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间笔记");
 const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
@@ -34,21 +36,23 @@ async function loadSiteSettings() {
 
 async function submit() {
   message.value = "";
+  errorMessage.value = "";
+  const submittedMode = mode.value;
 
   try {
-    if (mode.value === "login") {
+    if (submittedMode === "login") {
       await auth.login(email.value, password.value);
       await router.push(String(route.query.redirect || "/account"));
       return;
     }
 
-    if (mode.value === "register") {
+    if (submittedMode === "register") {
       await auth.register(email.value, password.value, displayName.value);
       await router.push(String(route.query.redirect || "/account/settings"));
       return;
     }
 
-    if (mode.value === "forgot") {
+    if (submittedMode === "forgot") {
       const response = await forgotPassword(email.value);
       resetToken.value = response.resetToken || "";
       mode.value = "reset";
@@ -61,9 +65,48 @@ async function submit() {
     password.value = "";
     newPassword.value = "";
     message.value = "密码已重置，请使用新密码登录。";
-  } catch {
-    message.value = auth.error || "操作失败";
+  } catch (error) {
+    errorTitle.value = failureTitle(submittedMode);
+    errorMessage.value = friendlyErrorMessage(error, submittedMode);
   }
+}
+
+function failureTitle(failedMode: typeof mode.value) {
+  if (failedMode === "register") return "注册失败";
+  if (failedMode === "forgot") return "找回密码失败";
+  if (failedMode === "reset") return "重置密码失败";
+  return "登录失败";
+}
+
+function friendlyErrorMessage(error: unknown, failedMode: typeof mode.value) {
+  if (error instanceof ApiError) {
+    if (failedMode === "login") {
+      if (error.status === 401) return "邮箱或密码不正确。";
+      if (error.status === 429) return "登录失败次数过多，请稍后再试。";
+      if (error.status === 400) return "请输入有效的邮箱和密码。";
+      return "登录失败，请稍后再试。";
+    }
+
+    if (failedMode === "register") {
+      if (error.status === 409) return "该邮箱已注册，请直接登录或找回密码。";
+      if (error.status === 400) return "请输入邮箱和至少 6 位密码。";
+      return "注册失败，请稍后再试。";
+    }
+
+    if (failedMode === "reset") {
+      if (error.status === 400) return "重置 token 无效、已过期，或新密码不足 6 位。";
+      return "密码重置失败，请稍后再试。";
+    }
+
+    if (error.status === 400) return "请输入有效的邮箱地址。";
+    return "找回密码失败，请稍后再试。";
+  }
+
+  return error instanceof Error ? error.message : "操作失败，请稍后再试。";
+}
+
+function closeError() {
+  errorMessage.value = "";
 }
 
 function title() {
@@ -91,6 +134,14 @@ function buttonText() {
 
 <template>
   <main class="auth-shell">
+    <Transition name="auth-alert">
+      <div v-if="errorMessage" class="auth-alert" role="alert" aria-live="assertive">
+        <strong>{{ errorTitle }}</strong>
+        <span>{{ errorMessage }}</span>
+        <button class="auth-alert-close" type="button" aria-label="关闭提示" @click="closeError">×</button>
+      </div>
+    </Transition>
+
     <section class="auth-visual" aria-label="登录背景">
       <img
         src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1400&q=80"
@@ -139,6 +190,7 @@ function buttonText() {
           <button class="button" type="submit" :disabled="auth.loading">{{ buttonText() }}</button>
           <button v-if="mode === 'login'" class="button-secondary" type="button" @click="mode = 'forgot'">忘记密码</button>
           <button v-if="mode === 'forgot' || mode === 'reset'" class="button-secondary" type="button" @click="mode = 'login'">返回登录</button>
+          <p v-if="errorMessage" class="auth-form-error" role="alert">{{ errorMessage }}</p>
           <p v-if="message" class="muted">{{ message }}</p>
         </form>
 

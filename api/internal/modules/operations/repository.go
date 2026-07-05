@@ -540,11 +540,7 @@ func seedNavigation() Navigation {
 			{ID: "nav_top_3", Label: "专题", URL: "/topics", Order: 3},
 			{ID: "nav_top_4", Label: "投稿", URL: "/submit", Order: 4},
 		},
-		FooterItems: []NavItem{
-			{ID: "nav_footer_1", Label: "首页", URL: "/", Order: 1},
-			{ID: "nav_footer_2", Label: "归档", URL: "/archive", Order: 2},
-			{ID: "nav_footer_3", Label: "专题", URL: "/topics", Order: 3},
-		},
+		FooterItems:            []NavItem{},
 		MobileCollapse:         true,
 		ExternalLinksNewWindow: true,
 		ShowLoginEntry:         true,

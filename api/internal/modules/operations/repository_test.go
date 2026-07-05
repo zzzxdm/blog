@@ -109,8 +109,8 @@ func TestUpdateNavigationNormalizesInput(t *testing.T) {
 	if navigation.TopItems[1].ID != "nav_top_2" || navigation.TopItems[1].Order != 2 {
 		t.Fatalf("second top item = %+v, want generated id and order 2", navigation.TopItems[1])
 	}
-	if len(navigation.FooterItems) != 3 {
-		t.Fatalf("FooterItems = %#v, want defaults when all provided items are invalid", navigation.FooterItems)
+	if len(navigation.FooterItems) != 0 {
+		t.Fatalf("FooterItems = %#v, want no default footer items when all provided items are invalid", navigation.FooterItems)
 	}
 	if navigation.GitHubURL != "https://github.com/example" || navigation.ContactEmail != "hello@example.com" || navigation.RSSURL != "/rss.xml" {
 		t.Fatalf("link settings not trimmed: %+v", navigation)

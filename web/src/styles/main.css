@@ -1355,6 +1355,75 @@ textarea {
   box-shadow: 0 1px 2px rgba(17, 23, 20, 0.08);
 }
 
+.auth-alert {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  width: min(380px, calc(100vw - 32px));
+  border: 1px solid rgba(183, 78, 71, 0.26);
+  border-left: 4px solid var(--rose);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 14px 14px 14px 16px;
+}
+
+.auth-alert strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.auth-alert span {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.auth-alert-close {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: grid;
+  width: 30px;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-alert-close:hover {
+  color: var(--ink);
+}
+
+.auth-alert-enter-active,
+.auth-alert-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.auth-alert-enter-from,
+.auth-alert-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.auth-panel .auth-form-error {
+  margin: 0;
+  border: 1px solid rgba(183, 78, 71, 0.28);
+  border-radius: 8px;
+  background: rgba(183, 78, 71, 0.08);
+  color: var(--rose);
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
 .account-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -2199,6 +2268,13 @@ textarea.input {
   .auth-visual,
   .auth-visual img {
     min-height: 420px;
+  }
+
+  .auth-alert {
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    width: auto;
   }
 
   .footbar-inner {

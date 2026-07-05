@@ -18,12 +18,7 @@ const siteStartDate = new Date(2020, 7, 21, 0, 0, 0);
 const currentYear = new Date().getFullYear();
 const runtimeText = ref("");
 const siteStats = ref<SiteStats | null>(null);
-const defaultFooterItems: NavItem[] = [
-  { id: "footer_default_home", label: "首页", url: "/", order: 1 },
-  { id: "footer_default_archive", label: "归档", url: "/archive", order: 2 },
-  { id: "footer_default_topics", label: "专题", url: "/topics", order: 3 }
-];
-const footerItems = computed(() => orderedNavItems(props.navigation?.footerItems ?? defaultFooterItems));
+const footerItems = computed(() => orderedNavItems(props.navigation?.footerItems ?? []));
 const socialLinks = computed(() => {
   const githubUrl = props.navigation ? props.navigation.githubUrl.trim() : "https://github.com/";
   const contactEmail = props.navigation ? props.navigation.contactEmail.trim() : "hello@example.com";
