@@ -31,3 +31,7 @@ Thumbs.db
 # Go
 *.test
 *.out
+
+# agent
+AGENTS.md
+.agents/
