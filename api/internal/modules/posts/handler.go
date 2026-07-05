@@ -3,6 +3,7 @@ package posts
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -25,6 +26,8 @@ func RegisterPublicRoutes(router gin.IRouter, repo Repository) {
 	router.GET("/posts", handler.List)
 	router.GET("/site-stats", handler.Stats)
 	router.GET("/posts/:slug", handler.GetBySlug)
+	router.GET("/categories/:slug/posts", handler.ListCategoryPosts)
+	router.GET("/tags/:slug/posts", handler.ListTagPosts)
 	router.GET("/search", handler.Search)
 }
 
@@ -34,6 +37,16 @@ func (handler *Handler) List(ctx *gin.Context) {
 
 func (handler *Handler) Search(ctx *gin.Context) {
 	handler.list(ctx, true)
+}
+
+func (handler *Handler) ListCategoryPosts(ctx *gin.Context) {
+	ctx.Request.URL.RawQuery = mergeQuery(ctx.Request.URL.Query(), "category", ctx.Param("slug"))
+	handler.list(ctx, false)
+}
+
+func (handler *Handler) ListTagPosts(ctx *gin.Context) {
+	ctx.Request.URL.RawQuery = mergeQuery(ctx.Request.URL.Query(), "tag", ctx.Param("slug"))
+	handler.list(ctx, false)
 }
 
 func (handler *Handler) GetBySlug(ctx *gin.Context) {
@@ -49,6 +62,11 @@ func (handler *Handler) GetBySlug(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, post)
+}
+
+func mergeQuery(values url.Values, key string, value string) string {
+	values[key] = []string{value}
+	return values.Encode()
 }
 
 func (handler *Handler) Stats(ctx *gin.Context) {
@@ -75,6 +93,7 @@ func (handler *Handler) list(ctx *gin.Context, forceKeyword bool) {
 		Keyword:  strings.TrimSpace(ctx.Query("q")),
 		Category: strings.TrimSpace(ctx.Query("category")),
 		Tag:      strings.TrimSpace(ctx.Query("tag")),
+		Author:   strings.TrimSpace(ctx.Query("author")),
 		Sort:     strings.TrimSpace(ctx.Query("sort")),
 		Page:     intQuery(ctx, "page", 1),
 		PageSize: intQuery(ctx, "pageSize", 10),

@@ -23,9 +23,12 @@ func RegisterRoutes(router gin.IRouter, repo Repository, postRepo posts.Reposito
 	handler := NewHandler(repo, postRepo)
 
 	router.GET("/posts/:slug/reaction", handler.Get)
+	router.POST("/posts/:slug/bookmark", handler.SetBookmark)
 	router.PUT("/posts/:slug/reaction", handler.SetReaction)
+	router.DELETE("/posts/:slug/reaction", handler.ClearReaction)
 	router.PUT("/posts/:slug/bookmark", handler.SetBookmark)
 	router.GET("/bookmarks/mine", handler.ListBookmarks)
+	router.GET("/me/bookmarks", handler.ListBookmarks)
 }
 
 func (handler *Handler) Get(ctx *gin.Context) {
@@ -66,6 +69,24 @@ func (handler *Handler) SetReaction(ctx *gin.Context) {
 		}
 
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update reaction"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, summary)
+}
+
+func (handler *Handler) ClearReaction(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+	if !handler.ensurePostExists(ctx) {
+		return
+	}
+
+	summary, err := handler.repo.SetReaction(ctx.Request.Context(), ctx.Param("slug"), user.ID, "")
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear reaction"})
 		return
 	}
 

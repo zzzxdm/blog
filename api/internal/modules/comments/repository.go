@@ -15,15 +15,20 @@ import (
 var ErrEmptyBody = errors.New("comment body is empty")
 var ErrCommentNotFound = errors.New("comment not found")
 var ErrInvalidStatus = errors.New("invalid comment status")
+var ErrForbidden = errors.New("comment forbidden")
 
 type Repository interface {
 	List(ctx context.Context, postSlug string, viewerID string) (ListResult, error)
 	Create(ctx context.Context, postSlug string, request CreateRequest, user auth.User) (Comment, error)
+	CreateReply(ctx context.Context, parentID string, request CreateRequest, user auth.User) (Comment, error)
 	ListByAuthor(ctx context.Context, userID string, query ListQuery) (ManageListResult, error)
 	AdminList(ctx context.Context, query ListQuery) (ManageListResult, error)
 	UpdateStatus(ctx context.Context, commentID string, status string) (Comment, error)
+	DeleteByAuthor(ctx context.Context, commentID string, userID string) (Comment, error)
 	ToggleLike(ctx context.Context, commentID string, userID string) (Comment, error)
 	Report(ctx context.Context, commentID string, user auth.User, request ReportRequest) error
+	ListReports(ctx context.Context, status string) (ReportListResult, error)
+	UpdateReportStatus(ctx context.Context, id string, status string) (CommentReport, error)
 }
 
 type MemoryRepository struct {
@@ -33,15 +38,6 @@ type MemoryRepository struct {
 	reports  []CommentReport
 	nextID   int
 	now      func() time.Time
-}
-
-type CommentReport struct {
-	ID         string
-	CommentID  string
-	ReporterID string
-	Reason     string
-	Status     string
-	CreatedAt  time.Time
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -95,6 +91,49 @@ func (repo *MemoryRepository) Create(_ context.Context, postSlug string, request
 		PostSlug:   postSlug,
 		PostTitle:  titleForSlug(postSlug),
 		ParentID:   strings.TrimSpace(request.ParentID),
+		AuthorID:   user.ID,
+		AuthorName: user.DisplayName,
+		AvatarText: user.AvatarText,
+		Body:       body,
+		Status:     "pending",
+		LikeCount:  0,
+		RiskLevel:  riskLevel(body),
+		IsMine:     true,
+		CreatedAt:  repo.now(),
+	}
+	repo.nextID++
+	repo.comments = append(repo.comments, comment)
+
+	return repo.enrichLocked(comment), nil
+}
+
+func (repo *MemoryRepository) CreateReply(_ context.Context, parentID string, request CreateRequest, user auth.User) (Comment, error) {
+	body := strings.TrimSpace(request.Body)
+	if body == "" {
+		return Comment{}, ErrEmptyBody
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	var parent Comment
+	found := false
+	for _, comment := range repo.comments {
+		if comment.ID == parentID {
+			parent = comment
+			found = true
+			break
+		}
+	}
+	if !found {
+		return Comment{}, ErrCommentNotFound
+	}
+
+	comment := Comment{
+		ID:         fmt.Sprintf("comment_%03d", repo.nextID),
+		PostSlug:   parent.PostSlug,
+		PostTitle:  titleForSlug(parent.PostSlug),
+		ParentID:   parent.ID,
 		AuthorID:   user.ID,
 		AuthorName: user.DisplayName,
 		AvatarText: user.AvatarText,
@@ -178,6 +217,25 @@ func (repo *MemoryRepository) UpdateStatus(_ context.Context, commentID string, 
 	return Comment{}, ErrCommentNotFound
 }
 
+func (repo *MemoryRepository) DeleteByAuthor(_ context.Context, commentID string, userID string) (Comment, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	for index := range repo.comments {
+		if repo.comments[index].ID != commentID {
+			continue
+		}
+		if repo.comments[index].AuthorID != userID {
+			return Comment{}, ErrForbidden
+		}
+
+		repo.comments[index].Status = "deleted"
+		return repo.enrichLocked(repo.comments[index]), nil
+	}
+
+	return Comment{}, ErrCommentNotFound
+}
+
 func (repo *MemoryRepository) ToggleLike(_ context.Context, commentID string, userID string) (Comment, error) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
@@ -248,6 +306,43 @@ func (repo *MemoryRepository) Report(_ context.Context, commentID string, user a
 	})
 
 	return nil
+}
+
+func (repo *MemoryRepository) ListReports(_ context.Context, status string) (ReportListResult, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	items := make([]CommentReport, 0, len(repo.reports))
+	for _, report := range repo.reports {
+		if status != "" && status != "all" && report.Status != status {
+			continue
+		}
+		items = append(items, report)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+
+	return ReportListResult{Items: items, Total: len(items)}, nil
+}
+
+func (repo *MemoryRepository) UpdateReportStatus(_ context.Context, id string, status string) (CommentReport, error) {
+	status = normalizeReportStatus(status)
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	for index := range repo.reports {
+		if repo.reports[index].ID != id {
+			continue
+		}
+		repo.reports[index].Status = status
+		return repo.reports[index], nil
+	}
+
+	return CommentReport{}, ErrCommentNotFound
 }
 
 func (repo *MemoryRepository) enrichLocked(comment Comment) Comment {
@@ -327,6 +422,15 @@ func isValidStatus(status string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func normalizeReportStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "reviewed", "dismissed":
+		return strings.ToLower(strings.TrimSpace(status))
+	default:
+		return "pending"
 	}
 }
 

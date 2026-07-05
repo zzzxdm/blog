@@ -25,12 +25,16 @@ func RegisterRoutes(router gin.IRouter, repo Repository, authStore auth.Store) {
 
 	router.GET("/admin/users", handler.List)
 	router.GET("/admin/users/export", handler.Export)
+	router.GET("/admin/users/:id", handler.Get)
+	router.GET("/admin/users/:id/sessions", handler.ListSessions)
 	router.POST("/admin/users/invitations", handler.Invite)
 	router.PUT("/admin/users/:id/role", handler.UpdateRole)
 	router.PUT("/admin/users/:id/status", handler.UpdateStatus)
 	router.POST("/admin/users/:id/password-reset", handler.RequestPasswordReset)
 	router.GET("/account/settings", handler.GetAccount)
 	router.PUT("/account/settings", handler.UpdateAccount)
+	router.PUT("/me/profile", handler.UpdateAccount)
+	router.POST("/me/avatar", handler.UpdateAvatar)
 }
 
 func (handler *Handler) List(ctx *gin.Context) {
@@ -45,6 +49,49 @@ func (handler *Handler) List(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) Get(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	user, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, user)
+}
+
+func (handler *Handler) ListSessions(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+	if handler.authStore == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "session management is unavailable"})
+		return
+	}
+
+	sessions, err := handler.authStore.ListSessions(ctx.Param("id"), "")
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidSession) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user sessions"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"items": sessions,
+		"total": len(sessions),
+	})
 }
 
 func (handler *Handler) Export(ctx *gin.Context) {
@@ -119,6 +166,32 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 	var request StatusRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user status payload"})
+		return
+	}
+
+	if handler.authStore != nil {
+		updated, err := handler.authStore.UpdateStatus(ctx.Param("id"), request.Status)
+		if err != nil {
+			if errors.Is(err, auth.ErrInvalidSession) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+			if errors.Is(err, auth.ErrInvalidStatus) {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user status"})
+				return
+			}
+
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user status"})
+			return
+		}
+
+		managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user status"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, managed)
 		return
 	}
 
@@ -245,12 +318,64 @@ func (handler *Handler) UpdateAccount(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update account settings"})
 		return
 	}
-	if handler.authStore != nil {
-		if _, err := handler.authStore.UpdateProfile(user.ID, settings.DisplayName, settings.AvatarText); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync account profile"})
-			return
-		}
+	if !handler.syncAccountProfile(ctx, user.ID, settings) {
+		return
 	}
 
 	ctx.JSON(http.StatusOK, settings)
+}
+
+func (handler *Handler) UpdateAvatar(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	settings, err := handler.repo.GetAccount(ctx.Request.Context(), user)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load account settings"})
+		return
+	}
+
+	avatarText := strings.TrimSpace(ctx.PostForm("avatarText"))
+	if avatarText == "" && strings.HasPrefix(ctx.ContentType(), "application/json") {
+		var request AvatarRequest
+		if err := ctx.ShouldBindJSON(&request); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid avatar payload"})
+			return
+		}
+		avatarText = strings.TrimSpace(request.AvatarText)
+	}
+	if avatarText == "" {
+		if file, err := ctx.FormFile("file"); err == nil {
+			avatarText = firstRune(file.Filename)
+		}
+	}
+	if avatarText == "" {
+		avatarText = settings.AvatarText
+	}
+
+	settings.AvatarText = avatarText
+	settings, err = handler.repo.UpdateAccount(ctx.Request.Context(), user, settings)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update avatar"})
+		return
+	}
+	if !handler.syncAccountProfile(ctx, user.ID, settings) {
+		return
+	}
+
+	ctx.JSON(http.StatusOK, settings)
+}
+
+func (handler *Handler) syncAccountProfile(ctx *gin.Context, userID string, settings AccountSettings) bool {
+	if handler.authStore == nil {
+		return true
+	}
+	if _, err := handler.authStore.UpdateProfile(userID, settings.DisplayName, settings.AvatarText); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync account profile"})
+		return false
+	}
+
+	return true
 }

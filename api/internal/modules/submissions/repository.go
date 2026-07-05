@@ -25,6 +25,7 @@ type Repository interface {
 	Create(ctx context.Context, request SaveRequest, user auth.User) (Submission, error)
 	Update(ctx context.Context, submissionID string, userID string, request SaveRequest) (Submission, error)
 	Submit(ctx context.Context, submissionID string, userID string) (Submission, error)
+	DeleteByAuthor(ctx context.Context, submissionID string, userID string) (Submission, error)
 	AdminList(ctx context.Context, query ListQuery) (ListResult, error)
 	Get(ctx context.Context, submissionID string) (Submission, error)
 	AdminUpdate(ctx context.Context, submissionID string, request SaveRequest) (Submission, error)
@@ -184,6 +185,24 @@ func (repo *MemoryRepository) Submit(_ context.Context, submissionID string, use
 	repo.submissions[index].Version++
 
 	return normalizeSubmission(repo.submissions[index]), nil
+}
+
+func (repo *MemoryRepository) DeleteByAuthor(_ context.Context, submissionID string, userID string) (Submission, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	index := repo.findLocked(submissionID)
+	if index < 0 {
+		return Submission{}, ErrSubmissionNotFound
+	}
+	if repo.submissions[index].AuthorID != userID || repo.submissions[index].Status == StatusPublished {
+		return Submission{}, ErrForbidden
+	}
+
+	deleted := normalizeSubmission(repo.submissions[index])
+	repo.submissions = append(repo.submissions[:index], repo.submissions[index+1:]...)
+
+	return deleted, nil
 }
 
 func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (ListResult, error) {

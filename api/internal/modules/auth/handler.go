@@ -68,6 +68,7 @@ func RegisterRoutesWithSettings(router gin.IRouter, store Store, settings Securi
 	router.POST("/auth/verify-email", handler.VerifyEmail)
 	router.POST("/auth/forgot-password", handler.ForgotPassword)
 	router.POST("/auth/reset-password", handler.ResetPassword)
+	router.GET("/auth/me", handler.Me)
 	router.GET("/me", handler.Me)
 	router.GET("/me/sessions", handler.Sessions)
 	router.DELETE("/me/sessions/:id", handler.DeleteSession)

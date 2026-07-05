@@ -148,6 +148,27 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	return clonePost(item), nil
 }
 
+func (repo *SQLRepository) Delete(ctx context.Context, id string) (AdminPost, error) {
+	item, err := repo.Get(ctx, id)
+	if err != nil {
+		return AdminPost{}, err
+	}
+
+	result, err := repo.db.ExecContext(ctx, "DELETE FROM admin_posts WHERE id = $1", id)
+	if err != nil {
+		return AdminPost{}, fmt.Errorf("delete admin post: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return AdminPost{}, fmt.Errorf("read admin post delete rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return AdminPost{}, ErrPostNotFound
+	}
+
+	return item, nil
+}
+
 func scanAdminPostListItem(scanner interface{ Scan(dest ...any) error }) (AdminPost, error) {
 	var data []byte
 	var viewCount sql.NullInt64

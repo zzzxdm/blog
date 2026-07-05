@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
   createAdminPost,
+  createAdminPostPreview,
   getCategories,
   getAdminPost,
   getAdminPostRevisions,
@@ -27,6 +28,7 @@ const route = useRoute();
 const current = ref<AdminPost | null>(null);
 const loading = ref(false);
 const saving = ref(false);
+const previewing = ref(false);
 const revisionLoading = ref(false);
 const restoringId = ref("");
 const error = ref("");
@@ -228,6 +230,34 @@ async function schedulePost() {
   }
 }
 
+async function openPreview() {
+  if (!title.value.trim()) {
+    error.value = "请输入标题后再生成预览";
+    message.value = "";
+    return;
+  }
+
+  previewing.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const saved = current.value
+      ? await updateAdminPost(current.value.id, payload(status.value || "draft"))
+      : await createAdminPost(payload("draft"));
+    applyPost(saved);
+    await loadRevisions(saved.id);
+
+    const preview = await createAdminPostPreview(saved.id);
+    window.open(preview.previewUrl, "_blank", "noopener");
+    message.value = `预览链接已生成，${formatDate(preview.expiresAt)} 前有效。`;
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "预览生成失败";
+  } finally {
+    previewing.value = false;
+  }
+}
+
 async function restoreRevision(revision: AdminPostRevision) {
   if (!current.value || !window.confirm(`恢复到版本 ${revision.version}？`)) {
     return;
@@ -359,8 +389,8 @@ function toDateTimeLocal(value: string) {
 
     <template #actions>
       <div class="header-actions">
-        <RouterLink v-if="current?.publishedPostSlug" class="button-secondary" :to="`/posts/${current.publishedPostSlug}`">预览</RouterLink>
-        <button v-else class="button-secondary" type="button" @click="scrollToPreview">预览</button>
+        <RouterLink v-if="current?.publishedPostSlug" class="button-secondary" :to="`/posts/${current.publishedPostSlug}`">查看已发布</RouterLink>
+        <button class="button-secondary" type="button" :disabled="previewing || saving" @click="openPreview">{{ previewing ? "生成中..." : "预览" }}</button>
         <button class="button-secondary" type="button" :disabled="saving" @click="saveDraft">{{ saving ? "保存中..." : "保存草稿" }}</button>
         <button class="button" type="button" :disabled="saving || visibility !== 'public'" title="私密和会员可见文章暂不支持发布到公开站点" @click="publish">{{ saving ? "发布中..." : "发布" }}</button>
       </div>

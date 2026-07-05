@@ -64,6 +64,12 @@ type RevisionListResult struct {
 	Total int        `json:"total"`
 }
 
+type PreviewResult struct {
+	PreviewURL string    `json:"previewUrl"`
+	Token      string    `json:"token"`
+	ExpiresAt  time.Time `json:"expiresAt"`
+}
+
 type Stats struct {
 	Published    int    `json:"published"`
 	Draft        int    `json:"draft"`

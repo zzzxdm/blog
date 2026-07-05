@@ -23,10 +23,24 @@ type Repository interface {
 	List(ctx context.Context) (ListResult, error)
 	Get(ctx context.Context, id string) (AdminPost, error)
 	Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error)
+	Delete(ctx context.Context, id string) (AdminPost, error)
 	Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error)
 	PublishDue(ctx context.Context, publisher posts.Publisher, now time.Time) (int, error)
 	ListRevisions(ctx context.Context, id string) (RevisionListResult, error)
 	RestoreRevision(ctx context.Context, id string, revisionID string) (AdminPost, error)
+}
+
+func (repo *MemoryRepository) Delete(_ context.Context, id string) (AdminPost, error) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	item, ok := repo.items[id]
+	if !ok {
+		return AdminPost{}, ErrPostNotFound
+	}
+
+	delete(repo.items, id)
+	return clonePost(item), nil
 }
 
 type MemoryRepository struct {

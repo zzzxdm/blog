@@ -67,3 +67,20 @@ type CreateRequest struct {
 	TargetTitle   string `json:"targetTitle"`
 	ScheduledAt   string `json:"scheduledAt"`
 }
+
+type BroadcastRecipient struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type BroadcastRequest struct {
+	Recipients  []BroadcastRecipient `json:"recipients"`
+	Type        string               `json:"type"`
+	Priority    string               `json:"priority"`
+	Title       string               `json:"title"`
+	Body        string               `json:"body"`
+	TargetType  string               `json:"targetType"`
+	TargetID    string               `json:"targetId"`
+	TargetTitle string               `json:"targetTitle"`
+	ScheduledAt string               `json:"scheduledAt"`
+}

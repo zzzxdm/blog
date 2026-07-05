@@ -40,13 +40,18 @@ func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Re
 	handler := NewHandler(repo, messageRepo, publisher, settings)
 
 	router.GET("/submissions", handler.ListMine)
+	router.GET("/me/submissions", handler.ListMine)
 	router.POST("/submissions", handler.Create)
 	router.PUT("/submissions/:id", handler.Update)
 	router.POST("/submissions/:id/submit", handler.Submit)
+	router.DELETE("/submissions/:id", handler.DeleteMine)
 
 	router.GET("/admin/submissions", handler.AdminList)
+	router.GET("/admin/submissions/:id", handler.AdminGet)
 	router.PUT("/admin/submissions/:id", handler.AdminUpdate)
 	router.POST("/admin/submissions/:id/review", handler.Review)
+	router.POST("/admin/submissions/:id/approve", handler.Approve)
+	router.POST("/admin/submissions/:id/reject", handler.Reject)
 }
 
 func (handler *Handler) ListMine(ctx *gin.Context) {
@@ -178,6 +183,21 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, submission)
 }
 
+func (handler *Handler) DeleteMine(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	submission, err := handler.repo.DeleteByAuthor(ctx.Request.Context(), ctx.Param("id"), user.ID)
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"ok": true, "submission": submission})
+}
+
 func (handler *Handler) requireSubmissionSettings(ctx *gin.Context) (operations.Settings, bool) {
 	if handler.settings == nil {
 		return operations.Settings{SubmissionsEnabled: true}, true
@@ -231,6 +251,20 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, result)
 }
 
+func (handler *Handler) AdminGet(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	submission, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, submission)
+}
+
 func (handler *Handler) AdminUpdate(ctx *gin.Context) {
 	if _, ok := auth.RequireAdmin(ctx); !ok {
 		return
@@ -263,6 +297,36 @@ func (handler *Handler) Review(ctx *gin.Context) {
 		return
 	}
 
+	handler.reviewWithRequest(ctx, reviewer, request)
+}
+
+func (handler *Handler) Approve(ctx *gin.Context) {
+	reviewer, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+
+	var request ReviewRequest
+	_ = ctx.ShouldBindJSON(&request)
+	request.Action = ActionApprove
+	handler.reviewWithRequest(ctx, reviewer, request)
+}
+
+func (handler *Handler) Reject(ctx *gin.Context) {
+	reviewer, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+
+	var request ReviewRequest
+	_ = ctx.ShouldBindJSON(&request)
+	if strings.TrimSpace(request.Action) == "" {
+		request.Action = ActionReject
+	}
+	handler.reviewWithRequest(ctx, reviewer, request)
+}
+
+func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, request ReviewRequest) {
 	publishedPostSlug := ""
 	if strings.ToLower(strings.TrimSpace(request.Action)) == ActionApprove {
 		submission, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))

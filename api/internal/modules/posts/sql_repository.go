@@ -24,12 +24,13 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 	keyword := strings.TrimSpace(query.Keyword)
 	category := strings.TrimSpace(query.Category)
 	tag := strings.TrimSpace(query.Tag)
+	author := strings.TrimSpace(query.Author)
 	sortMode := strings.ToLower(strings.TrimSpace(query.Sort))
 	if sortMode != "views" && sortMode != "comments" && sortMode != "likes" {
 		sortMode = ""
 	}
 
-	total, err := repo.count(ctx, keyword, category, tag)
+	total, err := repo.count(ctx, keyword, category, tag, author)
 	if err != nil {
 		return ListResult{}, err
 	}
@@ -66,19 +67,24 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 		CROSS JOIN input
 		WHERE p.status = 'published'
 			AND ($2 = '' OR lower(c.slug) = lower($2) OR lower(c.name) = lower($2))
-			AND (
-				$3 = ''
-				OR EXISTS (
+				AND (
+					$3 = ''
+					OR EXISTS (
 					SELECT 1
 					FROM post_tags filter_pt
 					JOIN tags filter_t ON filter_t.id = filter_pt.tag_id
 					WHERE filter_pt.post_id = p.id
-						AND (lower(filter_t.slug) = lower($3) OR lower(filter_t.name) = lower($3))
+							AND (lower(filter_t.slug) = lower($3) OR lower(filter_t.name) = lower($3))
+					)
 				)
-			)
-			AND (
-				input.keyword IS NULL
-				OR p.search_vector @@ input.tsquery
+				AND (
+					$4 = ''
+					OR lower(p.author_name) = lower($4)
+					OR lower(replace(p.author_name, ' ', '-')) = lower($4)
+				)
+				AND (
+					input.keyword IS NULL
+					OR p.search_vector @@ input.tsquery
 				OR p.title ILIKE '%' || input.keyword || '%'
 				OR p.summary ILIKE '%' || input.keyword || '%'
 				OR p.content ILIKE '%' || input.keyword || '%'
@@ -91,19 +97,19 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 						AND search_t.name ILIKE '%' || input.keyword || '%'
 				)
 			)
-		GROUP BY p.id, c.name, input.keyword, input.tsquery
-		ORDER BY
-			CASE WHEN $6 = 'views' THEN p.view_count END DESC NULLS LAST,
-			CASE WHEN $6 = 'comments' THEN p.comment_count END DESC NULLS LAST,
-			CASE WHEN $6 = 'likes' THEN p.like_count END DESC NULLS LAST,
-			CASE
-				WHEN $6 <> '' OR input.keyword IS NULL OR input.tsquery IS NULL THEN 0
-				ELSE ts_rank_cd(p.search_vector, input.tsquery)
-			END DESC,
-			p.published_at DESC NULLS LAST,
-			p.created_at DESC
-		LIMIT $4 OFFSET $5
-	`, keyword, category, tag, pageSize, offset, sortMode)
+			GROUP BY p.id, c.name, input.keyword, input.tsquery
+			ORDER BY
+				CASE WHEN $7 = 'views' THEN p.view_count END DESC NULLS LAST,
+				CASE WHEN $7 = 'comments' THEN p.comment_count END DESC NULLS LAST,
+				CASE WHEN $7 = 'likes' THEN p.like_count END DESC NULLS LAST,
+				CASE
+					WHEN $7 <> '' OR input.keyword IS NULL OR input.tsquery IS NULL THEN 0
+					ELSE ts_rank_cd(p.search_vector, input.tsquery)
+				END DESC,
+				p.published_at DESC NULLS LAST,
+				p.created_at DESC
+			LIMIT $5 OFFSET $6
+		`, keyword, category, tag, author, pageSize, offset, sortMode)
 	if err != nil {
 		return ListResult{}, fmt.Errorf("list posts: %w", err)
 	}
@@ -287,7 +293,7 @@ func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Pos
 	return repo.GetBySlug(ctx, slug)
 }
 
-func (repo *SQLRepository) count(ctx context.Context, keyword string, category string, tag string) (int, error) {
+func (repo *SQLRepository) count(ctx context.Context, keyword string, category string, tag string, author string) (int, error) {
 	var total int
 	err := repo.db.QueryRowContext(ctx, `
 		WITH input AS (
@@ -304,19 +310,24 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 		CROSS JOIN input
 		WHERE p.status = 'published'
 			AND ($2 = '' OR lower(c.slug) = lower($2) OR lower(c.name) = lower($2))
-			AND (
-				$3 = ''
-				OR EXISTS (
+				AND (
+					$3 = ''
+					OR EXISTS (
 					SELECT 1
 					FROM post_tags filter_pt
 					JOIN tags filter_t ON filter_t.id = filter_pt.tag_id
 					WHERE filter_pt.post_id = p.id
-						AND (lower(filter_t.slug) = lower($3) OR lower(filter_t.name) = lower($3))
+							AND (lower(filter_t.slug) = lower($3) OR lower(filter_t.name) = lower($3))
+					)
 				)
-			)
-			AND (
-				input.keyword IS NULL
-				OR p.search_vector @@ input.tsquery
+				AND (
+					$4 = ''
+					OR lower(p.author_name) = lower($4)
+					OR lower(replace(p.author_name, ' ', '-')) = lower($4)
+				)
+				AND (
+					input.keyword IS NULL
+					OR p.search_vector @@ input.tsquery
 				OR p.title ILIKE '%' || input.keyword || '%'
 				OR p.summary ILIKE '%' || input.keyword || '%'
 				OR p.content ILIKE '%' || input.keyword || '%'
@@ -328,8 +339,8 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 					WHERE search_pt.post_id = p.id
 						AND search_t.name ILIKE '%' || input.keyword || '%'
 				)
-			)
-	`, keyword, category, tag).Scan(&total)
+				)
+		`, keyword, category, tag, author).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("count posts: %w", err)
 	}

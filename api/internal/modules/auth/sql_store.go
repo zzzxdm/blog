@@ -220,6 +220,27 @@ func (store *SQLStore) UpdateRole(userID string, role string) (User, error) {
 	return store.userByID(context.Background(), userID)
 }
 
+func (store *SQLStore) UpdateStatus(userID string, status string) (User, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if !validStatus(status) {
+		return User{}, ErrInvalidStatus
+	}
+
+	result, err := store.db.ExecContext(context.Background(), "UPDATE users SET status = $2 WHERE id = $1", userID, status)
+	if err != nil {
+		return User{}, fmt.Errorf("update user status: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return User{}, fmt.Errorf("read user status rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return User{}, ErrInvalidSession
+	}
+
+	return store.userByID(context.Background(), userID)
+}
+
 func (store *SQLStore) UpdateProfile(userID string, displayName string, avatarText string) (User, error) {
 	displayName = strings.TrimSpace(displayName)
 	avatarText = strings.TrimSpace(avatarText)
@@ -271,6 +292,9 @@ func (store *SQLStore) UserBySession(token string) (User, error) {
 			return User{}, ErrInvalidSession
 		}
 		return User{}, err
+	}
+	if user.Status == "banned" || user.Status == "deleted" {
+		return User{}, ErrInvalidSession
 	}
 
 	return user, nil

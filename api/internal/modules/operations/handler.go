@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"blog/api/internal/modules/auth"
@@ -26,6 +27,8 @@ const maxMediaUploadBytes = 10 << 20
 type Handler struct {
 	repo      Repository
 	uploadDir string
+	jobsMu    sync.RWMutex
+	jobs      map[string]AdminJob
 }
 
 func NewHandler(repo Repository, uploadDir string) *Handler {
@@ -33,7 +36,7 @@ func NewHandler(repo Repository, uploadDir string) *Handler {
 		uploadDir = "uploads"
 	}
 
-	return &Handler{repo: repo, uploadDir: uploadDir}
+	return &Handler{repo: repo, uploadDir: uploadDir, jobs: map[string]AdminJob{}}
 }
 
 func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
@@ -47,13 +50,20 @@ func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
 	router.POST("/admin/backups", handler.RunBackup)
 	router.GET("/admin/navigation", handler.GetNavigation)
 	router.PUT("/admin/navigation", handler.UpdateNavigation)
+	router.GET("/admin/redirects", handler.ListRedirects)
+	router.POST("/admin/redirects", handler.CreateRedirect)
+	router.PUT("/admin/redirects", handler.ReplaceRedirects)
 	router.GET("/admin/media", handler.ListMedia)
 	router.POST("/admin/media", handler.UploadMedia)
 	router.GET("/admin/media/:id", handler.GetMedia)
 	router.PATCH("/admin/media/:id", handler.UpdateMedia)
 	router.DELETE("/admin/media/:id", handler.DeleteMedia)
 	router.GET("/admin/stats", handler.GetStats)
+	router.GET("/admin/statistics", handler.GetStats)
 	router.GET("/admin/stats/export", handler.ExportStats)
+	router.POST("/admin/import", handler.CreateImportJob)
+	router.POST("/admin/export", handler.CreateExportJob)
+	router.GET("/admin/jobs/:id", handler.GetJob)
 	router.GET("/admin/audit-logs", handler.ListAuditLogs)
 }
 
@@ -169,6 +179,92 @@ func (handler *Handler) UpdateNavigation(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, navigation)
+}
+
+func (handler *Handler) ListRedirects(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load redirects"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"items": navigation.Redirects,
+		"total": len(navigation.Redirects),
+	})
+}
+
+func (handler *Handler) CreateRedirect(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request RedirectRule
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid redirect payload"})
+		return
+	}
+
+	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load redirects"})
+		return
+	}
+
+	updatedRedirects := normalizeRedirects(append(navigation.Redirects, request))
+	if len(updatedRedirects) == len(navigation.Redirects) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "redirect from and to are required"})
+		return
+	}
+
+	navigation.Redirects = updatedRedirects
+	navigation, err = handler.repo.UpdateNavigation(ctx.Request.Context(), navigation)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save redirect"})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"item":  navigation.Redirects[len(navigation.Redirects)-1],
+		"items": navigation.Redirects,
+		"total": len(navigation.Redirects),
+	})
+}
+
+func (handler *Handler) ReplaceRedirects(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request struct {
+		Items []RedirectRule `json:"items"`
+	}
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid redirects payload"})
+		return
+	}
+
+	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load redirects"})
+		return
+	}
+
+	navigation.Redirects = normalizeRedirects(request.Items)
+	navigation, err = handler.repo.UpdateNavigation(ctx.Request.Context(), navigation)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save redirects"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"items": navigation.Redirects,
+		"total": len(navigation.Redirects),
+	})
 }
 
 func (handler *Handler) ListMedia(ctx *gin.Context) {
@@ -372,6 +468,55 @@ func (handler *Handler) ExportStats(ctx *gin.Context) {
 	})
 }
 
+func (handler *Handler) CreateImportJob(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request AdminJobRequest
+	_ = ctx.ShouldBindJSON(&request)
+	job := handler.createJob("import", request.Scope, request.FileName)
+	job.Status = "queued"
+	job.Progress = 10
+	job.Message = "导入任务已创建，等待离线校验和执行。"
+	handler.storeJob(job)
+
+	ctx.JSON(http.StatusAccepted, job)
+}
+
+func (handler *Handler) CreateExportJob(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	var request AdminJobRequest
+	_ = ctx.ShouldBindJSON(&request)
+	job := handler.createJob("export", request.Scope, request.FileName)
+	job.Status = "completed"
+	job.Progress = 100
+	job.Message = "导出任务已完成。"
+	job.DownloadURL = "/api/admin/jobs/" + job.ID
+	handler.storeJob(job)
+
+	ctx.JSON(http.StatusAccepted, job)
+}
+
+func (handler *Handler) GetJob(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	handler.jobsMu.RLock()
+	job, ok := handler.jobs[ctx.Param("id")]
+	handler.jobsMu.RUnlock()
+	if !ok {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, job)
+}
+
 func (handler *Handler) ListAuditLogs(ctx *gin.Context) {
 	if _, ok := auth.RequireAdmin(ctx); !ok {
 		return
@@ -389,6 +534,38 @@ func (handler *Handler) ListAuditLogs(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) createJob(kind string, scope string, fileName string) AdminJob {
+	now := time.Now()
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = "site"
+	}
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		fileName = fmt.Sprintf("%s-%s-%s.json", kind, scope, now.Format("20060102-150405"))
+	}
+
+	return AdminJob{
+		ID:        fmt.Sprintf("job_%d", now.UnixNano()),
+		Type:      kind,
+		Scope:     scope,
+		Status:    "queued",
+		Progress:  0,
+		Message:   "任务已创建。",
+		FileName:  fileName,
+		Result:    map[string]any{"scope": scope},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func (handler *Handler) storeJob(job AdminJob) {
+	job.UpdatedAt = time.Now()
+	handler.jobsMu.Lock()
+	handler.jobs[job.ID] = job
+	handler.jobsMu.Unlock()
 }
 
 func (handler *Handler) writeMediaError(ctx *gin.Context, err error) {

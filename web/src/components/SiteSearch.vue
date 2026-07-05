@@ -131,11 +131,11 @@ onUnmounted(() => {
           <RouterLink
             v-if="results && results.total > results.items.length"
             class="search-result"
-            :to="{ path: '/archive', query: { q: query.trim() } }"
+            :to="{ path: '/search', query: { q: query.trim() } }"
             @click="close"
           >
             <strong>查看全部 {{ results.total }} 条结果</strong>
-            <p>在归档页继续筛选分类、标签和排序。</p>
+            <p>进入搜索页继续筛选分类、标签和排序。</p>
           </RouterLink>
         </template>
       </div>

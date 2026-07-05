@@ -123,3 +123,52 @@ func TestSearchRequiresKeyword(t *testing.T) {
 		t.Fatalf("expected empty search result, got %q", rec.Body.String())
 	}
 }
+
+func TestListPostsFiltersByAuthor(t *testing.T) {
+	router := gin.New()
+	RegisterPublicRoutes(router, NewMemoryRepository())
+
+	req := httptest.NewRequest(http.MethodGet, "/posts?author=管理员&pageSize=10", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response ListResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Total != 3 {
+		t.Fatalf("author filtered total = %d, want 3", response.Total)
+	}
+	for _, post := range response.Items {
+		if post.AuthorName != "管理员" {
+			t.Fatalf("post author = %q, want 管理员", post.AuthorName)
+		}
+	}
+}
+
+func TestSearchFiltersByAuthor(t *testing.T) {
+	router := gin.New()
+	RegisterPublicRoutes(router, NewMemoryRepository())
+
+	req := httptest.NewRequest(http.MethodGet, "/search?q=SEO&author=unknown", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var response ListResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Total != 0 {
+		t.Fatalf("search total = %d, want 0 for unmatched author", response.Total)
+	}
+}

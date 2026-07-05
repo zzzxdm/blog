@@ -17,6 +17,7 @@ var (
 	ErrInvalidSession     = errors.New("invalid session")
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrInvalidRole        = errors.New("invalid role")
+	ErrInvalidStatus      = errors.New("invalid status")
 )
 
 type session struct {
@@ -35,6 +36,7 @@ type Store interface {
 	Register(request RegisterRequest) (User, string, error)
 	InviteUser(request InviteUserRequest) (User, string, error)
 	UpdateRole(userID string, role string) (User, error)
+	UpdateStatus(userID string, status string) (User, error)
 	UpdateProfile(userID string, displayName string, avatarText string) (User, error)
 	UserBySession(token string) (User, error)
 	SetSessionExpiry(token string, expiresAt time.Time) error
@@ -271,6 +273,26 @@ func (store *MemoryStore) UpdateRole(userID string, role string) (User, error) {
 	return user, nil
 }
 
+func (store *MemoryStore) UpdateStatus(userID string, status string) (User, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if !validStatus(status) {
+		return User{}, ErrInvalidStatus
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	user, ok := store.usersByID[userID]
+	if !ok {
+		return User{}, ErrInvalidSession
+	}
+
+	user.Status = status
+	store.usersByID[userID] = user
+
+	return user, nil
+}
+
 func (store *MemoryStore) UpdateProfile(userID string, displayName string, avatarText string) (User, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
@@ -299,7 +321,7 @@ func (store *MemoryStore) UserBySession(token string) (User, error) {
 	user := store.usersByID[session.UserID]
 	store.mu.RUnlock()
 
-	if !ok || session.ExpiresAt.Before(store.now()) {
+	if !ok || session.ExpiresAt.Before(store.now()) || user.Status == "banned" || user.Status == "deleted" {
 		return User{}, ErrInvalidSession
 	}
 
@@ -560,6 +582,15 @@ func normalizeRole(role string) string {
 func validRole(role string) bool {
 	switch strings.ToLower(strings.TrimSpace(role)) {
 	case "user", "author", "editor", "admin":
+		return true
+	default:
+		return false
+	}
+}
+
+func validStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "active", "muted", "banned", "deleted":
 		return true
 	default:
 		return false

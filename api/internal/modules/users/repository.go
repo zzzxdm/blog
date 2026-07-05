@@ -98,6 +98,7 @@ func (repo *MemoryRepository) EnsureFromAuth(_ context.Context, user auth.User) 
 		managed.AvatarText = user.AvatarText
 		managed.EmailVerified = user.EmailVerified
 	}
+	managed.ModerationNote = moderationNote(managed.Status)
 
 	repo.users[user.ID] = managed
 	if _, ok := repo.accounts[user.ID]; !ok {
@@ -122,15 +123,7 @@ func (repo *MemoryRepository) UpdateStatus(_ context.Context, userID string, sta
 	}
 
 	user.Status = status
-	if status == "muted" {
-		user.ModerationNote = "管理员已限制该用户评论和投稿。"
-	}
-	if status == "active" {
-		user.ModerationNote = ""
-	}
-	if status == "banned" {
-		user.ModerationNote = "账号已封禁，禁止登录和互动。"
-	}
+	user.ModerationNote = moderationNote(status)
 
 	repo.users[userID] = user
 	return user, nil
@@ -182,7 +175,11 @@ func (repo *MemoryRepository) UpdateAccount(_ context.Context, user auth.User, s
 
 func normalizeAccountSettings(settings AccountSettings, user auth.User) AccountSettings {
 	settings.Email = user.Email
-	settings.AvatarText = firstRune(settings.DisplayName)
+	if strings.TrimSpace(settings.AvatarText) == "" {
+		settings.AvatarText = firstRune(settings.DisplayName)
+	} else {
+		settings.AvatarText = firstRune(settings.AvatarText)
+	}
 	settings.TwoFactor = false
 	settings.LoginAlert = false
 	settings.NotifyReview = true

@@ -804,6 +804,37 @@ textarea {
   gap: 14px;
 }
 
+.content-shell {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+
+.metric-card {
+  display: grid;
+  gap: 8px;
+  min-height: 110px;
+  align-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.metric-card strong {
+  color: var(--green-2);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.metric-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .compact-card {
   overflow: hidden;
 }

@@ -59,3 +59,17 @@ type StatusRequest struct {
 type ReportRequest struct {
 	Reason string `json:"reason"`
 }
+
+type CommentReport struct {
+	ID         string    `json:"id"`
+	CommentID  string    `json:"commentId"`
+	ReporterID string    `json:"reporterId"`
+	Reason     string    `json:"reason"`
+	Status     string    `json:"status"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+type ReportListResult struct {
+	Items []CommentReport `json:"items"`
+	Total int             `json:"total"`
+}

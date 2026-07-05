@@ -105,6 +105,10 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
+function authorPath(authorName: string) {
+  return `/authors/${encodeURIComponent(authorName)}`;
+}
+
 function formatCommentTime(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
     month: "2-digit",
@@ -393,7 +397,7 @@ watch(() => auth.user?.id, () => {
           <div class="author-row">
             <span class="avatar">{{ avatarText }}</span>
             <div>
-              <strong>{{ post.authorName }}</strong>
+              <strong><RouterLink :to="authorPath(post.authorName)">{{ post.authorName }}</RouterLink></strong>
               <div class="meta-row">
                 <span>{{ post.tags[0] || "系统设计" }}</span>
                 <span>{{ formatNumber(post.viewCount) }} 次阅读</span>
@@ -552,7 +556,7 @@ watch(() => auth.user?.id, () => {
           <div class="author-row">
             <span class="avatar">{{ avatarText }}</span>
             <div>
-              <strong>{{ post.authorName }}</strong>
+              <strong><RouterLink :to="authorPath(post.authorName)">{{ post.authorName }}</RouterLink></strong>
               <div class="meta-row">
                 <span>{{ post.category }}</span>
                 <span>{{ post.tags.length }} 个标签</span>

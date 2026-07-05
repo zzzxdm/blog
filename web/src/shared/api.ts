@@ -160,6 +160,20 @@ export interface CommentManageListResponse {
   stats: CommentStats;
 }
 
+export interface CommentReport {
+  id: string;
+  commentId: string;
+  reporterId: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface CommentReportListResponse {
+  items: CommentReport[];
+  total: number;
+}
+
 export interface ReactionSummary {
   postSlug: string;
   likeCount: number;
@@ -344,6 +358,20 @@ export interface BackupResult {
   settings: OperationsSettings;
 }
 
+export interface AdminJob {
+  id: string;
+  type: string;
+  scope: string;
+  status: string;
+  progress: number;
+  message: string;
+  fileName?: string;
+  downloadUrl?: string;
+  result?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NavItem {
   id: string;
   label: string;
@@ -355,6 +383,11 @@ export interface RedirectRule {
   from: string;
   to: string;
   code: number;
+}
+
+export interface RedirectListResponse {
+  items: RedirectRule[];
+  total: number;
 }
 
 export interface OperationsNavigation {
@@ -625,6 +658,12 @@ export interface AdminPostRevisionListResponse {
   total: number;
 }
 
+export interface AdminPostPreview {
+  previewUrl: string;
+  token: string;
+  expiresAt: string;
+}
+
 export interface AdminPostPayload {
   slug: string;
   title: string;
@@ -653,6 +692,7 @@ export interface PostListParams {
   q?: string;
   category?: string;
   tag?: string;
+  author?: string;
   sort?: "views" | "comments" | "likes";
 }
 
@@ -672,6 +712,16 @@ export async function getSiteStats(): Promise<SiteStats> {
 export async function searchPosts(params: PostListParams): Promise<ListResponse<Post>> {
   const query = toQuery(params);
   return request<ListResponse<Post>>(`/search${query}`);
+}
+
+export async function getCategoryPosts(slug: string, params: PostListParams = {}): Promise<ListResponse<Post>> {
+  const query = toQuery(params);
+  return request<ListResponse<Post>>(`/categories/${encodeURIComponent(slug)}/posts${query}`);
+}
+
+export async function getTagPosts(slug: string, params: PostListParams = {}): Promise<ListResponse<Post>> {
+  const query = toQuery(params);
+  return request<ListResponse<Post>>(`/tags/${encodeURIComponent(slug)}/posts${query}`);
 }
 
 export async function getCategories(): Promise<TaxonomyListResponse<Category>> {
@@ -833,6 +883,24 @@ export async function updateCommentStatus(id: string, status: Comment["status"])
   });
 }
 
+export async function deleteAdminComment(id: string): Promise<{ ok: boolean; comment: Comment }> {
+  return request<{ ok: boolean; comment: Comment }>(`/admin/comments/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
+export async function getAdminCommentReports(status = ""): Promise<CommentReportListResponse> {
+  const query = toQuery({ status });
+  return request<CommentReportListResponse>(`/admin/comment-reports${query}`);
+}
+
+export async function updateAdminCommentReportStatus(id: string, status: string): Promise<CommentReport> {
+  return request<CommentReport>(`/admin/comment-reports/${encodeURIComponent(id)}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status })
+  });
+}
+
 export async function getReaction(postSlug: string): Promise<ReactionSummary> {
   return request<ReactionSummary>(`/posts/${encodeURIComponent(postSlug)}/reaction`);
 }
@@ -950,6 +1018,33 @@ export async function createAdminMessage(payload: {
   });
 }
 
+export async function broadcastAdminMessage(payload: {
+  recipients: Array<{ id: string; name: string }>;
+  type: MessageType;
+  priority: string;
+  title: string;
+  body: string;
+  targetType?: string;
+  targetId?: string;
+  targetTitle?: string;
+  scheduledAt?: string;
+}): Promise<{ items: StationMessage[]; total: number }> {
+  return request<{ items: StationMessage[]; total: number }>("/admin/messages/broadcast", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function revokeAdminMessage(id: string): Promise<{ ok: boolean; message: StationMessage }> {
+  return request<{ ok: boolean; message: StationMessage }>(`/admin/messages/${encodeURIComponent(id)}/revoke`, {
+    method: "POST"
+  });
+}
+
+export async function getAdminMessageStatistics(id: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/admin/messages/${encodeURIComponent(id)}/statistics`);
+}
+
 export async function getAdminSettings(): Promise<OperationsSettings> {
   return request<OperationsSettings>("/admin/settings");
 }
@@ -973,6 +1068,24 @@ export async function createAdminBackup(): Promise<BackupResult> {
   });
 }
 
+export async function createAdminImportJob(payload: { scope: string; fileName?: string }): Promise<AdminJob> {
+  return request<AdminJob>("/admin/import", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function createAdminExportJob(payload: { scope: string; fileName?: string }): Promise<AdminJob> {
+  return request<AdminJob>("/admin/export", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getAdminJob(id: string): Promise<AdminJob> {
+  return request<AdminJob>(`/admin/jobs/${encodeURIComponent(id)}`);
+}
+
 export async function getSiteSettings(): Promise<SiteSettings> {
   return request<SiteSettings>("/settings");
 }
@@ -989,6 +1102,24 @@ export async function updateAdminNavigation(payload: OperationsNavigation): Prom
   return request<OperationsNavigation>("/admin/navigation", {
     method: "PUT",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function getAdminRedirects(): Promise<RedirectListResponse> {
+  return request<RedirectListResponse>("/admin/redirects");
+}
+
+export async function createAdminRedirect(payload: RedirectRule): Promise<RedirectListResponse & { item: RedirectRule }> {
+  return request<RedirectListResponse & { item: RedirectRule }>("/admin/redirects", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function replaceAdminRedirects(items: RedirectRule[]): Promise<RedirectListResponse> {
+  return request<RedirectListResponse>("/admin/redirects", {
+    method: "PUT",
+    body: JSON.stringify({ items })
   });
 }
 
@@ -1055,6 +1186,14 @@ export async function getAdminAuditLogs(params: AuditLogParams = {}): Promise<Au
 
 export async function getAdminUsers(): Promise<UserListResponse> {
   return request<UserListResponse>("/admin/users");
+}
+
+export async function getAdminUser(id: string): Promise<ManagedUser> {
+  return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}`);
+}
+
+export async function getAdminUserSessions(id: string): Promise<SessionListResponse> {
+  return request<SessionListResponse>(`/admin/users/${encodeURIComponent(id)}/sessions`);
 }
 
 export async function exportAdminUsers(): Promise<AdminUsersExport> {
@@ -1132,10 +1271,26 @@ export async function updateAdminPost(id: string, payload: AdminPostPayload): Pr
   });
 }
 
+export async function deleteAdminPost(id: string): Promise<{ ok: boolean; post: AdminPost }> {
+  return request<{ ok: boolean; post: AdminPost }>(`/admin/posts/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
 export async function publishAdminPost(id: string): Promise<AdminPost> {
   return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/publish`, {
     method: "POST"
   });
+}
+
+export async function createAdminPostPreview(id: string): Promise<AdminPostPreview> {
+  return request<AdminPostPreview>(`/admin/posts/${encodeURIComponent(id)}/preview`, {
+    method: "POST"
+  });
+}
+
+export async function getPreviewPost(token: string): Promise<AdminPost> {
+  return request<AdminPost>(`/preview/${encodeURIComponent(token)}`);
 }
 
 export async function restoreAdminPostRevision(id: string, revisionId: string): Promise<AdminPost> {

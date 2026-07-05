@@ -3,6 +3,7 @@ package submissions
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -182,6 +183,68 @@ func TestSubmissionLimitAllowsDraftButRejectsSubmit(t *testing.T) {
 	}
 	if after.Total != before.Total+2 {
 		t.Fatalf("submission total = %d, want draft and first submit total %d", after.Total, before.Total+2)
+	}
+}
+
+func TestDeleteMineRemovesUnpublishedSubmission(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate returned error: %v", err)
+	}
+
+	submissionRepo := NewMemoryRepository()
+	before, err := submissionRepo.ListByAuthor(context.Background(), "user_linyi", ListQuery{})
+	if err != nil {
+		t.Fatalf("ListByAuthor before returned error: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutes(router, submissionRepo, messages.NewMemoryRepository(), nil, operations.NewMemoryRepository())
+
+	req := httptest.NewRequest(http.MethodDelete, "/submissions/submission_001", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d with body %q", rec.Code, rec.Body.String())
+	}
+
+	after, err := submissionRepo.ListByAuthor(context.Background(), "user_linyi", ListQuery{})
+	if err != nil {
+		t.Fatalf("ListByAuthor after returned error: %v", err)
+	}
+	if after.Total != before.Total-1 {
+		t.Fatalf("submission total = %d, want %d", after.Total, before.Total-1)
+	}
+	if _, err := submissionRepo.Get(context.Background(), "submission_001"); !errors.Is(err, ErrSubmissionNotFound) {
+		t.Fatalf("Get deleted submission error = %v, want ErrSubmissionNotFound", err)
+	}
+}
+
+func TestDeleteMineRejectsPublishedSubmission(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate returned error: %v", err)
+	}
+
+	submissionRepo := NewMemoryRepository()
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutes(router, submissionRepo, messages.NewMemoryRepository(), nil, operations.NewMemoryRepository())
+
+	req := httptest.NewRequest(http.MethodDelete, "/submissions/submission_004", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d with body %q", rec.Code, rec.Body.String())
 	}
 }
 

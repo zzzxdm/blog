@@ -78,3 +78,7 @@ type AccountSettings struct {
 	LastDeviceDescription    string    `json:"lastDeviceDescription"`
 	UpdatedAt                time.Time `json:"updatedAt"`
 }
+
+type AvatarRequest struct {
+	AvatarText string `json:"avatarText"`
+}

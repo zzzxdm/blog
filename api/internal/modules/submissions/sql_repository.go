@@ -204,6 +204,30 @@ func (repo *SQLRepository) Submit(ctx context.Context, submissionID string, user
 	return repo.Get(ctx, submissionID)
 }
 
+func (repo *SQLRepository) DeleteByAuthor(ctx context.Context, submissionID string, userID string) (Submission, error) {
+	current, err := repo.Get(ctx, submissionID)
+	if err != nil {
+		return Submission{}, err
+	}
+	if current.AuthorID != userID || current.Status == StatusPublished {
+		return Submission{}, ErrForbidden
+	}
+
+	result, err := repo.db.ExecContext(ctx, "DELETE FROM submissions WHERE id = $1 AND author_id = $2 AND status <> $3", submissionID, userID, StatusPublished)
+	if err != nil {
+		return Submission{}, fmt.Errorf("delete submission: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return Submission{}, fmt.Errorf("delete submission rows affected: %w", err)
+	}
+	if affected == 0 {
+		return Submission{}, ErrSubmissionNotFound
+	}
+
+	return current, nil
+}
+
 func (repo *SQLRepository) AdminList(ctx context.Context, query ListQuery) (ListResult, error) {
 	items, err := repo.querySubmissions(ctx, `
 		WHERE ($1 = '' OR $1 = 'all' OR s.status = $1)

@@ -25,7 +25,8 @@ const defaultTopItems: NavItem[] = [
   { id: "nav_default_home", label: "首页", url: "/", order: 1 },
   { id: "nav_default_archive", label: "归档", url: "/archive", order: 2 },
   { id: "nav_default_topics", label: "专题", url: "/topics", order: 3 },
-  { id: "nav_default_submit", label: "投稿", url: "/submit", order: 4 }
+  { id: "nav_default_submit", label: "投稿", url: "/submit", order: 4 },
+  { id: "nav_default_about", label: "关于", url: "/about", order: 5 }
 ];
 const topNavItems = computed(() => orderedNavItems(navigation.value?.topItems ?? defaultTopItems));
 const showLoginEntry = computed(() => navigation.value?.showLoginEntry ?? true);

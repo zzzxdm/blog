@@ -173,6 +173,10 @@ func matches(post Post, query ListQuery) bool {
 		return false
 	}
 
+	if query.Author != "" && !matchesAuthor(post.AuthorName, query.Author) {
+		return false
+	}
+
 	if query.Keyword == "" {
 		return true
 	}
@@ -187,6 +191,23 @@ func matches(post Post, query ListQuery) bool {
 	}, " "))
 
 	return strings.Contains(text, keyword)
+}
+
+func matchesAuthor(authorName string, authorQuery string) bool {
+	normalizedAuthor := normalizeAuthor(authorName)
+	normalizedQuery := normalizeAuthor(authorQuery)
+	return normalizedAuthor == normalizedQuery || strings.EqualFold(authorName, authorQuery)
+}
+
+func normalizeAuthor(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, " ", "-")
+	value = strings.ReplaceAll(value, "_", "-")
+	for strings.Contains(value, "--") {
+		value = strings.ReplaceAll(value, "--", "-")
+	}
+
+	return strings.Trim(value, "-")
 }
 
 func hasTag(tags []string, tag string) bool {

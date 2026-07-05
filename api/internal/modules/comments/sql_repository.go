@@ -73,6 +73,39 @@ func (repo *SQLRepository) Create(ctx context.Context, postSlug string, request 
 	return comment, nil
 }
 
+func (repo *SQLRepository) CreateReply(ctx context.Context, parentID string, request CreateRequest, user auth.User) (Comment, error) {
+	body := trimString(request.Body)
+	if body == "" {
+		return Comment{}, ErrEmptyBody
+	}
+
+	var postSlug string
+	if err := repo.db.QueryRowContext(ctx, "SELECT post_slug FROM comments WHERE id = $1", parentID).Scan(&postSlug); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Comment{}, ErrCommentNotFound
+		}
+		return Comment{}, fmt.Errorf("load parent comment: %w", err)
+	}
+
+	id := fmt.Sprintf("comment_%d", time.Now().UnixNano())
+	row := repo.db.QueryRowContext(ctx, `
+		INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author)
+		VALUES ($1, $2, $3, $4, $5, 'pending', 0, $6)
+		RETURNING id
+	`, id, postSlug, parentID, user.ID, body, user.Role == "admin" || user.Role == "author")
+	if err := row.Scan(&id); err != nil {
+		return Comment{}, fmt.Errorf("insert reply: %w", err)
+	}
+
+	comment, err := repo.getByID(ctx, id)
+	if err != nil {
+		return Comment{}, err
+	}
+	comment.IsMine = true
+
+	return comment, nil
+}
+
 func (repo *SQLRepository) ListByAuthor(ctx context.Context, userID string, query ListQuery) (ManageListResult, error) {
 	items, err := repo.queryComments(ctx, `
 		WHERE c.author_id = $1
@@ -182,6 +215,75 @@ func (repo *SQLRepository) UpdateStatus(ctx context.Context, commentID string, s
 	return repo.getByID(ctx, id)
 }
 
+func (repo *SQLRepository) DeleteByAuthor(ctx context.Context, commentID string, userID string) (Comment, error) {
+	tx, err := repo.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, fmt.Errorf("begin comment delete transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var id string
+	var postSlug string
+	var previousStatus string
+	var authorID string
+	err = tx.QueryRowContext(ctx, `
+		WITH current_comment AS (
+			SELECT id, post_slug, status AS previous_status, author_id
+			FROM comments
+			WHERE id = $1
+			FOR UPDATE
+		),
+		updated_comment AS (
+			UPDATE comments c
+			SET status = 'deleted'
+			FROM current_comment
+			WHERE c.id = current_comment.id
+				AND current_comment.author_id = $2
+			RETURNING c.id, current_comment.post_slug, current_comment.previous_status, current_comment.author_id
+		)
+		SELECT id, post_slug, previous_status, author_id
+		FROM updated_comment
+	`, commentID, userID).Scan(&id, &postSlug, &previousStatus, &authorID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			var exists bool
+			if checkErr := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM comments WHERE id = $1)", commentID).Scan(&exists); checkErr != nil {
+				return Comment{}, fmt.Errorf("check comment exists: %w", checkErr)
+			}
+			if exists {
+				return Comment{}, ErrForbidden
+			}
+			return Comment{}, ErrCommentNotFound
+		}
+		return Comment{}, fmt.Errorf("delete comment: %w", err)
+	}
+
+	if authorID != userID {
+		return Comment{}, ErrForbidden
+	}
+	if delta := approvedCommentDelta(previousStatus, "deleted"); delta != 0 {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE posts
+			SET comment_count = GREATEST(comment_count + $2, 0)
+			WHERE slug = $1
+		`, postSlug, delta); err != nil {
+			return Comment{}, fmt.Errorf("update post comment count: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Comment{}, fmt.Errorf("commit comment delete transaction: %w", err)
+	}
+	committed = true
+
+	return repo.getByID(ctx, id)
+}
+
 func (repo *SQLRepository) ToggleLike(ctx context.Context, commentID string, userID string) (Comment, error) {
 	tx, err := repo.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -262,6 +364,59 @@ func (repo *SQLRepository) Report(ctx context.Context, commentID string, user au
 	}
 
 	return nil
+}
+
+func (repo *SQLRepository) ListReports(ctx context.Context, status string) (ReportListResult, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	query := `
+		SELECT id, comment_id, reporter_id, reason, status, created_at
+		FROM comment_reports
+	`
+	args := []any{}
+	if status != "" && status != "all" {
+		query += " WHERE status = $1"
+		args = append(args, status)
+	}
+	query += " ORDER BY created_at DESC, id DESC"
+
+	rows, err := repo.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return ReportListResult{}, fmt.Errorf("query comment reports: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]CommentReport, 0)
+	for rows.Next() {
+		var report CommentReport
+		if err := rows.Scan(&report.ID, &report.CommentID, &report.ReporterID, &report.Reason, &report.Status, &report.CreatedAt); err != nil {
+			return ReportListResult{}, fmt.Errorf("scan comment report: %w", err)
+		}
+		items = append(items, report)
+	}
+	if err := rows.Err(); err != nil {
+		return ReportListResult{}, fmt.Errorf("iterate comment reports: %w", err)
+	}
+
+	return ReportListResult{Items: items, Total: len(items)}, nil
+}
+
+func (repo *SQLRepository) UpdateReportStatus(ctx context.Context, id string, status string) (CommentReport, error) {
+	status = normalizeReportStatus(status)
+	var report CommentReport
+	err := repo.db.QueryRowContext(ctx, `
+		UPDATE comment_reports
+		SET status = $2
+		WHERE id = $1
+		RETURNING id, comment_id, reporter_id, reason, status, created_at
+	`, id, status).Scan(&report.ID, &report.CommentID, &report.ReporterID, &report.Reason, &report.Status, &report.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return CommentReport{}, ErrCommentNotFound
+		}
+		return CommentReport{}, fmt.Errorf("update comment report: %w", err)
+	}
+
+	return report, nil
 }
 
 func (repo *SQLRepository) getByID(ctx context.Context, id string) (Comment, error) {

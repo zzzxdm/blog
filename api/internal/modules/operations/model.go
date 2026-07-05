@@ -68,6 +68,25 @@ type BackupResult struct {
 	Settings  Settings  `json:"settings"`
 }
 
+type AdminJob struct {
+	ID          string         `json:"id"`
+	Type        string         `json:"type"`
+	Scope       string         `json:"scope"`
+	Status      string         `json:"status"`
+	Progress    int            `json:"progress"`
+	Message     string         `json:"message"`
+	FileName    string         `json:"fileName,omitempty"`
+	DownloadURL string         `json:"downloadUrl,omitempty"`
+	Result      map[string]any `json:"result,omitempty"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
+}
+
+type AdminJobRequest struct {
+	Scope    string `json:"scope"`
+	FileName string `json:"fileName"`
+}
+
 type NavItem struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`

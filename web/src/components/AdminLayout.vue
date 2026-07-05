@@ -29,7 +29,9 @@ const navItems = [
   { label: "站内信", to: "/admin/messages" },
   { label: "媒体库", to: "/admin/media" },
   { label: "导航", to: "/admin/navigation" },
+  { label: "重定向", to: "/admin/redirects" },
   { label: "统计", to: "/admin/stats" },
+  { label: "导入导出", to: "/admin/import-export" },
   { label: "日志", to: "/admin/audit" },
   { label: "设置", to: "/admin/settings" }
 ];
@@ -51,7 +53,7 @@ function isActive(to: string) {
     return false;
   }
 
-  return route.path === to;
+  return route.path === to || route.path.startsWith(`${to}/`);
 }
 </script>
 
