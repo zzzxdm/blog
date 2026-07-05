@@ -14,6 +14,7 @@ defineProps<{
 
 const route = useRoute();
 const siteSettings = ref<SiteSettings | null>(null);
+const sidebarCollapsed = ref(false);
 const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间笔记");
 const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
 
@@ -37,6 +38,7 @@ const navItems = [
 ];
 
 onMounted(() => {
+  sidebarCollapsed.value = window.localStorage.getItem("admin:sidebar-collapsed") === "true";
   void loadSiteSettings();
 });
 
@@ -55,6 +57,11 @@ function isActive(to: string) {
 
   return route.path === to || route.path.startsWith(`${to}/`);
 }
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  window.localStorage.setItem("admin:sidebar-collapsed", String(sidebarCollapsed.value));
+}
 </script>
 
 <template>
@@ -68,20 +75,33 @@ function isActive(to: string) {
     </slot>
   </div>
 
-  <div class="admin-shell">
+  <div class="admin-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <aside class="admin-sidebar">
-      <RouterLink class="admin-brand" to="/admin">
-        <span class="brand-mark">{{ brandMark }}</span>
-        <span>{{ siteName }}后台</span>
-      </RouterLink>
+      <div class="admin-sidebar-header">
+        <RouterLink class="admin-brand" to="/admin" :title="`${siteName}后台`">
+          <span class="brand-mark">{{ brandMark }}</span>
+          <span class="admin-brand-text">{{ siteName }}后台</span>
+        </RouterLink>
+        <button
+          class="admin-sidebar-toggle"
+          type="button"
+          :aria-label="sidebarCollapsed ? '展开后台菜单' : '折叠后台菜单'"
+          :title="sidebarCollapsed ? '展开菜单' : '折叠菜单'"
+          @click="toggleSidebar"
+        >
+          {{ sidebarCollapsed ? "›" : "‹" }}
+        </button>
+      </div>
       <nav class="admin-nav" aria-label="后台导航">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"
           :class="{ active: isActive(item.to) }"
           :to="item.to"
+          :title="item.label"
         >
-          {{ item.label }}
+          <span class="admin-nav-icon" aria-hidden="true">{{ item.label.slice(0, 1) }}</span>
+          <span class="admin-nav-label">{{ item.label }}</span>
         </RouterLink>
       </nav>
     </aside>

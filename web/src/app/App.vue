@@ -6,13 +6,14 @@ import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
 import SiteSearch from "../components/SiteSearch.vue";
 import { getCategories, getSiteNavigation, getSiteSettings, type Category, type NavItem, type OperationsNavigation, type SiteSettings } from "../shared/api";
+import { applyPrimaryColor, applyThemeMode, getInitialThemeMode, type ThemeMode } from "../shared/theme";
 import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
 const auth = useAuthStore();
 const navOpen = ref(false);
 const searchOpen = ref(false);
-const themeMode = ref<"light" | "dark">("light");
+const themeMode = ref<ThemeMode>("light");
 const categories = ref<Category[]>([]);
 const navigation = ref<OperationsNavigation | null>(null);
 const siteSettings = ref<SiteSettings | null>(null);
@@ -51,19 +52,16 @@ function logout() {
 }
 
 function initializeTheme() {
-  const stored = window.localStorage.getItem("site:theme");
-  const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  applyTheme(stored === "dark" || (!stored && prefersDark) ? "dark" : "light");
+  applyTheme(getInitialThemeMode());
 }
 
 function toggleTheme() {
   applyTheme(themeMode.value === "dark" ? "light" : "dark");
 }
 
-function applyTheme(mode: "light" | "dark") {
+function applyTheme(mode: ThemeMode) {
   themeMode.value = mode;
-  document.documentElement.dataset.theme = mode;
-  window.localStorage.setItem("site:theme", mode);
+  applyThemeMode(mode);
 }
 
 async function loadCategories() {
@@ -92,12 +90,6 @@ async function loadNavigation() {
     navigation.value = await getSiteNavigation();
   } catch {
     navigation.value = null;
-  }
-}
-
-function applyPrimaryColor(color: string) {
-  if (/^#[0-9a-f]{6}$/i.test(color.trim())) {
-    document.documentElement.style.setProperty("--green", color.trim());
   }
 }
 

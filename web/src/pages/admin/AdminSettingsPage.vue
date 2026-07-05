@@ -9,6 +9,7 @@ import {
   updateAdminSettings,
   type OperationsSettings
 } from "../../shared/api";
+import { applyPrimaryColor, applyThemeMode, themeOptions, type ThemeMode } from "../../shared/theme";
 
 const settings = ref<OperationsSettings | null>(null);
 const blockedWordsText = ref("");
@@ -18,8 +19,12 @@ const testingMail = ref(false);
 const runningBackup = ref(false);
 const error = ref("");
 const message = ref("");
+const themeMode = ref<ThemeMode>("light");
 
-onMounted(load);
+onMounted(() => {
+  themeMode.value = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  void load();
+});
 
 watch(settings, (value) => {
   blockedWordsText.value = value?.blockedWords.join(", ") || "";
@@ -31,6 +36,7 @@ async function load() {
 
   try {
     settings.value = await getAdminSettings();
+    applyPrimaryColor(settings.value.themePrimary);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "设置加载失败";
   } finally {
@@ -53,12 +59,44 @@ async function save() {
       blockedWords: blockedWordsText.value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean)
     };
     settings.value = await updateAdminSettings(payload);
+    applyPrimaryColor(settings.value.themePrimary);
     message.value = "设置已保存。";
   } catch (err) {
     error.value = err instanceof Error ? err.message : "设置保存失败";
   } finally {
     saving.value = false;
   }
+}
+
+function selectTheme(color: string) {
+  if (!settings.value) {
+    return;
+  }
+
+  settings.value.themePrimary = color;
+  applyPrimaryColor(color);
+}
+
+function isSelectedTheme(color: string) {
+  return settings.value?.themePrimary.toLowerCase() === color.toLowerCase();
+}
+
+function setThemeMode(mode: ThemeMode) {
+  themeMode.value = mode;
+  applyThemeMode(mode);
+  if (settings.value) {
+    applyPrimaryColor(settings.value.themePrimary);
+  }
+}
+
+function toggleDarkModeSetting(event: Event) {
+  if (!settings.value) {
+    return;
+  }
+
+  const checked = (event.target as HTMLInputElement).checked;
+  settings.value.darkModeEnabled = checked;
+  setThemeMode(checked ? "dark" : "light");
 }
 
 async function testMail() {
@@ -124,9 +162,33 @@ async function runBackup() {
       <section class="panel">
         <div class="panel-title"><h2>主题外观</h2></div>
         <div class="settings-stack">
-          <div class="field"><label>主色</label><div class="swatches"><button v-for="color in ['#295b4b', '#b95f2d', '#e3b45d']" :key="color" class="swatch" :style="{ background: color }" type="button" :aria-label="color" @click="settings.themePrimary = color"></button></div></div>
+          <div class="field">
+            <label>主色</label>
+            <div class="theme-options" role="radiogroup" aria-label="主色">
+              <button
+                v-for="theme in themeOptions"
+                :key="theme.value"
+                class="theme-option"
+                :class="{ active: isSelectedTheme(theme.value) }"
+                type="button"
+                role="radio"
+                :aria-checked="isSelectedTheme(theme.value)"
+                @click="selectTheme(theme.value)"
+              >
+                <span class="theme-option-swatch" :style="{ background: theme.value }"></span>
+                <span>{{ theme.label }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <label>后台外观</label>
+            <div class="segmented-control" aria-label="后台外观">
+              <button type="button" :class="{ active: themeMode === 'light' }" @click="setThemeMode('light')">浅色</button>
+              <button type="button" :class="{ active: themeMode === 'dark' }" @click="setThemeMode('dark')">深色</button>
+            </div>
+          </div>
           <div class="field"><label for="homepage-layout">首页布局</label><select v-model="settings.homepageLayout" class="input" id="homepage-layout"><option>精选文章 + 最新列表</option><option>专题优先</option><option>极简文章流</option></select></div>
-          <label class="setting-row"><div><strong>深色模式</strong><div class="meta-row"><span>允许读者切换浅色和深色</span></div></div><input v-model="settings.darkModeEnabled" type="checkbox"></label>
+          <label class="setting-row"><div><strong>深色模式</strong><div class="meta-row"><span>开启后立即预览深色，并允许读者切换浅色和深色</span></div></div><input v-model="settings.darkModeEnabled" type="checkbox" @change="toggleDarkModeSetting"></label>
           <label class="setting-row"><div><strong>显示阅读进度</strong><div class="meta-row"><span>文章页顶部展示阅读进度条</span></div></div><input v-model="settings.readingProgressEnabled" type="checkbox"></label>
         </div>
       </section>

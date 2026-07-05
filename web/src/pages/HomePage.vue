@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import { usePostsStore } from "../stores/posts";
@@ -31,8 +31,10 @@ const tags = ref<Tag[]>([]);
 const topicLinkLimit = 6;
 
 const allPosts = computed(() => posts.list?.items ?? []);
-const featurePost = computed(() => allPosts.value[0] ?? null);
-const weeklyPosts = computed(() => allPosts.value.slice(1, 4));
+const featuredPosts = computed(() => allPosts.value.slice(0, 4));
+const featureIndex = ref(0);
+const featurePost = computed(() => featuredPosts.value[featureIndex.value] ?? featuredPosts.value[0] ?? null);
+const weeklyPosts = computed(() => allPosts.value.filter((_, index) => index !== featureIndex.value).slice(0, 3));
 const latestPosts = computed(() => allPosts.value.slice(1, 5));
 const homepageLayout = computed(() => siteSettings.value?.homepageLayout || "精选文章 + 最新列表");
 const topicFirstLayout = computed(() => homepageLayout.value === "专题优先");
@@ -97,7 +99,19 @@ onMounted(() => {
   void posts.loadList({ page: 1, pageSize: 12 });
   void loadSiteSettings();
   void loadTaxonomies();
+  startFeatureCarousel();
 });
+
+onUnmounted(stopFeatureCarousel);
+
+watch(() => featuredPosts.value.length, (length) => {
+  if (featureIndex.value >= length) {
+    featureIndex.value = 0;
+  }
+  restartFeatureCarousel();
+});
+
+let featureTimer: number | undefined;
 
 async function loadSiteSettings() {
   try {
@@ -187,6 +201,49 @@ function topicTone(index: number): "" | "rust" | "amber" {
 
   return "";
 }
+
+function startFeatureCarousel() {
+  if (featureTimer || featuredPosts.value.length <= 1) {
+    return;
+  }
+
+  featureTimer = window.setInterval(() => {
+    nextFeature(false);
+  }, 6000);
+}
+
+function stopFeatureCarousel() {
+  if (featureTimer) {
+    window.clearInterval(featureTimer);
+    featureTimer = undefined;
+  }
+}
+
+function restartFeatureCarousel() {
+  stopFeatureCarousel();
+  startFeatureCarousel();
+}
+
+function showFeature(index: number, resetTimer = true) {
+  const total = featuredPosts.value.length;
+  if (total <= 1) {
+    featureIndex.value = 0;
+    return;
+  }
+
+  featureIndex.value = (index + total) % total;
+  if (resetTimer) {
+    restartFeatureCarousel();
+  }
+}
+
+function nextFeature(resetTimer = true) {
+  showFeature(featureIndex.value + 1, resetTimer);
+}
+
+function previousFeature() {
+  showFeature(featureIndex.value - 1);
+}
 </script>
 
 <template>
@@ -243,7 +300,24 @@ function topicTone(index: number): "" | "rust" | "amber" {
               <RouterLink :to="`/posts/${featurePost.slug}`">{{ featurePost.title }}</RouterLink>
             </h1>
             <p>{{ featurePost.summary }}</p>
-            <RouterLink class="button" :to="`/posts/${featurePost.slug}`">阅读全文</RouterLink>
+            <div class="feature-actions">
+              <RouterLink class="button" :to="`/posts/${featurePost.slug}`">阅读全文</RouterLink>
+              <div v-if="featuredPosts.length > 1" class="feature-controls" aria-label="精选内容轮播">
+                <button class="icon-button" type="button" aria-label="上一篇" @click="previousFeature">‹</button>
+                <div class="feature-dots">
+                  <button
+                    v-for="(post, index) in featuredPosts"
+                    :key="post.id"
+                    type="button"
+                    :class="{ active: index === featureIndex }"
+                    :aria-label="`切换到第 ${index + 1} 篇`"
+                    :aria-current="index === featureIndex ? 'true' : undefined"
+                    @click="showFeature(index)"
+                  ></button>
+                </div>
+                <button class="icon-button" type="button" aria-label="下一篇" @click="nextFeature()">›</button>
+              </div>
+            </div>
           </div>
         </article>
 
