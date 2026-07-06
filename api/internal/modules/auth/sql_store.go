@@ -717,16 +717,10 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 		}
 
 		if _, err := store.db.ExecContext(ctx, `
-			INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (id) DO UPDATE SET
-				email = EXCLUDED.email,
-				display_name = EXCLUDED.display_name,
-				role = EXCLUDED.role,
-				status = EXCLUDED.status,
-				avatar_text = EXCLUDED.avatar_text,
-				email_verified = EXCLUDED.email_verified
-		`, seed.User.ID, normalizeEmail(seed.User.Email), seed.User.DisplayName, seed.User.Role, seed.User.Status, seed.User.AvatarText, seed.User.EmailVerified, string(hash)); err != nil {
+				INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				ON CONFLICT (id) DO NOTHING
+			`, seed.User.ID, normalizeEmail(seed.User.Email), seed.User.DisplayName, seed.User.Role, seed.User.Status, seed.User.AvatarText, seed.User.EmailVerified, string(hash)); err != nil {
 			return fmt.Errorf("seed user %s: %w", seed.User.ID, err)
 		}
 	}

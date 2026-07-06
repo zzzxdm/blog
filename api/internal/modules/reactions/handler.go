@@ -51,6 +51,10 @@ func (handler *Handler) SetReaction(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !canInteract(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to react to posts"})
+		return
+	}
 	if !handler.ensurePostExists(ctx) {
 		return
 	}
@@ -80,6 +84,10 @@ func (handler *Handler) ClearReaction(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if !canInteract(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to react to posts"})
+		return
+	}
 	if !handler.ensurePostExists(ctx) {
 		return
 	}
@@ -96,6 +104,10 @@ func (handler *Handler) ClearReaction(ctx *gin.Context) {
 func (handler *Handler) SetBookmark(ctx *gin.Context) {
 	user, ok := auth.RequireUser(ctx)
 	if !ok {
+		return
+	}
+	if !canInteract(user) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to bookmark posts"})
 		return
 	}
 	if !handler.ensurePostExists(ctx) {
@@ -175,4 +187,8 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 		Items: items,
 		Total: len(items),
 	})
+}
+
+func canInteract(user auth.User) bool {
+	return user.Status == "" || user.Status == "active"
 }

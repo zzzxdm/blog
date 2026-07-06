@@ -139,6 +139,32 @@ func TestDeleteMineMarksOwnCommentDeleted(t *testing.T) {
 	}
 }
 
+func TestMutedUserCannotReportComment(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate returned error: %v", err)
+	}
+	if _, err := store.UpdateStatus("user_linyi", "muted"); err != nil {
+		t.Fatalf("UpdateStatus returned error: %v", err)
+	}
+
+	commentRepo := NewMemoryRepository()
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutes(router, commentRepo, operations.NewMemoryRepository())
+
+	req := httptest.NewRequest(http.MethodPost, "/comments/comment_001/report", bytes.NewBufferString(`{"reason":"spam"}`))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d with body %q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestContainsBlockedWord(t *testing.T) {
 	if !containsBlockedWord("This has SPAM content", []string{"spam"}) {
 		t.Fatal("expected case-insensitive blocked word match")

@@ -3,10 +3,12 @@ import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
+  deleteAdminUser,
   exportAdminUsers,
   getAdminUsers,
   inviteAdminUser,
   requestAdminUserPasswordReset,
+  updateAdminUserRole,
   updateAdminUserStatus,
   type ManagedUser,
   type UserStats
@@ -20,6 +22,8 @@ const exporting = ref(false);
 const inviting = ref(false);
 const actingId = ref("");
 const resettingId = ref("");
+const roleActingId = ref("");
+const deletingId = ref("");
 const error = ref("");
 const message = ref("");
 const inviteOpen = ref(false);
@@ -90,6 +94,26 @@ async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
   }
 }
 
+async function setRole(user: ManagedUser, role: string) {
+  if (user.role === role) {
+    return;
+  }
+
+  roleActingId.value = user.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await updateAdminUserRole(user.id, role);
+    message.value = "用户角色已更新。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户角色更新失败";
+  } finally {
+    roleActingId.value = "";
+  }
+}
+
 async function exportUsers() {
   exporting.value = true;
   error.value = "";
@@ -141,6 +165,29 @@ async function resetPassword(user: ManagedUser) {
     error.value = err instanceof Error ? err.message : "密码重置失败";
   } finally {
     resettingId.value = "";
+  }
+}
+
+async function deleteUser(user: ManagedUser) {
+  if (!window.confirm(`确定删除 ${user.displayName} 吗？该用户会被标记为已删除并退出所有会话。`)) {
+    return;
+  }
+
+  deletingId.value = user.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await deleteAdminUser(user.id);
+    if (selectedId.value === user.id) {
+      selectedId.value = "";
+    }
+    message.value = "用户已删除。";
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户删除失败";
+  } finally {
+    deletingId.value = "";
   }
 }
 
@@ -211,6 +258,21 @@ function formatDate(value: string) {
           </div>
         </div>
         <div class="settings-stack">
+          <div class="field">
+            <label for="selected-user-role">角色</label>
+            <select
+              class="input"
+              id="selected-user-role"
+              :value="selectedUser.role"
+              :disabled="roleActingId === selectedUser.id || selectedUser.status === 'deleted'"
+              @change="setRole(selectedUser, ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="user">注册用户</option>
+              <option value="author">作者</option>
+              <option value="editor">编辑</option>
+              <option value="admin">管理员</option>
+            </select>
+          </div>
           <div class="meta-row"><span>评论 {{ selectedUser.commentCount }}</span><span>收藏 {{ selectedUser.bookmarkCount }}</span><span>{{ selectedUser.emailVerified ? "已验证邮箱" : "未验证邮箱" }}</span></div>
           <div class="meta-row"><span>注册于 {{ formatDate(selectedUser.registeredAt) }}</span><span>最近登录 {{ formatDate(selectedUser.lastLoginAt) }}</span></div>
           <p v-if="selectedUser.moderationNote" class="muted">{{ selectedUser.moderationNote }}</p>
@@ -242,6 +304,7 @@ function formatDate(value: string) {
           <option value="unverified">待验证</option>
           <option value="muted">禁言</option>
           <option value="banned">封禁</option>
+          <option value="deleted">已删除</option>
         </select>
         <select v-model="roleFilter" class="input" aria-label="角色">
           <option value="">全部角色</option>
@@ -268,7 +331,20 @@ function formatDate(value: string) {
         <tbody>
           <tr v-for="user in visibleUsers" :key="user.id">
             <td><strong>{{ user.displayName }}</strong><div class="meta-row"><span>{{ user.email }}</span><span>{{ user.emailVerified ? "已验证邮箱" : "未验证邮箱" }}</span><span v-if="user.moderationNote">{{ user.moderationNote }}</span></div></td>
-            <td>{{ roleText(user.role) }}</td>
+            <td>
+              <select
+                class="input"
+                :value="user.role"
+                :aria-label="`${user.displayName}角色`"
+                :disabled="roleActingId === user.id || user.status === 'deleted'"
+                @change="setRole(user, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="user">注册用户</option>
+                <option value="author">作者</option>
+                <option value="editor">编辑</option>
+                <option value="admin">管理员</option>
+              </select>
+            </td>
             <td><span class="status" :class="statusClass(user.status)">{{ statusText(user.status) }}</span></td>
             <td>{{ user.commentCount }}</td>
             <td>{{ user.bookmarkCount }}</td>
@@ -276,10 +352,11 @@ function formatDate(value: string) {
             <td>
               <div class="header-actions">
                 <button class="button-secondary" type="button" @click="viewUser(user)">查看</button>
-                <button class="button-secondary" type="button" :disabled="resettingId === user.id" @click="resetPassword(user)">{{ resettingId === user.id ? "生成中..." : "重置密码" }}</button>
-                <button v-if="user.status === 'active'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'muted')">禁言</button>
-                <button v-else class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'active')">解除</button>
-                <button v-if="user.status !== 'banned'" class="button-secondary" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'banned')">封禁</button>
+                <button v-if="user.status !== 'deleted'" class="button-secondary" type="button" :disabled="resettingId === user.id" @click="resetPassword(user)">{{ resettingId === user.id ? "生成中..." : "重置密码" }}</button>
+                <button v-if="user.status === 'active'" class="button-secondary button-danger" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'muted')">禁言</button>
+                <button v-else-if="user.status !== 'deleted'" class="button-secondary button-success" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'active')">解除</button>
+                <button v-if="user.status !== 'banned' && user.status !== 'deleted'" class="button-secondary button-danger" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'banned')">封禁</button>
+                <button v-if="user.status !== 'deleted'" class="button-secondary button-danger" type="button" :disabled="deletingId === user.id" @click="deleteUser(user)">{{ deletingId === user.id ? "删除中..." : "删除" }}</button>
               </div>
             </td>
           </tr>

@@ -256,6 +256,23 @@ textarea {
   font-weight: 700;
 }
 
+.button-danger {
+  border-color: color-mix(in srgb, var(--rose) 72%, transparent);
+  background: var(--rose);
+  color: #fffefa;
+}
+
+.button-success {
+  border-color: color-mix(in srgb, var(--green) 72%, transparent);
+  background: var(--green);
+  color: #fffefa;
+}
+
+.button-danger:disabled,
+.button-success:disabled {
+  opacity: 0.62;
+}
+
 .page {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;

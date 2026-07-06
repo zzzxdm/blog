@@ -30,6 +30,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, authStore auth.Store) {
 	router.POST("/admin/users/invitations", handler.Invite)
 	router.PUT("/admin/users/:id/role", handler.UpdateRole)
 	router.PUT("/admin/users/:id/status", handler.UpdateStatus)
+	router.DELETE("/admin/users/:id", handler.Delete)
 	router.POST("/admin/users/:id/password-reset", handler.RequestPasswordReset)
 	router.GET("/account/settings", handler.GetAccount)
 	router.PUT("/account/settings", handler.UpdateAccount)
@@ -246,6 +247,48 @@ func (handler *Handler) UpdateRole(ctx *gin.Context) {
 	managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user role"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, managed)
+}
+
+func (handler *Handler) Delete(ctx *gin.Context) {
+	admin, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+
+	userID := ctx.Param("id")
+	if userID == admin.ID {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete current admin"})
+		return
+	}
+
+	if handler.authStore != nil {
+		if err := handler.authStore.DeleteUser(userID); err != nil {
+			if errors.Is(err, auth.ErrInvalidSession) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+			return
+		}
+	}
+
+	managed, err := handler.repo.UpdateStatus(ctx.Request.Context(), userID, "deleted")
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		if errors.Is(err, ErrInvalidStatus) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user status"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync deleted user"})
 		return
 	}
 

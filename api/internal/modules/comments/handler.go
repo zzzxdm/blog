@@ -197,7 +197,7 @@ func (handler *Handler) Report(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if user.Status == "banned" || user.Status == "deleted" {
+	if !canInteract(user) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "user is not allowed to report comments"})
 		return
 	}

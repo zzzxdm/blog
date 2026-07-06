@@ -1221,6 +1221,12 @@ export async function updateAdminUserStatus(id: string, status: ManagedUser["sta
   });
 }
 
+export async function deleteAdminUser(id: string): Promise<ManagedUser> {
+  return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
 export async function requestAdminUserPasswordReset(id: string): Promise<AdminPasswordResetResponse> {
   return request<AdminPasswordResetResponse>(`/admin/users/${encodeURIComponent(id)}/password-reset`, {
     method: "POST"

@@ -72,6 +72,94 @@ func TestUpdateStatusSyncsAuthStoreAndManagedUser(t *testing.T) {
 	}
 }
 
+func TestDeleteSyncsAuthStoreAndManagedUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	authStore := auth.NewMemoryStore()
+	repo := NewMemoryRepository()
+	_, token, err := authStore.Authenticate("admin@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate admin returned error: %v", err)
+	}
+	_, userToken, err := authStore.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate user returned error: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(auth.Middleware(authStore))
+	RegisterRoutes(router, repo, authStore)
+
+	request := httptest.NewRequest(http.MethodDelete, "/admin/users/user_linyi", nil)
+	request.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d with body %q", recorder.Code, recorder.Body.String())
+	}
+
+	var updated ManagedUser
+	if err := json.NewDecoder(recorder.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if updated.Status != "deleted" {
+		t.Fatalf("response status = %q, want deleted", updated.Status)
+	}
+
+	managed, err := repo.Get(request.Context(), "user_linyi")
+	if err != nil {
+		t.Fatalf("repo.Get returned error: %v", err)
+	}
+	if managed.Status != "deleted" {
+		t.Fatalf("managed status = %q, want deleted", managed.Status)
+	}
+
+	_, _, err = authStore.Authenticate("linyi@example.com", "password")
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("Authenticate deleted user error = %v, want ErrInvalidCredentials", err)
+	}
+
+	_, err = authStore.UserBySession(userToken)
+	if !errors.Is(err, auth.ErrInvalidSession) {
+		t.Fatalf("UserBySession deleted user error = %v, want ErrInvalidSession", err)
+	}
+}
+
+func TestDeleteRejectsCurrentAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	authStore := auth.NewMemoryStore()
+	repo := NewMemoryRepository()
+	_, token, err := authStore.Authenticate("admin@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate admin returned error: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(auth.Middleware(authStore))
+	RegisterRoutes(router, repo, authStore)
+
+	request := httptest.NewRequest(http.MethodDelete, "/admin/users/user_admin", nil)
+	request.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d with body %q", recorder.Code, recorder.Body.String())
+	}
+
+	user, err := authStore.UserBySession(token)
+	if err != nil {
+		t.Fatalf("admin session should remain valid: %v", err)
+	}
+	if user.Status != "active" {
+		t.Fatalf("admin status = %q, want active", user.Status)
+	}
+}
+
 func TestUpdateAvatarSyncsAuthStore(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

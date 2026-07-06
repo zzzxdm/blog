@@ -93,6 +93,51 @@ func TestCreateSubmissionRejectsBlockedWords(t *testing.T) {
 	}
 }
 
+func TestMutedUserCannotCreateSubmission(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate returned error: %v", err)
+	}
+	if _, err := store.UpdateStatus("user_linyi", "muted"); err != nil {
+		t.Fatalf("UpdateStatus returned error: %v", err)
+	}
+
+	settingsRepo := operations.NewMemoryRepository()
+	settings, err := settingsRepo.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	settings.SubmissionsEnabled = true
+	if _, err := settingsRepo.UpdateSettings(context.Background(), settings); err != nil {
+		t.Fatalf("UpdateSettings returned error: %v", err)
+	}
+
+	submissionRepo := NewMemoryRepository()
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutes(router, submissionRepo, messages.NewMemoryRepository(), nil, settingsRepo)
+
+	req := httptest.NewRequest(http.MethodPost, "/submissions", bytes.NewBufferString(`{
+		"title":"Muted submission",
+		"summary":"Muted users cannot submit",
+		"content":"Ready for review.",
+		"category":"Engineering",
+		"tags":["moderation"],
+		"coverImage":"",
+		"slug":"muted-submission",
+		"submit":true
+	}`))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d with body %q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestSubmissionLimitAllowsDraftButRejectsSubmit(t *testing.T) {
 	store := auth.NewMemoryStore()
 	user, token, err := store.Register(auth.RegisterRequest{
