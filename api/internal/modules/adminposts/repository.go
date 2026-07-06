@@ -20,7 +20,7 @@ var (
 )
 
 type Repository interface {
-	List(ctx context.Context) (ListResult, error)
+	List(ctx context.Context, query ListQuery) (ListResult, error)
 	Get(ctx context.Context, id string) (AdminPost, error)
 	Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error)
 	Delete(ctx context.Context, id string) (AdminPost, error)
@@ -59,7 +59,7 @@ func NewMemoryRepository() *MemoryRepository {
 	}
 }
 
-func (repo *MemoryRepository) List(_ context.Context) (ListResult, error) {
+func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (ListResult, error) {
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
@@ -68,15 +68,11 @@ func (repo *MemoryRepository) List(_ context.Context) (ListResult, error) {
 		items = append(items, item)
 	}
 
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].UpdatedAt.After(items[j].UpdatedAt)
-	})
+	stats := countStats(items)
+	items = filterAdminPosts(items, query)
+	sortAdminPosts(items, query.Sort)
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: countStats(items),
-	}, nil
+	return pagedPostResult(items, stats, query), nil
 }
 
 func (repo *MemoryRepository) Get(_ context.Context, id string) (AdminPost, error) {
@@ -298,6 +294,115 @@ func (repo *MemoryRepository) RestoreRevision(_ context.Context, id string, revi
 
 func countStats(items []AdminPost) Stats {
 	return countStatsAt(items, time.Now())
+}
+
+func filterAdminPosts(items []AdminPost, query ListQuery) []AdminPost {
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
+	status := strings.ToLower(strings.TrimSpace(query.Status))
+	filtered := make([]AdminPost, 0, len(items))
+
+	for _, item := range items {
+		if status != "" && status != "all" && item.Status != status {
+			continue
+		}
+		if keyword != "" && !adminPostContains(item, keyword) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+
+	return filtered
+}
+
+func adminPostContains(item AdminPost, keyword string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		item.Title,
+		item.Summary,
+		item.AuthorName,
+		item.Category,
+		item.Slug,
+		item.Visibility,
+		item.Status,
+		strings.Join(item.Tags, " "),
+	}, " "))
+	return strings.Contains(haystack, keyword)
+}
+
+func sortAdminPosts(items []AdminPost, mode string) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "views":
+		sort.SliceStable(items, func(i, j int) bool {
+			return items[i].ViewCount > items[j].ViewCount
+		})
+	case "scheduled":
+		sort.SliceStable(items, func(i, j int) bool {
+			left := time.Time{}
+			right := time.Time{}
+			if items[i].ScheduledAt != nil {
+				left = *items[i].ScheduledAt
+			}
+			if items[j].ScheduledAt != nil {
+				right = *items[j].ScheduledAt
+			}
+			if left.IsZero() {
+				return false
+			}
+			if right.IsZero() {
+				return true
+			}
+			return left.Before(right)
+		})
+	default:
+		sort.SliceStable(items, func(i, j int) bool {
+			return items[i].UpdatedAt.After(items[j].UpdatedAt)
+		})
+	}
+}
+
+func pagedPostResult(items []AdminPost, stats Stats, query ListQuery) ListResult {
+	total := len(items)
+	page := normalizePage(query.Page)
+	pageSize := normalizePageSize(query.PageSize)
+	paged := items
+	if query.All {
+		page = 1
+		pageSize = total
+	} else {
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		paged = items[start:end]
+	}
+
+	return ListResult{
+		Items:    paged,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Stats:    stats,
+	}
+}
+
+func normalizePage(page int) int {
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize < 1 {
+		return 10
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
 }
 
 func countStatsAt(items []AdminPost, now time.Time) Stats {

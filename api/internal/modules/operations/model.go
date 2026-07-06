@@ -22,6 +22,12 @@ type Settings struct {
 	MailEnabled             bool      `json:"mailEnabled"`
 	MailProvider            string    `json:"mailProvider"`
 	FromEmail               string    `json:"fromEmail"`
+	TurnstileEnabled        bool      `json:"turnstileEnabled"`
+	TurnstileSiteKey        string    `json:"turnstileSiteKey"`
+	TurnstileSecretKey      string    `json:"turnstileSecretKey"`
+	TurnstileRegister       bool      `json:"turnstileRegister"`
+	TurnstileLogin          bool      `json:"turnstileLogin"`
+	TurnstileSubmission     bool      `json:"turnstileSubmission"`
 	AdminTwoFactorRequired  bool      `json:"adminTwoFactorRequired"`
 	LoginFailureLock        bool      `json:"loginFailureLock"`
 	SessionDays             int       `json:"sessionDays"`
@@ -45,6 +51,11 @@ type PublicSettings struct {
 	SubmissionsEnabled      bool      `json:"submissionsEnabled"`
 	SubmissionLimit         string    `json:"submissionLimit"`
 	SubmissionGuide         string    `json:"submissionGuide"`
+	TurnstileEnabled        bool      `json:"turnstileEnabled"`
+	TurnstileSiteKey        string    `json:"turnstileSiteKey"`
+	TurnstileRegister       bool      `json:"turnstileRegister"`
+	TurnstileLogin          bool      `json:"turnstileLogin"`
+	TurnstileSubmission     bool      `json:"turnstileSubmission"`
 	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
@@ -129,8 +140,19 @@ type MediaAsset struct {
 }
 
 type MediaListResult struct {
-	Items []MediaAsset `json:"items"`
-	Total int          `json:"total"`
+	Items    []MediaAsset `json:"items"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"pageSize"`
+	Total    int          `json:"total"`
+}
+
+type MediaListQuery struct {
+	Keyword  string
+	Type     string
+	Sort     string
+	Page     int
+	PageSize int
+	All      bool
 }
 
 type MediaUpdateRequest struct {

@@ -3,6 +3,8 @@ package messages
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"blog/api/internal/modules/auth"
@@ -48,8 +50,11 @@ func (handler *Handler) List(ctx *gin.Context) {
 	}
 
 	result, err := handler.repo.List(ctx.Request.Context(), user.ID, ListQuery{
-		Status: ctx.Query("status"),
-		Type:   ctx.Query("type"),
+		Status:   ctx.Query("status"),
+		Type:     ctx.Query("type"),
+		Keyword:  ctx.Query("q"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
@@ -65,8 +70,11 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 	}
 
 	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
-		Status: ctx.Query("status"),
-		Type:   ctx.Query("type"),
+		Status:   ctx.Query("status"),
+		Type:     ctx.Query("type"),
+		Keyword:  ctx.Query("q"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
@@ -84,6 +92,7 @@ func (handler *Handler) AdminExport(ctx *gin.Context) {
 	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
 		Status: ctx.Query("status"),
 		Type:   ctx.Query("type"),
+		All:    true,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export messages"})
@@ -209,7 +218,7 @@ func (handler *Handler) AdminStatistics(ctx *gin.Context) {
 }
 
 func (handler *Handler) adminMessageByID(ctx *gin.Context, id string) (Message, bool) {
-	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{})
+	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{All: true})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message"})
 		return Message{}, false
@@ -230,7 +239,7 @@ func (handler *Handler) GetMine(ctx *gin.Context) {
 		return
 	}
 
-	result, err := handler.repo.List(ctx.Request.Context(), user.ID, ListQuery{})
+	result, err := handler.repo.List(ctx.Request.Context(), user.ID, ListQuery{All: true})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message"})
 		return
@@ -297,4 +306,13 @@ func (handler *Handler) writeMessageError(ctx *gin.Context, err error) {
 	}
 
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update message"})
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 1 {
+		return 0
+	}
+
+	return parsed
 }

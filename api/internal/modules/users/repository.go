@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +17,7 @@ var (
 )
 
 type Repository interface {
-	List(ctx context.Context) (UserListResult, error)
+	List(ctx context.Context, query ListQuery) (UserListResult, error)
 	Get(ctx context.Context, userID string) (ManagedUser, error)
 	EnsureFromAuth(ctx context.Context, user auth.User) (ManagedUser, error)
 	UpdateStatus(ctx context.Context, userID string, status string) (ManagedUser, error)
@@ -45,19 +46,51 @@ func NewMemoryRepository() *MemoryRepository {
 	}
 }
 
-func (repo *MemoryRepository) List(_ context.Context) (UserListResult, error) {
+func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (UserListResult, error) {
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
-	items := make([]ManagedUser, 0, len(repo.users))
+	all := make([]ManagedUser, 0, len(repo.users))
 	for _, user := range repo.users {
-		items = append(items, user)
+		all = append(all, user)
+	}
+	sort.SliceStable(all, func(i, j int) bool {
+		return all[i].RegisteredAt.After(all[j].RegisteredAt)
+	})
+
+	stats := countStats(all)
+	filtered := make([]ManagedUser, 0, len(all))
+	for _, user := range all {
+		if matchesUserListQuery(user, query) {
+			filtered = append(filtered, user)
+		}
+	}
+
+	total := len(filtered)
+	page := normalizeUserPage(query.Page)
+	pageSize := normalizeUserPageSize(query.PageSize)
+	items := filtered
+	if !query.All {
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		items = filtered[start:end]
+	} else {
+		page = 1
+		pageSize = total
 	}
 
 	return UserListResult{
-		Items: items,
-		Total: len(items),
-		Stats: countStats(items),
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Stats:    stats,
 	}, nil
 }
 
@@ -142,7 +175,7 @@ func (repo *MemoryRepository) GetAccount(_ context.Context, user auth.User) (Acc
 			Role:          user.Role,
 			Status:        user.Status,
 			AvatarText:    user.AvatarText,
-			EmailVerified: true,
+			EmailVerified: user.EmailVerified,
 			RegisteredAt:  repo.now(),
 			LastLoginAt:   repo.now(),
 		}
@@ -175,6 +208,7 @@ func (repo *MemoryRepository) UpdateAccount(_ context.Context, user auth.User, s
 
 func normalizeAccountSettings(settings AccountSettings, user auth.User) AccountSettings {
 	settings.Email = user.Email
+	settings.EmailVerified = user.EmailVerified
 	if strings.TrimSpace(settings.AvatarText) == "" {
 		settings.AvatarText = firstRune(settings.DisplayName)
 	} else {
@@ -212,6 +246,59 @@ func countStats(items []ManagedUser) UserStats {
 	return stats
 }
 
+func matchesUserListQuery(user ManagedUser, query ListQuery) bool {
+	status := strings.ToLower(strings.TrimSpace(query.Status))
+	if status != "" {
+		if status == "unverified" {
+			if user.EmailVerified {
+				return false
+			}
+		} else if user.Status != status {
+			return false
+		}
+	}
+
+	role := strings.ToLower(strings.TrimSpace(query.Role))
+	if role != "" && user.Role != role {
+		return false
+	}
+
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
+	if keyword == "" {
+		return true
+	}
+
+	text := strings.ToLower(strings.Join([]string{
+		user.ID,
+		user.Email,
+		user.DisplayName,
+		user.Role,
+		user.Status,
+		user.ModerationNote,
+	}, " "))
+
+	return strings.Contains(text, keyword)
+}
+
+func normalizeUserPage(page int) int {
+	if page < 1 {
+		return 1
+	}
+
+	return page
+}
+
+func normalizeUserPageSize(pageSize int) int {
+	if pageSize < 1 {
+		return 10
+	}
+	if pageSize > 100 {
+		return 100
+	}
+
+	return pageSize
+}
+
 func validStatus(status string) bool {
 	switch status {
 	case "active", "muted", "banned", "deleted":
@@ -227,6 +314,7 @@ func accountFromUser(user ManagedUser) AccountSettings {
 		DisplayName:              user.DisplayName,
 		Username:                 username,
 		Email:                    user.Email,
+		EmailVerified:            user.EmailVerified,
 		AvatarText:               user.AvatarText,
 		Bio:                      "关注内容产品、工程实践和长期写作。",
 		TwoFactor:                false,

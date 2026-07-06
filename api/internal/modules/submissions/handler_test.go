@@ -16,6 +16,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type fakeTurnstileVerifier struct {
+	secret string
+	token  string
+	ok     bool
+}
+
+func (verifier *fakeTurnstileVerifier) Verify(_ context.Context, secret string, token string, _ string) (bool, error) {
+	verifier.secret = secret
+	verifier.token = token
+	return verifier.ok, nil
+}
+
 func TestCanReviewSubmission(t *testing.T) {
 	cases := []struct {
 		status string
@@ -34,6 +46,99 @@ func TestCanReviewSubmission(t *testing.T) {
 				t.Fatalf("canReviewSubmission(%q) = %v, want %v", tt.status, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTurnstileProtectedSubmissionRequiresTokenWhenSubmitting(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate returned error: %v", err)
+	}
+
+	settingsRepo := operations.NewMemoryRepository()
+	settings, err := settingsRepo.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	settings.SubmissionsEnabled = true
+	settings.TurnstileEnabled = true
+	settings.TurnstileSecretKey = "secret-key"
+	settings.TurnstileSubmission = true
+	if _, err := settingsRepo.UpdateSettings(context.Background(), settings); err != nil {
+		t.Fatalf("UpdateSettings returned error: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutesWithTurnstile(router, NewMemoryRepository(), messages.NewMemoryRepository(), nil, settingsRepo, &fakeTurnstileVerifier{ok: true})
+
+	req := httptest.NewRequest(http.MethodPost, "/submissions", bytes.NewBufferString(`{
+		"title":"Protected submission",
+		"summary":"Needs Turnstile",
+		"content":"Ready for review.",
+		"category":"Engineering",
+		"tags":["security"],
+		"coverImage":"",
+		"slug":"protected-submission",
+		"submit":true
+	}`))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d with body %q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTurnstileProtectedSubmissionVerifiesToken(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate returned error: %v", err)
+	}
+
+	settingsRepo := operations.NewMemoryRepository()
+	settings, err := settingsRepo.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	settings.SubmissionsEnabled = true
+	settings.TurnstileEnabled = true
+	settings.TurnstileSecretKey = "secret-key"
+	settings.TurnstileSubmission = true
+	if _, err := settingsRepo.UpdateSettings(context.Background(), settings); err != nil {
+		t.Fatalf("UpdateSettings returned error: %v", err)
+	}
+
+	verifier := &fakeTurnstileVerifier{ok: true}
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutesWithTurnstile(router, NewMemoryRepository(), messages.NewMemoryRepository(), nil, settingsRepo, verifier)
+
+	req := httptest.NewRequest(http.MethodPost, "/submissions", bytes.NewBufferString(`{
+		"title":"Verified submission",
+		"summary":"Has Turnstile",
+		"content":"Ready for review.",
+		"category":"Engineering",
+		"tags":["security"],
+		"coverImage":"",
+		"slug":"verified-submission",
+		"submit":true,
+		"turnstileToken":"submission-token"
+	}`))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d with body %q", rec.Code, rec.Body.String())
+	}
+	if verifier.secret != "secret-key" || verifier.token != "submission-token" {
+		t.Fatalf("turnstile verifier got secret/token %q/%q", verifier.secret, verifier.token)
 	}
 }
 
@@ -138,6 +243,52 @@ func TestMutedUserCannotCreateSubmission(t *testing.T) {
 	}
 }
 
+func TestUnverifiedUserCannotCreateSubmission(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Register(auth.RegisterRequest{
+		Email:       "unverified-submission@example.com",
+		Password:    "password",
+		DisplayName: "Unverified Submission",
+	})
+	if err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+
+	settingsRepo := operations.NewMemoryRepository()
+	settings, err := settingsRepo.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	settings.SubmissionsEnabled = true
+	if _, err := settingsRepo.UpdateSettings(context.Background(), settings); err != nil {
+		t.Fatalf("UpdateSettings returned error: %v", err)
+	}
+
+	submissionRepo := NewMemoryRepository()
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutes(router, submissionRepo, messages.NewMemoryRepository(), nil, settingsRepo)
+
+	req := httptest.NewRequest(http.MethodPost, "/submissions", bytes.NewBufferString(`{
+		"title":"Unverified submission",
+		"summary":"Unverified users cannot submit",
+		"content":"Ready for review.",
+		"category":"Engineering",
+		"tags":["verification"],
+		"coverImage":"",
+		"slug":"unverified-submission",
+		"submit":true
+	}`))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d with body %q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestSubmissionLimitAllowsDraftButRejectsSubmit(t *testing.T) {
 	store := auth.NewMemoryStore()
 	user, token, err := store.Register(auth.RegisterRequest{
@@ -147,6 +298,13 @@ func TestSubmissionLimitAllowsDraftButRejectsSubmit(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Register returned error: %v", err)
+	}
+	verificationToken, err := store.RequestEmailVerification(user.ID)
+	if err != nil {
+		t.Fatalf("RequestEmailVerification returned error: %v", err)
+	}
+	if _, err := store.VerifyEmail(verificationToken); err != nil {
+		t.Fatalf("VerifyEmail returned error: %v", err)
 	}
 
 	settingsRepo := operations.NewMemoryRepository()

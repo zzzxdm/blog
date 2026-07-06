@@ -99,7 +99,7 @@ func TestMemoryRepositorySaveScheduledStoresScheduledAtAndStats(t *testing.T) {
 		t.Fatalf("ScheduledAt = %v, want %v", post.ScheduledAt, scheduledAt)
 	}
 
-	result, err := repo.List(context.Background())
+	result, err := repo.List(context.Background(), ListQuery{All: true})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

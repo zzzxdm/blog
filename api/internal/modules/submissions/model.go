@@ -42,7 +42,12 @@ type Submission struct {
 }
 
 type ListQuery struct {
-	Status string
+	Status   string
+	Keyword  string
+	Sort     string
+	Page     int
+	PageSize int
+	All      bool
 }
 
 type Stats struct {
@@ -55,20 +60,23 @@ type Stats struct {
 }
 
 type ListResult struct {
-	Items []Submission `json:"items"`
-	Total int          `json:"total"`
-	Stats Stats        `json:"stats"`
+	Items    []Submission `json:"items"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"pageSize"`
+	Total    int          `json:"total"`
+	Stats    Stats        `json:"stats"`
 }
 
 type SaveRequest struct {
-	Title      string   `json:"title"`
-	Summary    string   `json:"summary"`
-	Content    string   `json:"content"`
-	Category   string   `json:"category"`
-	Tags       []string `json:"tags"`
-	CoverImage string   `json:"coverImage"`
-	Slug       string   `json:"slug"`
-	Submit     bool     `json:"submit"`
+	Title          string   `json:"title"`
+	Summary        string   `json:"summary"`
+	Content        string   `json:"content"`
+	Category       string   `json:"category"`
+	Tags           []string `json:"tags"`
+	CoverImage     string   `json:"coverImage"`
+	Slug           string   `json:"slug"`
+	Submit         bool     `json:"submit"`
+	TurnstileToken string   `json:"turnstileToken"`
 }
 
 type ReviewRequest struct {

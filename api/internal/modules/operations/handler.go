@@ -272,7 +272,14 @@ func (handler *Handler) ListMedia(ctx *gin.Context) {
 		return
 	}
 
-	result, err := handler.repo.ListMedia(ctx.Request.Context())
+	result, err := handler.repo.ListMedia(ctx.Request.Context(), MediaListQuery{
+		Keyword:  ctx.Query("q"),
+		Type:     ctx.Query("type"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
+		All:      boolQuery(ctx.Query("all")),
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load media"})
 		return
@@ -726,4 +733,9 @@ func parsePositiveInt(value string) int {
 	}
 
 	return parsed
+}
+
+func boolQuery(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return value == "1" || value == "true" || value == "yes"
 }

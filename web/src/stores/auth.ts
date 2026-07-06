@@ -41,12 +41,12 @@ export const useAuthStore = defineStore("auth", {
         this.loading = false;
       }
     },
-    async login(email: string, password: string): Promise<AuthResponse> {
+    async login(email: string, password: string, turnstileToken = ""): Promise<AuthResponse> {
       this.loading = true;
       this.error = null;
 
       try {
-        const response = await login(email, password);
+        const response = await login(email, password, turnstileToken);
         this.user = response.user;
         return response;
       } catch (error) {
@@ -56,12 +56,12 @@ export const useAuthStore = defineStore("auth", {
         this.loading = false;
       }
     },
-    async register(email: string, password: string, displayName: string): Promise<AuthResponse> {
+    async register(email: string, password: string, displayName: string, turnstileToken = ""): Promise<AuthResponse> {
       this.loading = true;
       this.error = null;
 
       try {
-        const response = await register(email, password, displayName);
+        const response = await register(email, password, displayName, turnstileToken);
         this.user = response.user;
         return response;
       } catch (error) {

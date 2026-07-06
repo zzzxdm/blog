@@ -38,11 +38,10 @@ func (repo *SQLRepository) ListByAuthor(ctx context.Context, userID string, quer
 		return ListResult{}, err
 	}
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: stats,
-	}, nil
+	items = filterSubmissions(items, query)
+	sortSubmissions(items, query.Sort)
+
+	return pagedSubmissionResult(items, stats, query), nil
 }
 
 func (repo *SQLRepository) CountSubmittedSince(ctx context.Context, userID string, since time.Time, excludeID string) (int, error) {
@@ -242,11 +241,10 @@ func (repo *SQLRepository) AdminList(ctx context.Context, query ListQuery) (List
 		return ListResult{}, err
 	}
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: stats,
-	}, nil
+	items = filterSubmissions(items, query)
+	sortSubmissions(items, query.Sort)
+
+	return pagedSubmissionResult(items, stats, query), nil
 }
 
 func (repo *SQLRepository) Get(ctx context.Context, submissionID string) (Submission, error) {

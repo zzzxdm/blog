@@ -3,6 +3,7 @@ package users
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,16 +13,25 @@ import (
 )
 
 type Handler struct {
-	repo      Repository
-	authStore auth.Store
+	repo        Repository
+	authStore   auth.Store
+	emailSender auth.EmailSender
 }
 
 func NewHandler(repo Repository, authStore auth.Store) *Handler {
-	return &Handler{repo: repo, authStore: authStore}
+	return NewHandlerWithEmailSender(repo, authStore, nil)
+}
+
+func NewHandlerWithEmailSender(repo Repository, authStore auth.Store, emailSender auth.EmailSender) *Handler {
+	return &Handler{repo: repo, authStore: authStore, emailSender: emailSender}
 }
 
 func RegisterRoutes(router gin.IRouter, repo Repository, authStore auth.Store) {
-	handler := NewHandler(repo, authStore)
+	RegisterRoutesWithEmailSender(router, repo, authStore, nil)
+}
+
+func RegisterRoutesWithEmailSender(router gin.IRouter, repo Repository, authStore auth.Store, emailSender auth.EmailSender) {
+	handler := NewHandlerWithEmailSender(repo, authStore, emailSender)
 
 	router.GET("/admin/users", handler.List)
 	router.GET("/admin/users/export", handler.Export)
@@ -43,7 +53,14 @@ func (handler *Handler) List(ctx *gin.Context) {
 		return
 	}
 
-	result, err := handler.repo.List(ctx.Request.Context())
+	result, err := handler.repo.List(ctx.Request.Context(), ListQuery{
+		Page:     intQuery(ctx, "page", 1),
+		PageSize: intQuery(ctx, "pageSize", 10),
+		Keyword:  strings.TrimSpace(ctx.Query("q")),
+		Status:   strings.TrimSpace(ctx.Query("status")),
+		Role:     strings.TrimSpace(ctx.Query("role")),
+		All:      boolQuery(ctx, "all"),
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load users"})
 		return
@@ -100,7 +117,7 @@ func (handler *Handler) Export(ctx *gin.Context) {
 		return
 	}
 
-	result, err := handler.repo.List(ctx.Request.Context())
+	result, err := handler.repo.List(ctx.Request.Context(), ListQuery{All: true})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export users"})
 		return
@@ -134,10 +151,10 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 		return
 	}
 
-	invited, token, err := handler.authStore.InviteUser(request)
+	invited, secrets, err := handler.authStore.InviteUser(request)
 	if err != nil {
 		if errors.Is(err, auth.ErrEmailExists) {
-			ctx.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
+			ctx.JSON(http.StatusConflict, gin.H{"error": "该邮箱已存在，不能重复邀请。请在用户列表中搜索该邮箱，可直接调整角色或发送密码重置邮件。"})
 			return
 		}
 
@@ -151,12 +168,24 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, InvitationResult{
-		OK:         true,
-		User:       managed,
-		ResetToken: token,
-		Delivery:   "dev-response",
-	})
+	response := InvitationResult{
+		OK:              true,
+		User:            managed,
+		InitialPassword: secrets.InitialPassword,
+		ResetToken:      secrets.ResetToken,
+		Delivery:        "dev-response",
+	}
+	if handler.emailSender != nil {
+		if err := handler.emailSender.SendInvitation(ctx.Request.Context(), invited, secrets.InitialPassword, secrets.ResetToken); err == nil {
+			response.InitialPassword = ""
+			response.ResetToken = ""
+			response.Delivery = "email"
+		} else {
+			response.Delivery = "email-failed"
+		}
+	}
+
+	ctx.JSON(http.StatusCreated, response)
 }
 
 func (handler *Handler) UpdateStatus(ctx *gin.Context) {
@@ -321,12 +350,31 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, PasswordResetResult{
+	response := PasswordResetResult{
 		OK:         true,
 		User:       user,
 		ResetToken: token,
 		Delivery:   "dev-response",
-	})
+	}
+	if handler.emailSender != nil {
+		authUser := auth.User{
+			ID:            user.ID,
+			Email:         user.Email,
+			DisplayName:   user.DisplayName,
+			Role:          user.Role,
+			Status:        user.Status,
+			AvatarText:    user.AvatarText,
+			EmailVerified: user.EmailVerified,
+		}
+		if err := handler.emailSender.SendPasswordSetup(ctx.Request.Context(), authUser, token); err == nil {
+			response.ResetToken = ""
+			response.Delivery = "email"
+		} else {
+			response.Delivery = "email-failed"
+		}
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (handler *Handler) GetAccount(ctx *gin.Context) {
@@ -409,6 +457,25 @@ func (handler *Handler) UpdateAvatar(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, settings)
+}
+
+func intQuery(ctx *gin.Context, key string, fallback int) int {
+	value := ctx.Query(key)
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
+func boolQuery(ctx *gin.Context, key string) bool {
+	value := strings.ToLower(strings.TrimSpace(ctx.Query(key)))
+	return value == "1" || value == "true" || value == "yes"
 }
 
 func (handler *Handler) syncAccountProfile(ctx *gin.Context, userID string, settings AccountSettings) bool {

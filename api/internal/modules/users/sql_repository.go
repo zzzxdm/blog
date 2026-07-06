@@ -24,16 +24,41 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 	return repo, nil
 }
 
-func (repo *SQLRepository) List(ctx context.Context) (UserListResult, error) {
-	items, err := repo.queryManagedUsers(ctx, "", nil)
+func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (UserListResult, error) {
+	where, args := userListWhere(query)
+	stats, err := repo.userStats(ctx)
+	if err != nil {
+		return UserListResult{}, err
+	}
+
+	total, err := repo.countManagedUsers(ctx, where, args)
+	if err != nil {
+		return UserListResult{}, err
+	}
+
+	page := normalizeUserPage(query.Page)
+	pageSize := normalizeUserPageSize(query.PageSize)
+	suffix := ""
+	queryArgs := args
+	if query.All {
+		page = 1
+		pageSize = total
+	} else {
+		suffix = fmt.Sprintf("LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+		queryArgs = append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	}
+
+	items, err := repo.queryManagedUsers(ctx, where, queryArgs, suffix)
 	if err != nil {
 		return UserListResult{}, err
 	}
 
 	return UserListResult{
-		Items: items,
-		Total: len(items),
-		Stats: countStats(items),
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Stats:    stats,
 	}, nil
 }
 
@@ -95,7 +120,7 @@ func (repo *SQLRepository) UpdateAccount(ctx context.Context, user auth.User, se
 }
 
 func (repo *SQLRepository) ensureAccountSettings(ctx context.Context) error {
-	users, err := repo.queryManagedUsers(ctx, "", nil)
+	users, err := repo.queryManagedUsers(ctx, "", nil, "")
 	if err != nil {
 		return err
 	}
@@ -110,10 +135,10 @@ func (repo *SQLRepository) ensureAccountSettings(ctx context.Context) error {
 	return nil
 }
 
-func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, arg any) ([]ManagedUser, error) {
+func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, args []any, suffix string) ([]ManagedUser, error) {
 	query := `
-		SELECT
-			u.id,
+			SELECT
+				u.id,
 			u.email,
 			u.display_name,
 			u.role,
@@ -124,18 +149,13 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 			u.created_at,
 			(SELECT count(*)::int FROM comments c WHERE c.author_id = u.id) AS comment_count,
 			(SELECT count(*)::int FROM post_bookmarks b WHERE b.user_id = u.id) AS bookmark_count
-		FROM users u
-		` + where + `
-		ORDER BY u.created_at DESC
-	`
+			FROM users u
+			` + where + `
+			ORDER BY u.created_at DESC
+			` + suffix + `
+		`
 
-	var rows *sql.Rows
-	var err error
-	if where == "" {
-		rows, err = repo.db.QueryContext(ctx, query)
-	} else {
-		rows, err = repo.db.QueryContext(ctx, query, arg)
-	}
+	rows, err := repo.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query users: %w", err)
 	}
@@ -161,12 +181,13 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 		}
 		user.ModerationNote = moderationNote(user.Status)
 		if settings, err := repo.getAccountSettings(ctx, auth.User{
-			ID:          user.ID,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Role:        user.Role,
-			Status:      user.Status,
-			AvatarText:  user.AvatarText,
+			ID:            user.ID,
+			Email:         user.Email,
+			DisplayName:   user.DisplayName,
+			Role:          user.Role,
+			Status:        user.Status,
+			AvatarText:    user.AvatarText,
+			EmailVerified: user.EmailVerified,
 		}); err == nil {
 			user.TwoFactor = settings.TwoFactor
 		}
@@ -180,7 +201,7 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 }
 
 func (repo *SQLRepository) getManagedUser(ctx context.Context, userID string) (ManagedUser, error) {
-	items, err := repo.queryManagedUsers(ctx, "WHERE u.id = $1", userID)
+	items, err := repo.queryManagedUsers(ctx, "WHERE u.id = $1", []any{userID}, "")
 	if err != nil {
 		return ManagedUser{}, err
 	}
@@ -189,6 +210,63 @@ func (repo *SQLRepository) getManagedUser(ctx context.Context, userID string) (M
 	}
 
 	return items[0], nil
+}
+
+func userListWhere(query ListQuery) (string, []any) {
+	conditions := make([]string, 0, 3)
+	args := make([]any, 0, 3)
+
+	if keyword := strings.TrimSpace(query.Keyword); keyword != "" {
+		args = append(args, "%"+keyword+"%")
+		placeholder := fmt.Sprintf("$%d", len(args))
+		conditions = append(conditions, "(u.id ILIKE "+placeholder+" OR u.email ILIKE "+placeholder+" OR u.display_name ILIKE "+placeholder+" OR u.role ILIKE "+placeholder+" OR u.status ILIKE "+placeholder+")")
+	}
+
+	if status := strings.ToLower(strings.TrimSpace(query.Status)); status != "" {
+		if status == "unverified" {
+			conditions = append(conditions, "u.email_verified = false")
+		} else {
+			args = append(args, status)
+			conditions = append(conditions, fmt.Sprintf("u.status = $%d", len(args)))
+		}
+	}
+
+	if role := strings.ToLower(strings.TrimSpace(query.Role)); role != "" {
+		args = append(args, role)
+		conditions = append(conditions, fmt.Sprintf("u.role = $%d", len(args)))
+	}
+
+	if len(conditions) == 0 {
+		return "", args
+	}
+
+	return "WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func (repo *SQLRepository) countManagedUsers(ctx context.Context, where string, args []any) (int, error) {
+	var total int
+	if err := repo.db.QueryRowContext(ctx, "SELECT count(*)::int FROM users u "+where, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count users: %w", err)
+	}
+
+	return total, nil
+}
+
+func (repo *SQLRepository) userStats(ctx context.Context) (UserStats, error) {
+	var stats UserStats
+	if err := repo.db.QueryRowContext(ctx, `
+		SELECT
+			count(*)::int,
+			count(*) FILTER (WHERE email_verified)::int,
+			count(*) FILTER (WHERE role IN ('author', 'admin', 'editor'))::int,
+			count(*) FILTER (WHERE status = 'muted')::int,
+			count(*) FILTER (WHERE status = 'banned')::int
+		FROM users
+	`).Scan(&stats.Total, &stats.EmailVerified, &stats.Authors, &stats.Muted, &stats.Banned); err != nil {
+		return UserStats{}, fmt.Errorf("count user stats: %w", err)
+	}
+
+	return stats, nil
 }
 
 func (repo *SQLRepository) getAccountSettings(ctx context.Context, user auth.User) (AccountSettings, error) {

@@ -31,10 +31,15 @@ type authToken struct {
 	ExpiresAt time.Time
 }
 
+type InvitationSecrets struct {
+	InitialPassword string
+	ResetToken      string
+}
+
 type Store interface {
 	Authenticate(email string, password string) (User, string, error)
 	Register(request RegisterRequest) (User, string, error)
-	InviteUser(request InviteUserRequest) (User, string, error)
+	InviteUser(request InviteUserRequest) (User, InvitationSecrets, error)
 	UpdateRole(userID string, role string) (User, error)
 	UpdateStatus(userID string, status string) (User, error)
 	UpdateProfile(userID string, displayName string, avatarText string) (User, error)
@@ -202,7 +207,7 @@ func (store *MemoryStore) Register(request RegisterRequest) (User, string, error
 	return user, token, nil
 }
 
-func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, string, error) {
+func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, InvitationSecrets, error) {
 	normalizedEmail := normalizeEmail(request.Email)
 	displayName := strings.TrimSpace(request.DisplayName)
 	if displayName == "" {
@@ -213,23 +218,23 @@ func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, string, e
 	defer store.mu.Unlock()
 
 	if normalizedEmail == "" {
-		return User{}, "", ErrInvalidCredentials
+		return User{}, InvitationSecrets{}, ErrInvalidCredentials
 	}
 	if _, ok := store.usersByEmail[normalizedEmail]; ok {
-		return User{}, "", ErrEmailExists
+		return User{}, InvitationSecrets{}, ErrEmailExists
 	}
 
 	resetToken, err := randomToken()
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
-	tempPassword, err := randomToken()
+	tempPassword, err := randomTemporaryPassword()
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 
 	user := User{
@@ -250,7 +255,7 @@ func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, string, e
 		ExpiresAt: store.now().Add(30 * time.Minute),
 	}
 
-	return user, resetToken, nil
+	return user, InvitationSecrets{InitialPassword: tempPassword, ResetToken: resetToken}, nil
 }
 
 func (store *MemoryStore) UpdateRole(userID string, role string) (User, error) {
@@ -446,8 +451,14 @@ func (store *MemoryStore) ResetPassword(token string, newPassword string) error 
 	if err != nil {
 		return err
 	}
+	user, ok := store.usersByID[record.UserID]
+	if !ok {
+		return ErrInvalidToken
+	}
 
 	store.passwordHashes[record.UserID] = newHash
+	user.EmailVerified = true
+	store.usersByID[record.UserID] = user
 	for sessionToken, session := range store.sessions {
 		if session.UserID == record.UserID {
 			delete(store.sessions, sessionToken)
@@ -555,6 +566,15 @@ func normalizeEmail(email string) string {
 
 func randomToken() (string, error) {
 	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func randomTemporaryPassword() (string, error) {
+	bytes := make([]byte, 12)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}

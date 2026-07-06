@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   createAdminPost,
   getAdminPosts,
@@ -23,36 +24,9 @@ const importInput = ref<HTMLInputElement | null>(null);
 const searchQuery = ref("");
 const statusFilter = ref("");
 const sortMode = ref("updated");
-
-const visiblePosts = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  const filtered = posts.value.filter((post) => {
-    const matchesKeyword = !keyword || [
-      post.title,
-      post.summary,
-      post.authorName,
-      post.category,
-      post.slug,
-      visibilityText(post.visibility),
-      post.tags.join(" ")
-    ].join(" ").toLowerCase().includes(keyword);
-    const matchesStatus = statusFilter.value === "" || post.status === statusFilter.value;
-
-    return matchesKeyword && matchesStatus;
-  });
-
-  return [...filtered].sort((left, right) => {
-    if (sortMode.value === "views") {
-      return right.viewCount - left.viewCount;
-    }
-    if (sortMode.value === "scheduled") {
-      const leftTime = left.scheduledAt ? new Date(left.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
-      const rightTime = right.scheduledAt ? new Date(right.scheduledAt).getTime() : Number.MAX_SAFE_INTEGER;
-      return leftTime - rightTime;
-    }
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-  });
-});
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
 
 onMounted(load);
 
@@ -61,14 +35,39 @@ async function load() {
   error.value = "";
 
   try {
-    const response = await getAdminPosts();
+    const response = await getAdminPosts({
+      q: searchQuery.value,
+      status: statusFilter.value,
+      sort: sortMode.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
     posts.value = response.items;
     stats.value = response.stats;
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "文章列表加载失败";
   } finally {
     loading.value = false;
   }
+}
+
+async function applyFilters() {
+  page.value = 1;
+  await load();
+}
+
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
 }
 
 function openImport() {
@@ -238,9 +237,9 @@ function formatDate(value: string) {
     <p v-if="message" class="muted">{{ message }}</p>
 
     <section class="table-panel" aria-label="文章列表">
-      <form class="table-toolbar" @submit.prevent="load">
+      <form class="table-toolbar" @submit.prevent="applyFilters">
         <input v-model="searchQuery" class="input" type="search" placeholder="搜索标题、作者、标签" aria-label="搜索文章">
-        <select v-model="statusFilter" class="input" aria-label="文章状态">
+        <select v-model="statusFilter" class="input" aria-label="文章状态" @change="applyFilters">
           <option value="">全部状态</option>
           <option value="published">已发布</option>
           <option value="draft">草稿</option>
@@ -248,7 +247,7 @@ function formatDate(value: string) {
           <option value="scheduled">待发布</option>
           <option value="archived">已归档</option>
         </select>
-        <select v-model="sortMode" class="input" aria-label="排序">
+        <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
           <option value="updated">最近更新</option>
           <option value="views">最多阅读</option>
           <option value="scheduled">定时发布</option>
@@ -271,7 +270,7 @@ function formatDate(value: string) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="post in visiblePosts" :key="post.id">
+          <tr v-for="post in posts" :key="post.id">
             <td>
               <strong>{{ post.title }}</strong>
               <div class="meta-row">
@@ -288,11 +287,23 @@ function formatDate(value: string) {
             <td>{{ formatDate(post.updatedAt) }}</td>
             <td><RouterLink class="button-secondary" :to="`/admin/editor?id=${post.id}`">编辑</RouterLink></td>
           </tr>
-          <tr v-if="visiblePosts.length === 0">
+          <tr v-if="posts.length === 0">
             <td colspan="7" class="muted">没有匹配的文章。</td>
           </tr>
         </tbody>
       </table>
+      <PaginationControls
+        v-if="!loading && !error"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :loading="loading"
+        item-label="篇文章"
+        show-page-size
+        :page-size-options="[5, 10, 20, 50, 100]"
+        @update:page="setPage"
+        @update:page-size="setPageSize"
+      />
     </section>
   </AdminLayout>
 </template>

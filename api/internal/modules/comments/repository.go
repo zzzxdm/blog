@@ -165,13 +165,10 @@ func (repo *MemoryRepository) ListByAuthor(_ context.Context, userID string, que
 		items = append(items, item)
 	}
 
-	sortComments(items)
+	items = filterComments(items, query)
+	sortComments(items, query.Sort)
 
-	return ManageListResult{
-		Items: items,
-		Total: len(items),
-		Stats: repo.statsByAuthorLocked(userID),
-	}, nil
+	return pagedManageResult(items, repo.statsByAuthorLocked(userID), query), nil
 }
 
 func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (ManageListResult, error) {
@@ -187,13 +184,10 @@ func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (Man
 		items = append(items, repo.enrichLocked(comment))
 	}
 
-	sortComments(items)
+	items = filterComments(items, query)
+	sortComments(items, query.Sort)
 
-	return ManageListResult{
-		Items: items,
-		Total: len(items),
-		Stats: repo.adminStatsLocked(),
-	}, nil
+	return pagedManageResult(items, repo.adminStatsLocked(), query), nil
 }
 
 func (repo *MemoryRepository) UpdateStatus(_ context.Context, commentID string, status string) (Comment, error) {
@@ -447,10 +441,104 @@ func approvedCommentDelta(previousStatus string, nextStatus string) int {
 	return -1
 }
 
-func sortComments(items []Comment) {
+func filterComments(items []Comment, query ListQuery) []Comment {
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
+	if keyword == "" {
+		return items
+	}
+
+	filtered := make([]Comment, 0, len(items))
+	for _, item := range items {
+		if commentContainsKeyword(item, keyword) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func commentContainsKeyword(item Comment, keyword string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		item.Body,
+		item.AuthorName,
+		item.AuthorID,
+		item.PostTitle,
+		item.PostSlug,
+		item.RiskLevel,
+	}, " "))
+	return strings.Contains(haystack, keyword)
+}
+
+func sortComments(items []Comment, mode string) {
 	sort.SliceStable(items, func(i, j int) bool {
+		if mode == "likes" {
+			return items[i].LikeCount > items[j].LikeCount
+		}
+		if mode == "risk" {
+			return commentRiskRank(items[i].RiskLevel) > commentRiskRank(items[j].RiskLevel)
+		}
+
 		return items[i].CreatedAt.After(items[j].CreatedAt)
 	})
+}
+
+func commentRiskRank(value string) int {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch {
+	case strings.Contains(value, "\u9ad8"), strings.Contains(value, "high"):
+		return 3
+	case strings.Contains(value, "\u4e2d"), strings.Contains(value, "medium"):
+		return 2
+	case value != "":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func pagedManageResult(items []Comment, stats ManageStats, query ListQuery) ManageListResult {
+	total := len(items)
+	page := normalizePage(query.Page)
+	pageSize := normalizePageSize(query.PageSize)
+	paged := items
+	if query.All {
+		page = 1
+		pageSize = total
+	} else {
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		paged = items[start:end]
+	}
+
+	return ManageListResult{
+		Items:    paged,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Stats:    stats,
+	}
+}
+
+func normalizePage(page int) int {
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize < 1 {
+		return 10
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
 }
 
 func riskLevel(body string) string {

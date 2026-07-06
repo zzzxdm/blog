@@ -108,6 +108,42 @@ func TestCreateReplyAliasUsesParentPost(t *testing.T) {
 	}
 }
 
+func TestUnverifiedUserCannotCreateComment(t *testing.T) {
+	store := auth.NewMemoryStore()
+	_, token, err := store.Register(auth.RegisterRequest{
+		Email:       "unverified-comment@example.com",
+		Password:    "password",
+		DisplayName: "Unverified Comment",
+	})
+	if err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+
+	settingsRepo := operations.NewMemoryRepository()
+	settings, err := settingsRepo.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	settings.CommentsEnabled = true
+	if _, err := settingsRepo.UpdateSettings(context.Background(), settings); err != nil {
+		t.Fatalf("UpdateSettings returned error: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(auth.Middleware(store))
+	RegisterRoutes(router, NewMemoryRepository(), settingsRepo)
+
+	req := httptest.NewRequest(http.MethodPost, "/posts/blog-system-design/comments", bytes.NewBufferString(`{"body":"waiting for verification"}`))
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d with body %q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestDeleteMineMarksOwnCommentDeleted(t *testing.T) {
 	store := auth.NewMemoryStore()
 	_, token, err := store.Authenticate("linyi@example.com", "password")

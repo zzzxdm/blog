@@ -9,6 +9,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/blog-api ./cmd/server
 FROM alpine:3.21
 WORKDIR /app
 COPY --from=build /bin/blog-api /usr/local/bin/blog-api
+COPY --from=build /app/email-templates ./email-templates
 EXPOSE 8080
 CMD ["blog-api"]
-

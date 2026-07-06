@@ -80,9 +80,20 @@ type Stats struct {
 }
 
 type ListResult struct {
-	Items []AdminPost `json:"items"`
-	Total int         `json:"total"`
-	Stats Stats       `json:"stats"`
+	Items    []AdminPost `json:"items"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"pageSize"`
+	Total    int         `json:"total"`
+	Stats    Stats       `json:"stats"`
+}
+
+type ListQuery struct {
+	Keyword  string
+	Status   string
+	Sort     string
+	Page     int
+	PageSize int
+	All      bool
 }
 
 type SaveRequest struct {

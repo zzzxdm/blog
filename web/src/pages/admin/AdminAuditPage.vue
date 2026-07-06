@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   getAdminAuditLogs,
   type AuditLog
@@ -11,12 +12,11 @@ const logs = ref<AuditLog[]>([]);
 const loading = ref(false);
 const error = ref("");
 const page = ref(1);
-const pageSize = 12;
+const pageSize = ref(12);
 const total = ref(0);
 const action = ref("");
 const resourceType = ref("");
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
 const successCount = computed(() => logs.value.filter((item) => item.status === "success").length);
 const blockedCount = computed(() => logs.value.filter((item) => item.status !== "success").length);
 
@@ -29,13 +29,14 @@ async function load() {
   try {
     const response = await getAdminAuditLogs({
       page: page.value,
-      pageSize,
+      pageSize: pageSize.value,
       action: action.value,
       resourceType: resourceType.value
     });
     logs.value = response.items;
     total.value = response.total;
     page.value = response.page;
+    pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "操作日志加载失败";
   } finally {
@@ -48,19 +49,14 @@ async function applyFilters() {
   await load();
 }
 
-async function nextPage() {
-  if (page.value >= totalPages.value) {
-    return;
-  }
-  page.value++;
+async function setPage(value: number) {
+  page.value = value;
   await load();
 }
 
-async function prevPage() {
-  if (page.value <= 1) {
-    return;
-  }
-  page.value--;
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
   await load();
 }
 
@@ -215,11 +211,17 @@ function formatDate(value: string) {
         </tbody>
       </table>
 
-      <div class="pagination">
-        <button class="button-secondary" type="button" :disabled="page <= 1 || loading" @click="prevPage">上一页</button>
-        <span>第 {{ page }} / {{ totalPages }} 页</span>
-        <button class="button-secondary" type="button" :disabled="page >= totalPages || loading" @click="nextPage">下一页</button>
-      </div>
+      <PaginationControls
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :loading="loading"
+        item-label="条日志"
+        show-page-size
+        :page-size-options="[10, 12, 20, 50, 100]"
+        @update:page="setPage"
+        @update:page-size="setPageSize"
+      />
     </section>
   </AdminLayout>
 </template>

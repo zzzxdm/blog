@@ -5,6 +5,7 @@ import { RouterLink, RouterView, useRoute } from "vue-router";
 import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
 import SiteSearch from "../components/SiteSearch.vue";
+import ToastViewport from "../components/ToastViewport.vue";
 import { getCategories, getSiteNavigation, getSiteSettings, type Category, type NavItem, type OperationsNavigation, type SiteSettings } from "../shared/api";
 import { applyPrimaryColor, applyThemeMode, getInitialThemeMode, type ThemeMode } from "../shared/theme";
 import { useAuthStore } from "../stores/auth";
@@ -207,4 +208,5 @@ function isActiveNav(url: string) {
   <SiteFootbar v-if="showChrome" :navigation="navigation" :site-name="siteName" :beian="siteBeian" />
   <SiteSearch v-if="showChrome" v-model:open="searchOpen" />
   <SiteBacktop v-if="showChrome" />
+  <ToastViewport />
 </template>

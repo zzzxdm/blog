@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   createAdminCategory,
   createAdminTag,
@@ -32,6 +33,12 @@ const categorySortOrder = ref(10);
 const tagId = ref("");
 const tagName = ref("");
 const tagSlug = ref("");
+const categoryPage = ref(1);
+const categoryPageSize = ref(10);
+const categoryTotal = ref(0);
+const tagPage = ref(1);
+const tagPageSize = ref(10);
+const tagTotal = ref(0);
 
 const categoryPostTotal = computed(() => categories.value.reduce((sum, item) => sum + item.postCount, 0));
 const tagPostTotal = computed(() => tags.value.reduce((sum, item) => sum + item.postCount, 0));
@@ -45,14 +52,45 @@ async function load() {
   error.value = "";
 
   try {
-    const [categoryResult, tagResult] = await Promise.all([getCategories(), getTags()]);
+    const [categoryResult, tagResult] = await Promise.all([
+      getCategories({ page: categoryPage.value, pageSize: categoryPageSize.value }),
+      getTags({ page: tagPage.value, pageSize: tagPageSize.value })
+    ]);
     categories.value = categoryResult.items;
     tags.value = tagResult.items;
+    categoryTotal.value = categoryResult.total;
+    categoryPage.value = categoryResult.page;
+    categoryPageSize.value = categoryResult.pageSize;
+    tagTotal.value = tagResult.total;
+    tagPage.value = tagResult.page;
+    tagPageSize.value = tagResult.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "分类标签加载失败";
   } finally {
     loading.value = false;
   }
+}
+
+async function setCategoryPage(value: number) {
+  categoryPage.value = value;
+  await load();
+}
+
+async function setCategoryPageSize(value: number) {
+  categoryPageSize.value = value;
+  categoryPage.value = 1;
+  await load();
+}
+
+async function setTagPage(value: number) {
+  tagPage.value = value;
+  await load();
+}
+
+async function setTagPageSize(value: number) {
+  tagPageSize.value = value;
+  tagPage.value = 1;
+  await load();
 }
 
 function resetCategoryForm() {
@@ -203,8 +241,8 @@ function nextCategorySortOrder() {
     </template>
 
     <section class="stats-grid" aria-label="分类标签统计">
-      <div class="stat-card"><span>分类</span><strong>{{ categories.length }}</strong></div>
-      <div class="stat-card"><span>标签</span><strong>{{ tags.length }}</strong></div>
+      <div class="stat-card"><span>分类</span><strong>{{ categoryTotal }}</strong></div>
+      <div class="stat-card"><span>标签</span><strong>{{ tagTotal }}</strong></div>
       <div class="stat-card"><span>分类引用</span><strong>{{ categoryPostTotal }}</strong></div>
       <div class="stat-card"><span>可清理</span><strong>{{ unusedCategories + unusedTags }}</strong></div>
     </section>
@@ -247,6 +285,17 @@ function nextCategorySortOrder() {
             </tr>
           </tbody>
         </table>
+        <PaginationControls
+          :page="categoryPage"
+          :page-size="categoryPageSize"
+          :total="categoryTotal"
+          :loading="loading"
+          item-label="个分类"
+          show-page-size
+          :page-size-options="[5, 10, 20, 50]"
+          @update:page="setCategoryPage"
+          @update:page-size="setCategoryPageSize"
+        />
       </section>
 
       <aside class="panel">
@@ -298,6 +347,17 @@ function nextCategorySortOrder() {
             </tr>
           </tbody>
         </table>
+        <PaginationControls
+          :page="tagPage"
+          :page-size="tagPageSize"
+          :total="tagTotal"
+          :loading="loading"
+          item-label="个标签"
+          show-page-size
+          :page-size-options="[5, 10, 20, 50]"
+          @update:page="setTagPage"
+          @update:page-size="setTagPageSize"
+        />
       </section>
 
       <aside class="panel">

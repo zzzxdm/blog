@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -228,7 +229,11 @@ func (handler *Handler) ListMine(ctx *gin.Context) {
 	}
 
 	result, err := handler.repo.ListByAuthor(ctx.Request.Context(), user.ID, ListQuery{
-		Status: ctx.Query("status"),
+		Status:   ctx.Query("status"),
+		Keyword:  ctx.Query("q"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
@@ -259,7 +264,11 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 	}
 
 	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
-		Status: ctx.Query("status"),
+		Status:   ctx.Query("status"),
+		Keyword:  ctx.Query("q"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
@@ -276,6 +285,7 @@ func (handler *Handler) AdminExport(ctx *gin.Context) {
 
 	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
 		Status: ctx.Query("status"),
+		All:    true,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export comments"})
@@ -377,7 +387,7 @@ func (handler *Handler) writeCommentError(ctx *gin.Context, err error) {
 }
 
 func canInteract(user auth.User) bool {
-	return user.Status == "" || user.Status == "active"
+	return (user.Status == "" || user.Status == "active") && user.EmailVerified
 }
 
 func containsBlockedWord(value string, blockedWords []string) bool {
@@ -394,4 +404,13 @@ func containsBlockedWord(value string, blockedWords []string) bool {
 	}
 
 	return false
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 1 {
+		return 0
+	}
+
+	return parsed
 }

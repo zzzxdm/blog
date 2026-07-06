@@ -2,7 +2,10 @@ module blog/api
 
 go 1.24.5
 
-require github.com/gin-gonic/gin v1.10.1
+require (
+	github.com/gin-gonic/gin v1.10.1
+	github.com/joho/godotenv v1.5.1
+)
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect

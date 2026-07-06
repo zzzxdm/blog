@@ -36,8 +36,12 @@ type Message struct {
 }
 
 type ListQuery struct {
-	Status string
-	Type   string
+	Status   string
+	Type     string
+	Keyword  string
+	Page     int
+	PageSize int
+	All      bool
 }
 
 type Stats struct {
@@ -50,9 +54,11 @@ type Stats struct {
 }
 
 type ListResult struct {
-	Items []Message `json:"items"`
-	Total int       `json:"total"`
-	Stats Stats     `json:"stats"`
+	Items    []Message `json:"items"`
+	Page     int       `json:"page"`
+	PageSize int       `json:"pageSize"`
+	Total    int       `json:"total"`
+	Stats    Stats     `json:"stats"`
 }
 
 type CreateRequest struct {

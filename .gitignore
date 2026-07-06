@@ -11,7 +11,7 @@ coverage/
 # Local env
 .env
 .env.*
-!.env.example
+!api/.env.example
 
 # Logs
 *.log
@@ -31,6 +31,8 @@ Thumbs.db
 # Go
 *.test
 *.out
+api/tmp/
+api/build-errors.log
 
 # agent
 AGENTS.md

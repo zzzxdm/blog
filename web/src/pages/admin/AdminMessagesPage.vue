@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   createAdminMessage,
   exportAdminMessages,
@@ -39,29 +40,13 @@ const scheduledAt = ref("");
 const searchQuery = ref("");
 const typeFilter = ref("");
 const statusFilter = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
 
 const selectedMessage = computed(() => messages.value.find((item) => item.id === selectedId.value) || messages.value[0]);
 const selectableUsers = computed(() => users.value.filter((user) => canReceiveMessage(user)));
 const selectedRecipient = computed(() => selectableUsers.value.find((user) => user.id === recipientId.value));
-const visibleMessages = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  return messages.value.filter((item) => {
-    const matchesKeyword = !keyword || [
-      item.title,
-      item.body,
-      item.recipientName,
-      item.recipientId,
-      item.targetTitle || "",
-      typeText(item.type),
-      statusText(item.status)
-    ].join(" ").toLowerCase().includes(keyword);
-    const matchesType = typeFilter.value === "" || item.type === typeFilter.value;
-    const matchesStatus = statusFilter.value === ""
-      || (statusFilter.value === "sent" ? item.status !== "scheduled" && item.status !== "archived" : item.status === statusFilter.value);
-
-    return matchesKeyword && matchesType && matchesStatus;
-  });
-});
 
 onMounted(() => {
   void load();
@@ -73,9 +58,18 @@ async function load() {
   error.value = "";
 
   try {
-    const response = await getAdminMessages();
+    const response = await getAdminMessages({
+      q: searchQuery.value,
+      type: typeFilter.value,
+      status: statusFilter.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
     messages.value = response.items;
     stats.value = response.stats;
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
     if (!messages.value.some((item) => item.id === selectedId.value)) {
       selectedId.value = messages.value[0]?.id || "";
     }
@@ -84,6 +78,22 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+async function applyFilters() {
+  page.value = 1;
+  await load();
+}
+
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
 }
 
 async function send() {
@@ -151,7 +161,7 @@ async function loadUsers() {
   usersLoading.value = true;
 
   try {
-    const result = await getAdminUsers();
+    const result = await getAdminUsers({ all: true });
     users.value = result.items;
     if (!selectableUsers.value.some((user) => user.id === recipientId.value)) {
       applyRecipient(selectableUsers.value[0]);
@@ -172,7 +182,7 @@ async function resolveRecipients() {
   }
 
   if (!users.value.length) {
-    const result = await getAdminUsers();
+    const result = await getAdminUsers({ all: true });
     users.value = result.items;
   }
 
@@ -300,9 +310,9 @@ function nextScheduleValue() {
 
     <section class="admin-grid-2">
       <section class="table-panel" aria-label="发送记录">
-        <form class="table-toolbar" @submit.prevent="load">
+        <form class="table-toolbar" @submit.prevent="applyFilters">
           <input v-model="searchQuery" class="input" type="search" placeholder="搜索标题、接收人、类型" aria-label="搜索站内信">
-          <select v-model="typeFilter" class="input" aria-label="消息类型">
+          <select v-model="typeFilter" class="input" aria-label="消息类型" @change="applyFilters">
             <option value="">全部类型</option>
             <option value="admin">管理员消息</option>
             <option value="review">投稿审核</option>
@@ -310,7 +320,7 @@ function nextScheduleValue() {
             <option value="account">系统事件</option>
             <option value="comment">评论</option>
           </select>
-          <select v-model="statusFilter" class="input" aria-label="发送状态">
+          <select v-model="statusFilter" class="input" aria-label="发送状态" @change="applyFilters">
             <option value="">全部状态</option>
             <option value="sent">已发送</option>
             <option value="scheduled">定时中</option>
@@ -332,7 +342,7 @@ function nextScheduleValue() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in visibleMessages" :key="item.id">
+            <tr v-for="item in messages" :key="item.id">
               <td><strong>{{ item.title }}</strong><div class="meta-row"><span>{{ item.targetTitle || item.body }}</span></div></td>
               <td>{{ item.recipientName }}</td>
               <td><span class="status" :class="typeClass(item.type)">{{ typeText(item.type) }}</span></td>
@@ -341,11 +351,23 @@ function nextScheduleValue() {
               <td>{{ formatTime(item.scheduledAt || item.createdAt) }}</td>
               <td><button class="button-secondary" type="button" @click="viewMessage(item)">查看</button></td>
             </tr>
-            <tr v-if="visibleMessages.length === 0">
+            <tr v-if="messages.length === 0">
               <td colspan="7" class="muted">没有匹配的站内信。</td>
             </tr>
           </tbody>
         </table>
+        <PaginationControls
+          v-if="!loading"
+          :page="page"
+          :page-size="pageSize"
+          :total="total"
+          :loading="loading"
+          item-label="条站内信"
+          show-page-size
+          :page-size-options="[5, 10, 20, 50, 100]"
+          @update:page="setPage"
+          @update:page-size="setPageSize"
+        />
       </section>
 
       <aside class="settings-stack">

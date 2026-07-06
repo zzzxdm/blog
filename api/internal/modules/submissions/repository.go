@@ -64,13 +64,10 @@ func (repo *MemoryRepository) ListByAuthor(_ context.Context, userID string, que
 		items = append(items, item)
 	}
 
-	sortSubmissions(items)
+	items = filterSubmissions(items, query)
+	sortSubmissions(items, query.Sort)
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: repo.statsByAuthorLocked(userID),
-	}, nil
+	return pagedSubmissionResult(items, repo.statsByAuthorLocked(userID), query), nil
 }
 
 func (repo *MemoryRepository) CountSubmittedSince(_ context.Context, userID string, since time.Time, excludeID string) (int, error) {
@@ -218,13 +215,10 @@ func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (Lis
 		items = append(items, item)
 	}
 
-	sortSubmissions(items)
+	items = filterSubmissions(items, query)
+	sortSubmissions(items, query.Sort)
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: repo.adminStatsLocked(),
-	}, nil
+	return pagedSubmissionResult(items, repo.adminStatsLocked(), query), nil
 }
 
 func (repo *MemoryRepository) Get(_ context.Context, submissionID string) (Submission, error) {
@@ -352,6 +346,52 @@ func countStatus(stats Stats, status string) Stats {
 	return stats
 }
 
+func pagedSubmissionResult(items []Submission, stats Stats, query ListQuery) ListResult {
+	total := len(items)
+	page := normalizePage(query.Page)
+	pageSize := normalizePageSize(query.PageSize)
+	paged := items
+	if query.All {
+		page = 1
+		pageSize = total
+	} else {
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		paged = items[start:end]
+	}
+
+	return ListResult{
+		Items:    paged,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Stats:    stats,
+	}
+}
+
+func normalizePage(page int) int {
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize < 1 {
+		return 10
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
+}
+
 func applySave(submission Submission, request SaveRequest) Submission {
 	submission.Title = strings.TrimSpace(request.Title)
 	submission.Summary = strings.TrimSpace(request.Summary)
@@ -399,8 +439,44 @@ func matchesStatus(status string, queryStatus string) bool {
 	return status == queryStatus
 }
 
-func sortSubmissions(items []Submission) {
+func filterSubmissions(items []Submission, query ListQuery) []Submission {
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
+	if keyword == "" {
+		return items
+	}
+
+	filtered := make([]Submission, 0, len(items))
+	for _, item := range items {
+		if submissionContainsKeyword(item, keyword) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func submissionContainsKeyword(item Submission, keyword string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		item.Title,
+		item.Summary,
+		item.AuthorName,
+		item.AuthorID,
+		item.Category,
+		item.Slug,
+		item.RiskLevel,
+		strings.Join(item.Tags, " "),
+	}, " "))
+	return strings.Contains(haystack, keyword)
+}
+
+func sortSubmissions(items []Submission, mode string) {
 	sort.SliceStable(items, func(i, j int) bool {
+		if mode == "risk" {
+			return riskRank(items[i].RiskLevel) > riskRank(items[j].RiskLevel)
+		}
+		if mode == "quality" {
+			return items[i].WordCount > items[j].WordCount
+		}
+
 		left := items[i].UpdatedAt
 		right := items[j].UpdatedAt
 		if items[i].SubmittedAt != nil {
@@ -412,6 +488,20 @@ func sortSubmissions(items []Submission) {
 
 		return left.After(right)
 	})
+}
+
+func riskRank(value string) int {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch {
+	case strings.Contains(value, "\u9ad8"), strings.Contains(value, "high"):
+		return 3
+	case strings.Contains(value, "\u4e2d"), strings.Contains(value, "medium"):
+		return 2
+	case value != "":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func normalizeTags(tags []string) []string {

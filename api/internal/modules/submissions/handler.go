@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,10 +18,11 @@ import (
 )
 
 type Handler struct {
-	repo      Repository
-	messages  messages.Repository
-	publisher posts.Publisher
-	settings  settingsReader
+	repo              Repository
+	messages          messages.Repository
+	publisher         posts.Publisher
+	settings          settingsReader
+	turnstileVerifier auth.TurnstileVerifier
 }
 
 type settingsReader interface {
@@ -28,16 +30,29 @@ type settingsReader interface {
 }
 
 func NewHandler(repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader) *Handler {
+	return NewHandlerWithTurnstile(repo, messageRepo, publisher, settings, nil)
+}
+
+func NewHandlerWithTurnstile(repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader, turnstileVerifier auth.TurnstileVerifier) *Handler {
+	if turnstileVerifier == nil {
+		turnstileVerifier = auth.NewHTTPTurnstileVerifier()
+	}
+
 	return &Handler{
-		repo:      repo,
-		messages:  messageRepo,
-		publisher: publisher,
-		settings:  settings,
+		repo:              repo,
+		messages:          messageRepo,
+		publisher:         publisher,
+		settings:          settings,
+		turnstileVerifier: turnstileVerifier,
 	}
 }
 
 func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader) {
-	handler := NewHandler(repo, messageRepo, publisher, settings)
+	RegisterRoutesWithTurnstile(router, repo, messageRepo, publisher, settings, nil)
+}
+
+func RegisterRoutesWithTurnstile(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader, turnstileVerifier auth.TurnstileVerifier) {
+	handler := NewHandlerWithTurnstile(repo, messageRepo, publisher, settings, turnstileVerifier)
 
 	router.GET("/submissions", handler.ListMine)
 	router.GET("/me/submissions", handler.ListMine)
@@ -61,7 +76,12 @@ func (handler *Handler) ListMine(ctx *gin.Context) {
 	}
 
 	result, err := handler.repo.ListByAuthor(ctx.Request.Context(), user.ID, ListQuery{
-		Status: ctx.Query("status"),
+		Status:   ctx.Query("status"),
+		Keyword:  ctx.Query("q"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
+		All:      boolQuery(ctx.Query("all")),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submissions"})
@@ -92,6 +112,9 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	}
 	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
+		return
+	}
+	if request.Submit && !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
 	if request.Submit && !handler.requireSubmissionSlot(ctx, user.ID, settings, "") {
@@ -128,6 +151,9 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	}
 	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
+		return
+	}
+	if request.Submit && !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
 	if request.Submit && !handler.requireSubmissionSlot(ctx, user.ID, settings, ctx.Param("id")) {
@@ -168,6 +194,13 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 	}
 	if submissionContainsBlockedWord(current, settings.BlockedWords) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "submission contains blocked word"})
+		return
+	}
+	var request struct {
+		TurnstileToken string `json:"turnstileToken"`
+	}
+	_ = ctx.ShouldBindJSON(&request)
+	if !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
 	if !handler.requireSubmissionSlot(ctx, user.ID, settings, current.ID) {
@@ -216,6 +249,32 @@ func (handler *Handler) requireSubmissionSettings(ctx *gin.Context) (operations.
 	return settings, true
 }
 
+func (handler *Handler) verifyTurnstile(ctx *gin.Context, settings operations.Settings, token string) bool {
+	if !settings.TurnstileEnabled || !settings.TurnstileSubmission {
+		return true
+	}
+	if strings.TrimSpace(settings.TurnstileSecretKey) == "" {
+		ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "turnstile is not configured"})
+		return false
+	}
+	if strings.TrimSpace(token) == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "turnstile token is required"})
+		return false
+	}
+
+	ok, err := handler.turnstileVerifier.Verify(ctx.Request.Context(), settings.TurnstileSecretKey, token, ctx.ClientIP())
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": "turnstile verification failed"})
+		return false
+	}
+	if !ok {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "turnstile token is invalid"})
+		return false
+	}
+
+	return true
+}
+
 func (handler *Handler) requireSubmissionSlot(ctx *gin.Context, userID string, settings operations.Settings, excludeID string) bool {
 	since, limit, ok := submissionLimitWindow(settings.SubmissionLimit, time.Now())
 	if !ok {
@@ -241,7 +300,12 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 	}
 
 	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{
-		Status: ctx.Query("status"),
+		Status:   ctx.Query("status"),
+		Keyword:  ctx.Query("q"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
+		All:      boolQuery(ctx.Query("all")),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submissions"})
@@ -425,7 +489,7 @@ func reviewMessage(submission Submission, action string) messages.CreateRequest 
 }
 
 func canSubmit(user auth.User) bool {
-	return user.Status == "" || user.Status == "active"
+	return (user.Status == "" || user.Status == "active") && user.EmailVerified
 }
 
 func canReviewSubmission(status string) bool {
@@ -501,4 +565,18 @@ func firstPositiveInt(value string) int {
 	}
 
 	return number
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 1 {
+		return 0
+	}
+
+	return parsed
+}
+
+func boolQuery(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return value == "1" || value == "true" || value == "yes"
 }

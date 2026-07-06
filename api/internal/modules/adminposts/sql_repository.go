@@ -28,7 +28,7 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 	return repo, nil
 }
 
-func (repo *SQLRepository) List(ctx context.Context) (ListResult, error) {
+func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResult, error) {
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
 			admin_posts.data,
@@ -57,11 +57,11 @@ func (repo *SQLRepository) List(ctx context.Context) (ListResult, error) {
 		return ListResult{}, fmt.Errorf("iterate admin posts: %w", err)
 	}
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: countStats(items),
-	}, nil
+	stats := countStats(items)
+	items = filterAdminPosts(items, query)
+	sortAdminPosts(items, query.Sort)
+
+	return pagedPostResult(items, stats, query), nil
 }
 
 func (repo *SQLRepository) Get(ctx context.Context, id string) (AdminPost, error) {

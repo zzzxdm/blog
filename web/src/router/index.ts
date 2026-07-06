@@ -74,7 +74,13 @@ export const router = createRouter({
     { path: "/admin/settings", name: "admin-settings", component: AdminSettingsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundPage }
   ],
-  scrollBehavior() {
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition;
+    }
+    if (to.hash) {
+      return { el: to.hash, top: 24 };
+    }
     return { top: 0 };
   }
 });

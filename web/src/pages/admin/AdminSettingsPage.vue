@@ -10,8 +10,10 @@ import {
   type OperationsSettings
 } from "../../shared/api";
 import { applyPrimaryColor, applyThemeMode, themeOptions, type ThemeMode } from "../../shared/theme";
+import { useToastStore } from "../../stores/toast";
 
 const settings = ref<OperationsSettings | null>(null);
+const toast = useToastStore();
 const blockedWordsText = ref("");
 const loading = ref(false);
 const saving = ref(false);
@@ -61,6 +63,7 @@ async function save() {
     settings.value = await updateAdminSettings(payload);
     applyPrimaryColor(settings.value.themePrimary);
     message.value = "设置已保存。";
+    toast.success("设置已保存", "站点配置已更新。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "设置保存失败";
   } finally {
@@ -107,6 +110,7 @@ async function testMail() {
   try {
     const result = await sendAdminTestMail();
     message.value = result.message;
+    toast.success("测试邮件已发送", result.message);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "测试邮件生成失败";
   } finally {
@@ -123,6 +127,7 @@ async function runBackup() {
     const result = await createAdminBackup();
     settings.value = result.settings;
     message.value = `${result.message} 文件：${result.fileName}`;
+    toast.success("备份已生成", result.fileName);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "备份失败";
   } finally {
@@ -146,7 +151,6 @@ async function runBackup() {
 
     <p v-if="loading" class="muted">正在加载设置...</p>
     <p v-else-if="error" class="error">{{ error }}</p>
-    <p v-if="message" class="muted">{{ message }}</p>
 
     <section v-if="settings" class="settings-grid">
       <section class="panel">
@@ -223,14 +227,20 @@ async function runBackup() {
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-title"><h2>安全</h2></div>
-        <div class="settings-stack">
-          <label class="setting-row"><div><strong>管理员 2FA 策略预留</strong><div class="meta-row"><span>完整登录挑战接入后再强制启用</span></div></div><input v-model="settings.adminTwoFactorRequired" type="checkbox"></label>
-          <label class="setting-row"><div><strong>登录失败锁定</strong><div class="meta-row"><span>连续失败后临时锁定账号</span></div></div><input v-model="settings.loginFailureLock" type="checkbox"></label>
-          <div class="field"><label for="session-days">会话有效期</label><select v-model.number="settings.sessionDays" class="input" id="session-days"><option :value="7">7 天</option><option :value="14">14 天</option><option :value="30">30 天</option></select></div>
-        </div>
-      </section>
+	      <section class="panel">
+	        <div class="panel-title"><h2>安全</h2></div>
+	        <div class="settings-stack">
+	          <label class="setting-row"><div><strong>管理员 2FA 策略预留</strong><div class="meta-row"><span>完整登录挑战接入后再强制启用</span></div></div><input v-model="settings.adminTwoFactorRequired" type="checkbox"></label>
+	          <label class="setting-row"><div><strong>登录失败锁定</strong><div class="meta-row"><span>连续失败后临时锁定账号</span></div></div><input v-model="settings.loginFailureLock" type="checkbox"></label>
+	          <label class="setting-row"><div><strong>Turnstile 人机验证</strong><div class="meta-row"><span>开启后可对指定功能要求 Cloudflare Turnstile 验证</span></div></div><input v-model="settings.turnstileEnabled" type="checkbox"></label>
+	          <div class="field"><label for="turnstile-site-key">Turnstile Site Key</label><input v-model="settings.turnstileSiteKey" class="input" id="turnstile-site-key"></div>
+	          <div class="field"><label for="turnstile-secret-key">Turnstile Secret Key</label><input v-model="settings.turnstileSecretKey" class="input" id="turnstile-secret-key" type="password" autocomplete="new-password"></div>
+	          <label class="setting-row"><div><strong>注册验证</strong><div class="meta-row"><span>注册账号时要求通过 Turnstile</span></div></div><input v-model="settings.turnstileRegister" type="checkbox" :disabled="!settings.turnstileEnabled"></label>
+	          <label class="setting-row"><div><strong>登录验证</strong><div class="meta-row"><span>登录账号时要求通过 Turnstile</span></div></div><input v-model="settings.turnstileLogin" type="checkbox" :disabled="!settings.turnstileEnabled"></label>
+	          <label class="setting-row"><div><strong>投稿验证</strong><div class="meta-row"><span>提交投稿审核时要求通过 Turnstile，保存草稿不受影响</span></div></div><input v-model="settings.turnstileSubmission" type="checkbox" :disabled="!settings.turnstileEnabled"></label>
+	          <div class="field"><label for="session-days">会话有效期</label><select v-model.number="settings.sessionDays" class="input" id="session-days"><option :value="7">7 天</option><option :value="14">14 天</option><option :value="30">30 天</option></select></div>
+	        </div>
+	      </section>
 
       <section class="panel">
         <div class="panel-title"><h2>备份</h2><span class="status published">正常</span></div>

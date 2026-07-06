@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import PaginationControls from "../components/PaginationControls.vue";
 import { getPosts, type Post } from "../shared/api";
 
 type TopicTone = "" | "rust" | "amber";
@@ -22,6 +23,8 @@ const loading = ref(false);
 const error = ref("");
 const posts = ref<Post[]>([]);
 const total = ref(0);
+const topicPage = ref(1);
+const topicPageSize = ref(4);
 
 const topics: Topic[] = [
   {
@@ -71,11 +74,17 @@ const currentTopic = computed(() => {
   return topics.find((topic) => topic.slug === topicSlug) ?? topics[0];
 });
 
+const allCurrentTopicPosts = computed(() => topicPosts(currentTopic.value));
 const currentTopicPosts = computed(() => {
-  return topicPosts(currentTopic.value).slice(0, 4);
+  const start = (topicPage.value - 1) * topicPageSize.value;
+  return allCurrentTopicPosts.value.slice(start, start + topicPageSize.value);
 });
 
 const articleCountText = computed(() => `${total.value || posts.value.length} 篇文章`);
+
+watch(() => currentTopic.value.slug, () => {
+  topicPage.value = 1;
+});
 
 onMounted(async () => {
   loading.value = true;
@@ -131,8 +140,25 @@ function topicStatus(index: number) {
   return { className: "draft", label: "延伸阅读" };
 }
 
+function topicPostIndex(index: number) {
+  return (topicPage.value - 1) * topicPageSize.value + index;
+}
+
 function topicLink(topic: Topic) {
   return { path: "/topics", query: { topic: topic.slug } };
+}
+
+function topicReadingLink(topic: Topic) {
+  return { ...topicLink(topic), hash: "#topic-reading" };
+}
+
+function setTopicPage(page: number) {
+  topicPage.value = page;
+}
+
+function setTopicPageSize(pageSize: number) {
+  topicPageSize.value = pageSize;
+  topicPage.value = 1;
 }
 
 function formatDate(value: string) {
@@ -165,7 +191,7 @@ function stringQuery(value: unknown) {
         <ol class="rank-list">
           <li v-for="(topic, index) in topics.slice(0, 3)" :key="topic.slug">
             <span class="rank-number">{{ index + 1 }}</span>
-            <RouterLink :to="topicLink(topic)">
+            <RouterLink :to="topicReadingLink(topic)">
               <strong>{{ topic.title }}</strong>
               <span>{{ topicArticleCount(topic) }} 篇文章 · 最近 {{ topicLatestLabel(topic) }}</span>
             </RouterLink>
@@ -193,12 +219,12 @@ function stringQuery(value: unknown) {
             <RouterLink :to="topicLink(topic)">{{ topic.title }}</RouterLink>
           </h3>
           <p>{{ topic.summary }}</p>
-          <RouterLink class="button-secondary" :to="topicLink(topic)">继续阅读</RouterLink>
+          <RouterLink class="button-secondary" :to="topicReadingLink(topic)">继续阅读</RouterLink>
         </div>
       </article>
     </section>
 
-    <section class="article-layout">
+    <section id="topic-reading" class="article-layout">
       <div>
         <div class="section-heading">
           <div>
@@ -222,8 +248,19 @@ function stringQuery(value: unknown) {
                 <span>{{ formatDate(post.publishedAt) }}</span>
               </div>
             </div>
-            <span class="status" :class="topicStatus(index).className">{{ topicStatus(index).label }}</span>
+            <span class="status" :class="topicStatus(topicPostIndex(index)).className">{{ topicStatus(topicPostIndex(index)).label }}</span>
+            <RouterLink class="button-secondary" :to="`/posts/${post.slug}`">继续阅读</RouterLink>
           </article>
+          <PaginationControls
+            :page="topicPage"
+            :page-size="topicPageSize"
+            :total="allCurrentTopicPosts.length"
+            item-label="篇专题文章"
+            show-page-size
+            :page-size-options="[4, 8, 12, 20]"
+            @update:page="setTopicPage"
+            @update:page-size="setTopicPageSize"
+          />
         </div>
         <p v-else class="muted">这个专题暂无文章。</p>
       </div>

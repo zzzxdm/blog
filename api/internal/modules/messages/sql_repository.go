@@ -37,11 +37,7 @@ func (repo *SQLRepository) List(ctx context.Context, userID string, query ListQu
 	filtered := filterMessages(items, query)
 	stats := countMessageStats(items)
 
-	return ListResult{
-		Items: filtered,
-		Total: len(filtered),
-		Stats: stats,
-	}, nil
+	return pagedMessageResult(filtered, stats, query), nil
 }
 
 func (repo *SQLRepository) AdminList(ctx context.Context, query ListQuery) (ListResult, error) {
@@ -53,11 +49,7 @@ func (repo *SQLRepository) AdminList(ctx context.Context, query ListQuery) (List
 	filtered := filterMessages(items, query)
 	stats := countMessageStats(items)
 
-	return ListResult{
-		Items: filtered,
-		Total: len(filtered),
-		Stats: stats,
-	}, nil
+	return pagedMessageResult(filtered, stats, query), nil
 }
 
 func (repo *SQLRepository) Create(ctx context.Context, request CreateRequest, sender auth.User) (Message, error) {

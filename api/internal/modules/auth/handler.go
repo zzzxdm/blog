@@ -22,15 +22,23 @@ const (
 )
 
 type Handler struct {
-	store         Store
-	settings      SecuritySettingsReader
-	loginFailures map[string]loginFailure
-	loginMu       sync.Mutex
+	store             Store
+	settings          SecuritySettingsReader
+	emailSender       EmailSender
+	turnstileVerifier TurnstileVerifier
+	loginFailures     map[string]loginFailure
+	loginMu           sync.Mutex
 }
 
 type SecuritySettings struct {
-	SessionDays      int
-	LoginFailureLock bool
+	SessionDays         int
+	LoginFailureLock    bool
+	TurnstileEnabled    bool
+	TurnstileSiteKey    string
+	TurnstileSecretKey  string
+	TurnstileRegister   bool
+	TurnstileLogin      bool
+	TurnstileSubmission bool
 }
 
 type SecuritySettingsReader interface {
@@ -47,10 +55,24 @@ func NewHandler(store Store) *Handler {
 }
 
 func NewHandlerWithSettings(store Store, settings SecuritySettingsReader) *Handler {
+	return NewHandlerWithSettingsAndEmailSender(store, settings, nil)
+}
+
+func NewHandlerWithSettingsAndEmailSender(store Store, settings SecuritySettingsReader, emailSender EmailSender) *Handler {
+	return NewHandlerWithDependencies(store, settings, emailSender, nil)
+}
+
+func NewHandlerWithDependencies(store Store, settings SecuritySettingsReader, emailSender EmailSender, turnstileVerifier TurnstileVerifier) *Handler {
+	if turnstileVerifier == nil {
+		turnstileVerifier = NewHTTPTurnstileVerifier()
+	}
+
 	return &Handler{
-		store:         store,
-		settings:      settings,
-		loginFailures: map[string]loginFailure{},
+		store:             store,
+		settings:          settings,
+		emailSender:       emailSender,
+		turnstileVerifier: turnstileVerifier,
+		loginFailures:     map[string]loginFailure{},
 	}
 }
 
@@ -59,7 +81,15 @@ func RegisterRoutes(router gin.IRouter, store Store) {
 }
 
 func RegisterRoutesWithSettings(router gin.IRouter, store Store, settings SecuritySettingsReader) {
-	handler := NewHandlerWithSettings(store, settings)
+	RegisterRoutesWithSettingsAndEmailSender(router, store, settings, nil)
+}
+
+func RegisterRoutesWithSettingsAndEmailSender(router gin.IRouter, store Store, settings SecuritySettingsReader, emailSender EmailSender) {
+	RegisterRoutesWithDependencies(router, store, settings, emailSender, nil)
+}
+
+func RegisterRoutesWithDependencies(router gin.IRouter, store Store, settings SecuritySettingsReader, emailSender EmailSender, turnstileVerifier TurnstileVerifier) {
+	handler := NewHandlerWithDependencies(store, settings, emailSender, turnstileVerifier)
 
 	router.POST("/auth/login", handler.Login)
 	router.POST("/auth/register", handler.Register)
@@ -136,6 +166,9 @@ func (handler *Handler) Login(ctx *gin.Context) {
 	}
 
 	security := handler.configuredSecuritySettings(ctx)
+	if !handler.verifyTurnstile(ctx, security, request.TurnstileToken, security.TurnstileLogin) {
+		return
+	}
 	if security.LoginFailureLock && handler.isLoginLocked(request.Email, time.Now()) {
 		ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked"})
 		return
@@ -180,6 +213,11 @@ func (handler *Handler) Register(ctx *gin.Context) {
 		return
 	}
 
+	security := handler.configuredSecuritySettings(ctx)
+	if !handler.verifyTurnstile(ctx, security, request.TurnstileToken, security.TurnstileRegister) {
+		return
+	}
+
 	user, token, err := handler.store.Register(request)
 	if err != nil {
 		if errors.Is(err, ErrEmailExists) {
@@ -191,7 +229,7 @@ func (handler *Handler) Register(ctx *gin.Context) {
 		return
 	}
 
-	sessionDays := clampSessionDays(handler.configuredSecuritySettings(ctx).SessionDays)
+	sessionDays := clampSessionDays(security.SessionDays)
 	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
 		return
@@ -205,11 +243,12 @@ func (handler *Handler) Register(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, gin.H{
-		"user":              user,
-		"verificationToken": verificationToken,
-		"delivery":          "dev-response",
-	})
+	response, ok := handler.deliverEmailVerification(ctx, user, verificationToken, true)
+	if !ok {
+		return
+	}
+	response["user"] = user
+	ctx.JSON(http.StatusCreated, response)
 }
 
 func (handler *Handler) Logout(ctx *gin.Context) {
@@ -346,11 +385,12 @@ func (handler *Handler) RequestEmailVerification(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"ok":                true,
-		"verificationToken": token,
-		"delivery":          "dev-response",
-	})
+	response, ok := handler.deliverEmailVerification(ctx, user, token, false)
+	if !ok {
+		return
+	}
+	response["ok"] = true
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (handler *Handler) VerifyEmail(ctx *gin.Context) {
@@ -372,6 +412,55 @@ func (handler *Handler) VerifyEmail(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+func (handler *Handler) deliverEmailVerification(ctx *gin.Context, user User, token string, failSoft bool) (gin.H, bool) {
+	if handler.emailSender == nil {
+		return gin.H{
+			"verificationToken": token,
+			"delivery":          "dev-response",
+		}, true
+	}
+
+	if err := handler.emailSender.SendEmailVerification(ctx.Request.Context(), user, token); err != nil {
+		if failSoft {
+			return gin.H{
+				"delivery": "email-failed",
+				"warning":  "failed to send email verification",
+			}, true
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send email verification"})
+		return nil, false
+	}
+
+	return gin.H{"delivery": "email"}, true
+}
+
+func (handler *Handler) verifyTurnstile(ctx *gin.Context, settings SecuritySettings, token string, required bool) bool {
+	if !settings.TurnstileEnabled || !required {
+		return true
+	}
+	if strings.TrimSpace(settings.TurnstileSecretKey) == "" {
+		ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "turnstile is not configured"})
+		return false
+	}
+	if strings.TrimSpace(token) == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "turnstile token is required"})
+		return false
+	}
+
+	ok, err := handler.turnstileVerifier.Verify(ctx.Request.Context(), settings.TurnstileSecretKey, token, ctx.ClientIP())
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"error": "turnstile verification failed"})
+		return false
+	}
+	if !ok {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "turnstile token is invalid"})
+		return false
+	}
+
+	return true
 }
 
 func (handler *Handler) ForgotPassword(ctx *gin.Context) {

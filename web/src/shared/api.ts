@@ -60,6 +60,8 @@ export interface Tag {
 
 export interface TaxonomyListResponse<T> {
   items: T[];
+  page: number;
+  pageSize: number;
   total: number;
 }
 
@@ -89,6 +91,7 @@ export interface AuthResponse {
   user: User;
   verificationToken?: string;
   delivery?: string;
+  warning?: string;
 }
 
 export interface TokenResponse {
@@ -96,6 +99,7 @@ export interface TokenResponse {
   verificationToken?: string;
   resetToken?: string;
   delivery?: string;
+  warning?: string;
 }
 
 export interface SessionInfo {
@@ -156,6 +160,8 @@ export interface CommentStats {
 
 export interface CommentManageListResponse {
   items: Comment[];
+  page: number;
+  pageSize: number;
   total: number;
   stats: CommentStats;
 }
@@ -223,6 +229,8 @@ export interface SubmissionStats {
 
 export interface SubmissionListResponse {
   items: Submission[];
+  page: number;
+  pageSize: number;
   total: number;
   stats: SubmissionStats;
 }
@@ -236,6 +244,7 @@ export interface SubmissionPayload {
   coverImage: string;
   slug: string;
   submit?: boolean;
+  turnstileToken?: string;
 }
 
 export interface ReviewPayload {
@@ -279,6 +288,8 @@ export interface MessageStats {
 
 export interface MessageListResponse {
   items: StationMessage[];
+  page: number;
+  pageSize: number;
   total: number;
   stats: MessageStats;
 }
@@ -312,6 +323,12 @@ export interface OperationsSettings {
   mailEnabled: boolean;
   mailProvider: string;
   fromEmail: string;
+  turnstileEnabled: boolean;
+  turnstileSiteKey: string;
+  turnstileSecretKey: string;
+  turnstileRegister: boolean;
+  turnstileLogin: boolean;
+  turnstileSubmission: boolean;
   adminTwoFactorRequired: boolean;
   loginFailureLock: boolean;
   sessionDays: number;
@@ -335,6 +352,11 @@ export interface SiteSettings {
   submissionsEnabled: boolean;
   submissionLimit: string;
   submissionGuide: string;
+  turnstileEnabled: boolean;
+  turnstileSiteKey: string;
+  turnstileRegister: boolean;
+  turnstileLogin: boolean;
+  turnstileSubmission: boolean;
   updatedAt: string;
 }
 
@@ -420,6 +442,8 @@ export interface MediaAsset {
 
 export interface MediaListResponse {
   items: MediaAsset[];
+  page: number;
+  pageSize: number;
   total: number;
 }
 
@@ -550,8 +574,19 @@ export interface UserStats {
 
 export interface UserListResponse {
   items: ManagedUser[];
+  page: number;
+  pageSize: number;
   total: number;
   stats: UserStats;
+}
+
+export interface AdminUserParams {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  status?: string;
+  role?: string;
+  all?: boolean;
 }
 
 export interface AdminPasswordResetResponse {
@@ -564,6 +599,7 @@ export interface AdminPasswordResetResponse {
 export interface AdminInvitationResponse {
   ok: boolean;
   user: ManagedUser;
+  initialPassword?: string;
   resetToken?: string;
   delivery: string;
 }
@@ -572,6 +608,7 @@ export interface AccountSettings {
   displayName: string;
   username: string;
   email: string;
+  emailVerified: boolean;
   avatarText: string;
   bio: string;
   twoFactor: boolean;
@@ -649,6 +686,8 @@ export interface AdminPostStats {
 
 export interface AdminPostListResponse {
   items: AdminPost[];
+  page: number;
+  pageSize: number;
   total: number;
   stats: AdminPostStats;
 }
@@ -696,6 +735,47 @@ export interface PostListParams {
   sort?: "views" | "comments" | "likes";
 }
 
+export interface TaxonomyListParams {
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ManageListParams {
+  status?: string;
+  q?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+  all?: boolean;
+}
+
+export interface MessageListParams {
+  status?: string;
+  type?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  all?: boolean;
+}
+
+export interface MediaListParams {
+  q?: string;
+  type?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+  all?: boolean;
+}
+
+export interface AdminPostParams {
+  q?: string;
+  status?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+  all?: boolean;
+}
+
 export async function getPosts(params: PostListParams = {}): Promise<ListResponse<Post>> {
   const query = toQuery(params);
   return request<ListResponse<Post>>(`/posts${query}`);
@@ -724,12 +804,14 @@ export async function getTagPosts(slug: string, params: PostListParams = {}): Pr
   return request<ListResponse<Post>>(`/tags/${encodeURIComponent(slug)}/posts${query}`);
 }
 
-export async function getCategories(): Promise<TaxonomyListResponse<Category>> {
-  return request<TaxonomyListResponse<Category>>("/categories");
+export async function getCategories(params: TaxonomyListParams = {}): Promise<TaxonomyListResponse<Category>> {
+  const query = toQuery(params);
+  return request<TaxonomyListResponse<Category>>(`/categories${query}`);
 }
 
-export async function getTags(): Promise<TaxonomyListResponse<Tag>> {
-  return request<TaxonomyListResponse<Tag>>("/tags");
+export async function getTags(params: TaxonomyListParams = {}): Promise<TaxonomyListResponse<Tag>> {
+  const query = toQuery(params);
+  return request<TaxonomyListResponse<Tag>>(`/tags${query}`);
 }
 
 export async function createAdminCategory(payload: SaveCategoryPayload): Promise<Category> {
@@ -772,17 +854,17 @@ export async function deleteAdminTag(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(email: string, password: string, turnstileToken = ""): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, turnstileToken })
   });
 }
 
-export async function register(email: string, password: string, displayName: string): Promise<AuthResponse> {
+export async function register(email: string, password: string, displayName: string, turnstileToken = ""): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, displayName })
+    body: JSON.stringify({ email, password, displayName, turnstileToken })
   });
 }
 
@@ -861,13 +943,13 @@ export async function reportComment(id: string, reason: string): Promise<{ ok: b
   });
 }
 
-export async function getMyComments(status = ""): Promise<CommentManageListResponse> {
-  const query = toQuery({ status });
+export async function getMyComments(params: ManageListParams | string = {}): Promise<CommentManageListResponse> {
+  const query = toQuery(typeof params === "string" ? { status: params } : params);
   return request<CommentManageListResponse>(`/comments/mine${query}`);
 }
 
-export async function getAdminComments(status = ""): Promise<CommentManageListResponse> {
-  const query = toQuery({ status });
+export async function getAdminComments(params: ManageListParams | string = {}): Promise<CommentManageListResponse> {
+  const query = toQuery(typeof params === "string" ? { status: params } : params);
   return request<CommentManageListResponse>(`/admin/comments${query}`);
 }
 
@@ -923,8 +1005,8 @@ export async function getMyBookmarks(): Promise<BookmarkListResponse> {
   return request<BookmarkListResponse>("/bookmarks/mine");
 }
 
-export async function getMySubmissions(status = ""): Promise<SubmissionListResponse> {
-  const query = toQuery({ status });
+export async function getMySubmissions(params: ManageListParams | string = {}): Promise<SubmissionListResponse> {
+  const query = toQuery(typeof params === "string" ? { status: params } : params);
   return request<SubmissionListResponse>(`/submissions${query}`);
 }
 
@@ -942,14 +1024,15 @@ export async function updateSubmission(id: string, payload: SubmissionPayload): 
   });
 }
 
-export async function submitExistingSubmission(id: string): Promise<Submission> {
+export async function submitExistingSubmission(id: string, turnstileToken = ""): Promise<Submission> {
   return request<Submission>(`/submissions/${encodeURIComponent(id)}/submit`, {
-    method: "POST"
+    method: "POST",
+    body: JSON.stringify({ turnstileToken })
   });
 }
 
-export async function getAdminSubmissions(status = ""): Promise<SubmissionListResponse> {
-  const query = toQuery({ status });
+export async function getAdminSubmissions(params: ManageListParams | string = {}): Promise<SubmissionListResponse> {
+  const query = toQuery(typeof params === "string" ? { status: params } : params);
   return request<SubmissionListResponse>(`/admin/submissions${query}`);
 }
 
@@ -967,7 +1050,7 @@ export async function reviewSubmission(id: string, payload: ReviewPayload): Prom
   });
 }
 
-export async function getMessages(params: { status?: string; type?: string } = {}): Promise<MessageListResponse> {
+export async function getMessages(params: MessageListParams = {}): Promise<MessageListResponse> {
   const query = toQuery(params);
   return request<MessageListResponse>(`/messages${query}`);
 }
@@ -990,7 +1073,7 @@ export async function archiveMessage(id: string): Promise<StationMessage> {
   });
 }
 
-export async function getAdminMessages(params: { status?: string; type?: string } = {}): Promise<MessageListResponse> {
+export async function getAdminMessages(params: MessageListParams = {}): Promise<MessageListResponse> {
   const query = toQuery(params);
   return request<MessageListResponse>(`/admin/messages${query}`);
 }
@@ -1123,8 +1206,9 @@ export async function replaceAdminRedirects(items: RedirectRule[]): Promise<Redi
   });
 }
 
-export async function getAdminMedia(): Promise<MediaListResponse> {
-  return request<MediaListResponse>("/admin/media");
+export async function getAdminMedia(params: MediaListParams = {}): Promise<MediaListResponse> {
+  const query = toQuery(params);
+  return request<MediaListResponse>(`/admin/media${query}`);
 }
 
 export async function getAdminMediaAsset(id: string): Promise<MediaAsset> {
@@ -1184,8 +1268,9 @@ export async function getAdminAuditLogs(params: AuditLogParams = {}): Promise<Au
   return request<AuditLogListResponse>(`/admin/audit-logs${query}`);
 }
 
-export async function getAdminUsers(): Promise<UserListResponse> {
-  return request<UserListResponse>("/admin/users");
+export async function getAdminUsers(params: AdminUserParams = {}): Promise<UserListResponse> {
+  const query = toQuery(params);
+  return request<UserListResponse>(`/admin/users${query}`);
 }
 
 export async function getAdminUser(id: string): Promise<ManagedUser> {
@@ -1251,8 +1336,9 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
-export async function getAdminPosts(): Promise<AdminPostListResponse> {
-  return request<AdminPostListResponse>("/admin/posts");
+export async function getAdminPosts(params: AdminPostParams = {}): Promise<AdminPostListResponse> {
+  const query = toQuery(params);
+  return request<AdminPostListResponse>(`/admin/posts${query}`);
 }
 
 export async function getAdminPost(id: string): Promise<AdminPost> {

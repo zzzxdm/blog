@@ -31,16 +31,18 @@ func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) 
 }
 
 type Repositories struct {
-	AuthStore      auth.Store
-	PostRepo       posts.Repository
-	CommentRepo    comments.Repository
-	ReactionRepo   reactions.Repository
-	MessageRepo    messages.Repository
-	SubmissionRepo submissions.Repository
-	OperationsRepo operations.Repository
-	UserRepo       users.Repository
-	AdminPostRepo  adminposts.Repository
-	TaxonomyRepo   taxonomies.Repository
+	AuthStore         auth.Store
+	PostRepo          posts.Repository
+	CommentRepo       comments.Repository
+	ReactionRepo      reactions.Repository
+	MessageRepo       messages.Repository
+	SubmissionRepo    submissions.Repository
+	OperationsRepo    operations.Repository
+	UserRepo          users.Repository
+	AdminPostRepo     adminposts.Repository
+	TaxonomyRepo      taxonomies.Repository
+	AuthEmailSender   auth.EmailSender
+	TurnstileVerifier auth.TurnstileVerifier
 }
 
 type authSecuritySettingsReader struct {
@@ -54,8 +56,14 @@ func (reader authSecuritySettingsReader) SecuritySettings(ctx context.Context) (
 	}
 
 	return auth.SecuritySettings{
-		SessionDays:      settings.SessionDays,
-		LoginFailureLock: settings.LoginFailureLock,
+		SessionDays:         settings.SessionDays,
+		LoginFailureLock:    settings.LoginFailureLock,
+		TurnstileEnabled:    settings.TurnstileEnabled,
+		TurnstileSiteKey:    settings.TurnstileSiteKey,
+		TurnstileSecretKey:  settings.TurnstileSecretKey,
+		TurnstileRegister:   settings.TurnstileRegister,
+		TurnstileLogin:      settings.TurnstileLogin,
+		TurnstileSubmission: settings.TurnstileSubmission,
 	}, nil
 }
 
@@ -94,6 +102,12 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	if repos.TaxonomyRepo == nil {
 		repos.TaxonomyRepo = taxonomies.NewMemoryRepository()
 	}
+	if repos.AuthEmailSender == nil {
+		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)
+		if err == nil && emailSender != nil {
+			repos.AuthEmailSender = emailSender
+		}
+	}
 
 	router := gin.New()
 	router.Use(gin.Logger())
@@ -101,6 +115,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(cors(cfg.WebOrigin))
 	router.Use(csrfProtection(cfg.WebOrigin, cfg.PublicURL))
 	router.Use(rateLimit(120, time.Minute))
+	router.Use(authSensitiveRateLimit())
 	router.Static("/uploads", uploadDir(cfg.UploadDir))
 
 	router.Use(navigationRedirects(repos.OperationsRepo))
@@ -119,21 +134,21 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		})
 	})
 
-	auth.RegisterRoutesWithSettings(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo})
+	auth.RegisterRoutesWithDependencies(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo}, repos.AuthEmailSender, repos.TurnstileVerifier)
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
 	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
 	operations.RegisterRoutes(api, repos.OperationsRepo, uploadDir(cfg.UploadDir))
-	users.RegisterRoutes(api, repos.UserRepo, repos.AuthStore)
+	users.RegisterRoutesWithEmailSender(api, repos.UserRepo, repos.AuthStore, repos.AuthEmailSender)
 
 	var publisher posts.Publisher
 	if item, ok := repos.PostRepo.(posts.Publisher); ok {
 		publisher = item
 	}
 	adminposts.RegisterRoutes(api, repos.AdminPostRepo, publisher)
-	submissions.RegisterRoutes(api, repos.SubmissionRepo, repos.MessageRepo, publisher, repos.OperationsRepo)
+	submissions.RegisterRoutesWithTurnstile(api, repos.SubmissionRepo, repos.MessageRepo, publisher, repos.OperationsRepo, repos.TurnstileVerifier)
 
 	return router
 }

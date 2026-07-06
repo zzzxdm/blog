@@ -64,11 +64,7 @@ func (repo *MemoryRepository) List(_ context.Context, userID string, query ListQ
 
 	sortMessages(items)
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: repo.statsLocked(userID, now),
-	}, nil
+	return pagedMessageResult(items, repo.statsLocked(userID, now), query), nil
 }
 
 func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (ListResult, error) {
@@ -87,11 +83,7 @@ func (repo *MemoryRepository) AdminList(_ context.Context, query ListQuery) (Lis
 
 	sortMessages(items)
 
-	return ListResult{
-		Items: items,
-		Total: len(items),
-		Stats: repo.adminStatsLocked(now),
-	}, nil
+	return pagedMessageResult(items, repo.adminStatsLocked(now), query), nil
 }
 
 func (repo *MemoryRepository) Create(_ context.Context, request CreateRequest, sender auth.User) (Message, error) {
@@ -276,8 +268,13 @@ func withStatus(message Message, now time.Time) Message {
 func matchesQuery(message Message, query ListQuery) bool {
 	status := strings.ToLower(strings.TrimSpace(query.Status))
 	messageType := strings.ToLower(strings.TrimSpace(query.Type))
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
 
-	if status != "" && status != "all" && message.Status != status {
+	if status == "sent" {
+		if message.Status == StatusScheduled || message.Status == StatusArchived {
+			return false
+		}
+	} else if status != "" && status != "all" && message.Status != status {
 		return false
 	}
 
@@ -289,7 +286,24 @@ func matchesQuery(message Message, query ListQuery) bool {
 		return false
 	}
 
+	if keyword != "" && !messageContainsKeyword(message, keyword) {
+		return false
+	}
+
 	return true
+}
+
+func messageContainsKeyword(message Message, keyword string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		message.Title,
+		message.Body,
+		message.RecipientName,
+		message.RecipientID,
+		message.TargetTitle,
+		message.Type,
+		message.Status,
+	}, " "))
+	return strings.Contains(haystack, keyword)
 }
 
 func parseScheduledAt(value string) (*time.Time, error) {
@@ -313,6 +327,52 @@ func sortMessages(items []Message) {
 	sort.SliceStable(items, func(i, j int) bool {
 		return items[i].CreatedAt.After(items[j].CreatedAt)
 	})
+}
+
+func pagedMessageResult(items []Message, stats Stats, query ListQuery) ListResult {
+	total := len(items)
+	page := normalizePage(query.Page)
+	pageSize := normalizePageSize(query.PageSize)
+	paged := items
+	if query.All {
+		page = 1
+		pageSize = total
+	} else {
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		paged = items[start:end]
+	}
+
+	return ListResult{
+		Items:    paged,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+		Stats:    stats,
+	}
+}
+
+func normalizePage(page int) int {
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize < 1 {
+		return 10
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
 }
 
 func normalizeType(value string) string {

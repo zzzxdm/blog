@@ -190,5 +190,5 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 }
 
 func canInteract(user auth.User) bool {
-	return user.Status == "" || user.Status == "active"
+	return (user.Status == "" || user.Status == "active") && user.EmailVerified
 }

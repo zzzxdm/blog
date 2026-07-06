@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import {
@@ -17,8 +17,20 @@ import {
 } from "../shared/api";
 import { renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
+import { useToastStore } from "../stores/toast";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (element: HTMLElement, options: Record<string, unknown>) => string;
+      reset: (widgetId: string) => void;
+      remove: (widgetId: string) => void;
+    };
+  }
+}
 
 const auth = useAuthStore();
+const toast = useToastStore();
 const route = useRoute();
 
 const current = ref<Submission | null>(null);
@@ -29,6 +41,10 @@ const error = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const editorArea = ref<HTMLTextAreaElement | null>(null);
+const turnstileEl = ref<HTMLElement | null>(null);
+const turnstileWidgetId = ref("");
+const turnstileToken = ref("");
+const turnstileError = ref("");
 const siteSettings = ref<SiteSettings | null>(null);
 const linkUrl = ref("https://");
 
@@ -47,11 +63,31 @@ const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled
 const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交文章草稿，审核通过后会发布到站点。");
 const submissionLimit = computed(() => siteSettings.value?.submissionLimit || "每天最多 3 篇");
 const canEdit = computed(() => submissionsEnabled.value && (!current.value || current.value.status === "draft" || current.value.status === "returned"));
+const turnstileRequired = computed(() => Boolean(
+  auth.user &&
+  canEdit.value &&
+  siteSettings.value?.turnstileEnabled &&
+  siteSettings.value.turnstileSubmission &&
+  siteSettings.value.turnstileSiteKey
+));
 
 onMounted(() => {
   void loadSiteSettings();
   void loadTaxonomies();
   void loadSubmissionFromQuery();
+});
+
+onBeforeUnmount(() => {
+  removeTurnstile();
+});
+
+watch(turnstileRequired, (required) => {
+  if (required) {
+    void renderTurnstile();
+    return;
+  }
+
+  removeTurnstile();
 });
 
 async function loadSiteSettings() {
@@ -121,7 +157,8 @@ function payload(submit = false): SubmissionPayload {
     tags: tags.value,
     coverImage: coverImage.value,
     slug: slug.value,
-    submit
+    submit,
+    turnstileToken: submit ? turnstileToken.value : ""
   };
 }
 
@@ -152,6 +189,11 @@ async function persist(submit: boolean) {
     message.value = "";
     return;
   }
+  if (submit && turnstileRequired.value && !turnstileToken.value) {
+    error.value = turnstileError.value || "请先完成人机验证";
+    message.value = "";
+    return;
+  }
 
   saving.value = true;
   message.value = "";
@@ -161,9 +203,16 @@ async function persist(submit: boolean) {
     current.value = current.value
       ? await updateSubmission(current.value.id, payload(submit))
       : await createSubmission(payload(submit));
+    if (submit) {
+      resetTurnstile();
+    }
     message.value = submit ? "已提交审核，审核结果会通过站内信通知你。" : "草稿已保存。";
+    toast.success(submit ? "已提交审核" : "草稿已保存", submit ? "审核结果会通过站内信通知你。" : "内容已保存在你的投稿列表。");
   } catch (err) {
     error.value = submissionErrorMessage(err);
+    if (submit) {
+      resetTurnstile();
+    }
   } finally {
     saving.value = false;
   }
@@ -173,8 +222,87 @@ function submissionErrorMessage(err: unknown) {
   if (err instanceof Error && err.message === "submission limit exceeded") {
     return `已达到投稿频率限制（${submissionLimit.value}），请稍后再提交。`;
   }
+  if (err instanceof Error && err.message.includes("turnstile")) {
+    return "人机验证未通过，请重新验证后再提交。";
+  }
 
   return err instanceof Error ? err.message : "投稿保存失败";
+}
+
+async function renderTurnstile() {
+  await nextTick();
+  if (!turnstileRequired.value || !turnstileEl.value || turnstileWidgetId.value) {
+    return;
+  }
+
+  try {
+    await loadTurnstileScript();
+  } catch {
+    turnstileError.value = "人机验证脚本加载失败，请检查浏览器是否能访问 challenges.cloudflare.com。";
+    return;
+  }
+
+  if (!window.turnstile || !turnstileEl.value || !siteSettings.value?.turnstileSiteKey) {
+    turnstileError.value = "人机验证加载失败，请刷新页面后重试。";
+    return;
+  }
+
+  turnstileError.value = "";
+  turnstileWidgetId.value = window.turnstile.render(turnstileEl.value, {
+    sitekey: siteSettings.value.turnstileSiteKey,
+    callback: (token: string) => {
+      turnstileToken.value = token;
+      turnstileError.value = "";
+    },
+    "expired-callback": () => {
+      turnstileToken.value = "";
+    },
+    "error-callback": () => {
+      turnstileToken.value = "";
+      turnstileError.value = "人机验证无法连接，请确认 Site Key 允许当前域名（localhost/127.0.0.1），或改用 Cloudflare Turnstile 本地测试 Key。";
+    }
+  });
+}
+
+function loadTurnstileScript() {
+  if (window.turnstile) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-turnstile]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("turnstile script failed")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.dataset.turnstile = "true";
+    script.addEventListener("load", () => resolve(), { once: true });
+    script.addEventListener("error", () => reject(new Error("turnstile script failed")), { once: true });
+    document.head.appendChild(script);
+  });
+}
+
+function resetTurnstile() {
+  turnstileToken.value = "";
+  turnstileError.value = "";
+  if (turnstileWidgetId.value && window.turnstile) {
+    window.turnstile.reset(turnstileWidgetId.value);
+  }
+}
+
+function removeTurnstile() {
+  turnstileToken.value = "";
+  turnstileError.value = "";
+  if (turnstileWidgetId.value && window.turnstile) {
+    window.turnstile.remove(turnstileWidgetId.value);
+  }
+  turnstileWidgetId.value = "";
 }
 
 function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | "link") {
@@ -408,12 +536,16 @@ function statusClass(value: string) {
               <strong>投稿不会直接公开</strong>
               <p>提交后进入待审核状态。编辑可能会通过、退回修改或拒绝投稿。</p>
               <p>当前频率限制：{{ submissionLimit }}。</p>
-            </div>
-            <p v-if="message" class="muted">{{ message }}</p>
-            <p v-if="error" class="error">{{ error }}</p>
-            <button class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="saveDraft">
-              {{ saving ? "保存中..." : "保存草稿" }}
-            </button>
+	            </div>
+		            <p v-if="error" class="error">{{ error }}</p>
+		            <div v-if="turnstileRequired" class="field">
+		              <label>人机验证</label>
+		              <div ref="turnstileEl"></div>
+		              <p v-if="turnstileError" class="error" role="alert">{{ turnstileError }}</p>
+		            </div>
+	            <button class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="saveDraft">
+	              {{ saving ? "保存中..." : "保存草稿" }}
+	            </button>
             <button class="button" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="submitForReview">
               {{ saving ? "提交中..." : "提交审核" }}
             </button>

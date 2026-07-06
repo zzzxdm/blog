@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   deleteAdminMedia,
   getAdminMedia,
@@ -29,36 +30,14 @@ const selectedAssetIds = ref<string[]>([]);
 const searchQuery = ref("");
 const typeFilter = ref("");
 const sortMode = ref("latest");
+const page = ref(1);
+const pageSize = ref(12);
+const total = ref(0);
 
 const selected = computed(() => assets.value.find((item) => item.id === selectedId.value) || assets.value[0]);
 const selectedBatchAssets = computed(() => assets.value.filter((item) => selectedAssetIds.value.includes(item.id)));
 const deletableBatchAssets = computed(() => selectedBatchAssets.value.filter((item) => item.usageCount === 0));
 const blockedBatchCount = computed(() => selectedBatchAssets.value.length - deletableBatchAssets.value.length);
-const visibleAssets = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  const filtered = assets.value.filter((asset) => {
-    const matchesKeyword = !keyword || [
-      asset.fileName,
-      asset.alt,
-      asset.uploadedBy,
-      asset.category,
-      asset.url
-    ].join(" ").toLowerCase().includes(keyword);
-    const matchesType = typeFilter.value === "" || asset.type === typeFilter.value;
-
-    return matchesKeyword && matchesType;
-  });
-
-  return [...filtered].sort((left, right) => {
-    if (sortMode.value === "size") {
-      return sizeValue(right.sizeLabel) - sizeValue(left.sizeLabel);
-    }
-    if (sortMode.value === "usage") {
-      return right.usageCount - left.usageCount;
-    }
-    return new Date(right.uploadedAt).getTime() - new Date(left.uploadedAt).getTime();
-  });
-});
 
 onMounted(load);
 watch(selected, (asset) => {
@@ -71,15 +50,42 @@ async function load() {
   error.value = "";
 
   try {
-    const response = await getAdminMedia();
+    const response = await getAdminMedia({
+      q: searchQuery.value,
+      type: typeFilter.value,
+      sort: sortMode.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
     assets.value = response.items;
-    selectedId.value = assets.value[0]?.id || "";
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
+    if (!assets.value.some((item) => item.id === selectedId.value)) {
+      selectedId.value = assets.value[0]?.id || "";
+    }
     selectedAssetIds.value = selectedAssetIds.value.filter((id) => assets.value.some((item) => item.id === id));
   } catch (err) {
     error.value = err instanceof Error ? err.message : "媒体库加载失败";
   } finally {
     loading.value = false;
   }
+}
+
+async function applyFilters() {
+  page.value = 1;
+  await load();
+}
+
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
 }
 
 async function selectAsset(id: string) {
@@ -265,19 +271,6 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString("zh-CN");
 }
 
-function sizeValue(label: string) {
-  const value = Number.parseFloat(label);
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  if (label.includes("MB")) {
-    return value * 1024 * 1024;
-  }
-  if (label.includes("KB")) {
-    return value * 1024;
-  }
-  return value;
-}
 </script>
 
 <template>
@@ -299,14 +292,14 @@ function sizeValue(label: string) {
 
     <section class="admin-grid-2">
       <div>
-        <form class="media-toolbar" @submit.prevent="load">
+        <form class="media-toolbar" @submit.prevent="applyFilters">
           <input v-model="searchQuery" class="input" type="search" placeholder="搜索文件名、alt 文本、上传人" aria-label="搜索媒体">
-          <select v-model="typeFilter" class="input" aria-label="文件类型">
+          <select v-model="typeFilter" class="input" aria-label="文件类型" @change="applyFilters">
             <option value="">全部类型</option>
             <option value="image">图片</option>
             <option value="document">文档</option>
           </select>
-          <select v-model="sortMode" class="input" aria-label="排序">
+          <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
             <option value="latest">最近上传</option>
             <option value="size">文件最大</option>
             <option value="usage">使用最多</option>
@@ -323,7 +316,7 @@ function sizeValue(label: string) {
           </p>
 
           <section class="media-grid" aria-label="媒体资源">
-            <article v-for="asset in visibleAssets" :key="asset.id" class="media-card" :class="{ 'is-selected': isBatchSelected(asset.id) }" @click="batchMode ? toggleBatchAsset(asset) : selectAsset(asset.id)">
+            <article v-for="asset in assets" :key="asset.id" class="media-card" :class="{ 'is-selected': isBatchSelected(asset.id) }" @click="batchMode ? toggleBatchAsset(asset) : selectAsset(asset.id)">
               <label v-if="batchMode" class="media-card-checkbox" @click.stop>
                 <input type="checkbox" :checked="isBatchSelected(asset.id)" @change="toggleBatchAsset(asset)">
               </label>
@@ -331,8 +324,19 @@ function sizeValue(label: string) {
               <div v-else class="media-card-file">{{ typeLabel(asset.type) }}</div>
               <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>
             </article>
-            <p v-if="visibleAssets.length === 0" class="muted">没有匹配的媒体资源。</p>
+            <p v-if="assets.length === 0" class="muted">没有匹配的媒体资源。</p>
           </section>
+          <PaginationControls
+            :page="page"
+            :page-size="pageSize"
+            :total="total"
+            :loading="loading"
+            item-label="个资源"
+            show-page-size
+            :page-size-options="[6, 12, 24, 48, 96]"
+            @update:page="setPage"
+            @update:page-size="setPageSize"
+          />
         </template>
       </div>
 

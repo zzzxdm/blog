@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 
+import PaginationControls from "../components/PaginationControls.vue";
 import { getCategories, searchPosts, type Category, type ListResponse, type Post } from "../shared/api";
 
 const pageSize = 10;
@@ -173,10 +174,14 @@ function formatNumber(value: number) {
       </article>
     </section>
 
-    <nav v-if="results && results.total > pageSize" class="pagination" aria-label="搜索分页">
-      <button class="page-button" :class="{ disabled: currentPage <= 1 }" type="button" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)">←</button>
-      <span class="page-button current">{{ currentPage }} / {{ totalPages }}</span>
-      <button class="page-button" :class="{ disabled: currentPage >= totalPages }" type="button" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)">→</button>
-    </nav>
+    <PaginationControls
+      v-if="results && results.total > 0"
+      :page="currentPage"
+      :page-size="pageSize"
+      :total="results.total"
+      :loading="loading"
+      item-label="条结果"
+      @update:page="goPage"
+    />
   </main>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AccountLayout from "../../components/AccountLayout.vue";
@@ -17,9 +17,11 @@ import {
   type SessionInfo
 } from "../../shared/api";
 import { useAuthStore } from "../../stores/auth";
+import { useToastStore } from "../../stores/toast";
 
 const router = useRouter();
 const auth = useAuthStore();
+const toast = useToastStore();
 const settings = ref<AccountSettings | null>(null);
 const sessions = ref<SessionInfo[]>([]);
 const loading = ref(false);
@@ -34,6 +36,7 @@ const currentPassword = ref("");
 const newPassword = ref("");
 const verificationToken = ref("");
 const verificationSaving = ref(false);
+const persistentMessage = computed(() => Boolean(verificationToken.value && message.value));
 
 onMounted(load);
 
@@ -45,6 +48,9 @@ async function load() {
     const [accountSettings, sessionResult] = await Promise.all([getAccountSettings(), getMySessions()]);
     settings.value = accountSettings;
     sessions.value = sessionResult.items;
+    if (auth.user) {
+      auth.user.emailVerified = accountSettings.emailVerified;
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号设置加载失败";
   } finally {
@@ -68,8 +74,10 @@ async function save() {
     if (auth.user) {
       auth.user.displayName = saved.displayName;
       auth.user.avatarText = saved.avatarText;
+      auth.user.emailVerified = saved.emailVerified;
     }
     message.value = "账号设置已保存。";
+    toast.success("账号设置已保存", "公开资料和偏好已更新。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号设置保存失败";
   } finally {
@@ -85,6 +93,7 @@ function resetAvatarText() {
   settings.value.avatarText = normalizeAvatarText("", settings.value.displayName);
   message.value = "头像已重置为昵称首字，保存设置后生效。";
   error.value = "";
+  toast.info("头像已重置", "保存设置后生效。");
 }
 
 function normalizeAvatarText(value: string, displayName: string) {
@@ -119,6 +128,7 @@ async function savePassword() {
     currentPassword.value = "";
     newPassword.value = "";
     message.value = "密码已更新。";
+    toast.success("密码已更新", "下次登录请使用新密码。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "密码修改失败";
   } finally {
@@ -135,6 +145,9 @@ async function sendVerification() {
     const response = await requestEmailVerification();
     verificationToken.value = response.verificationToken || "";
     message.value = response.verificationToken ? `验证 token：${response.verificationToken}` : "验证入口已发送。";
+    if (!response.verificationToken) {
+      toast.success("验证入口已发送", "请检查邮箱收件箱。");
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "发送验证失败";
   } finally {
@@ -155,8 +168,12 @@ async function confirmVerification() {
   try {
     const response = await verifyEmail(verificationToken.value);
     auth.user = response.user;
+    if (settings.value) {
+      settings.value.emailVerified = response.user.emailVerified;
+    }
     verificationToken.value = "";
     message.value = "邮箱已验证。";
+    toast.success("邮箱已验证", "现在可以投稿、评论和收藏。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "邮箱验证失败";
   } finally {
@@ -176,6 +193,7 @@ async function removeSession(session: SessionInfo) {
   try {
     await deleteMySession(session.id);
     message.value = "登录设备已移除。";
+    toast.success("登录设备已移除", session.device);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "登录设备移除失败";
@@ -199,6 +217,7 @@ async function exportData() {
     link.click();
     URL.revokeObjectURL(url);
     message.value = "账号数据已导出。";
+    toast.success("账号数据已导出", "下载文件已生成。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号数据导出失败";
   } finally {
@@ -218,6 +237,7 @@ async function deleteAccount() {
   try {
     await deleteMyAccount();
     auth.user = null;
+    toast.success("账号已注销", "已退出当前账号。");
     await router.push("/");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号注销失败";
@@ -244,7 +264,7 @@ function formatDate(value: string) {
 
     <p v-if="loading" class="muted">正在加载账号设置...</p>
     <p v-else-if="error" class="error">{{ error }}</p>
-    <p v-if="message" class="muted">{{ message }}</p>
+    <p v-if="persistentMessage" class="muted">{{ message }}</p>
 
     <template v-if="settings">
       <section class="stats-grid" aria-label="账号状态">
@@ -271,14 +291,14 @@ function formatDate(value: string) {
           <div class="settings-stack">
             <div class="field"><label for="email">登录邮箱</label><input v-model="settings.email" class="input" id="email" readonly></div>
             <div class="review-note">
-              <strong>{{ auth.user?.emailVerified ? "邮箱已验证" : "邮箱未验证" }}</strong>
+              <strong>{{ settings.emailVerified ? "邮箱已验证" : "邮箱未验证" }}</strong>
               <p>邮箱用于找回密码、重要账号事件提醒和后续两步验证。</p>
             </div>
-            <div v-if="!auth.user?.emailVerified" class="field">
+            <div v-if="!settings.emailVerified" class="field">
               <label for="verification-token">邮箱验证 token</label>
               <input v-model="verificationToken" class="input" id="verification-token">
             </div>
-            <div v-if="!auth.user?.emailVerified" class="header-actions">
+            <div v-if="!settings.emailVerified" class="header-actions">
               <button class="button-secondary" type="button" :disabled="verificationSaving" @click="sendVerification">{{ verificationSaving ? "发送中..." : "发送验证" }}</button>
               <button class="button-secondary" type="button" :disabled="verificationSaving || !verificationToken" @click="confirmVerification">确认验证</button>
             </div>

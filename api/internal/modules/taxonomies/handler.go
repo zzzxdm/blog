@@ -3,6 +3,8 @@ package taxonomies
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"blog/api/internal/modules/auth"
 
@@ -38,8 +40,10 @@ func (handler *Handler) ListCategories(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"items": categories,
-		"total": len(categories),
+		"items":    pageItems(categories, ctx),
+		"page":     taxonomyPage(ctx),
+		"pageSize": taxonomyPageSize(ctx, len(categories)),
+		"total":    len(categories),
 	})
 }
 
@@ -51,8 +55,10 @@ func (handler *Handler) ListTags(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"items": tags,
-		"total": len(tags),
+		"items":    pageItems(tags, ctx),
+		"page":     taxonomyPage(ctx),
+		"pageSize": taxonomyPageSize(ctx, len(tags)),
+		"total":    len(tags),
 	})
 }
 
@@ -165,4 +171,58 @@ func (handler *Handler) writeError(ctx *gin.Context, err error, resource string)
 	}
 
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update " + resource})
+}
+
+func pageItems[T any](items []T, ctx *gin.Context) []T {
+	pageSize := parsePositiveInt(ctx.Query("pageSize"))
+	if pageSize < 1 {
+		return items
+	}
+	page := parsePositiveInt(ctx.Query("page"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	start := (page - 1) * pageSize
+	if start > len(items) {
+		start = len(items)
+	}
+	end := start + pageSize
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[start:end]
+}
+
+func taxonomyPage(ctx *gin.Context) int {
+	pageSize := parsePositiveInt(ctx.Query("pageSize"))
+	if pageSize < 1 {
+		return 1
+	}
+	page := parsePositiveInt(ctx.Query("page"))
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func taxonomyPageSize(ctx *gin.Context, total int) int {
+	pageSize := parsePositiveInt(ctx.Query("pageSize"))
+	if pageSize < 1 {
+		return total
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 1 {
+		return 0
+	}
+	return parsed
 }

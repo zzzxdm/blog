@@ -49,7 +49,14 @@ func (handler *Handler) List(ctx *gin.Context) {
 		return
 	}
 
-	result, err := handler.repo.List(ctx.Request.Context())
+	result, err := handler.repo.List(ctx.Request.Context(), ListQuery{
+		Keyword:  ctx.Query("q"),
+		Status:   ctx.Query("status"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
+		All:      boolQuery(ctx.Query("all")),
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load admin posts"})
 		return
@@ -255,4 +262,18 @@ func previewSignature(payload string) string {
 	mac := hmac.New(sha256.New, []byte(previewTokenSecret))
 	_, _ = mac.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || parsed < 1 {
+		return 0
+	}
+
+	return parsed
+}
+
+func boolQuery(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return value == "1" || value == "true" || value == "yes"
 }

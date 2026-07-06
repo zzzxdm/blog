@@ -69,6 +69,98 @@ img {
   border: 0;
 }
 
+.toast-viewport {
+  position: fixed;
+  top: 78px;
+  right: 18px;
+  z-index: 80;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast-item {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 14px 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+
+.toast-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.toast-item.success .toast-dot {
+  background: var(--green);
+}
+
+.toast-item.error .toast-dot {
+  background: var(--rose);
+}
+
+.toast-item.warning .toast-dot {
+  background: var(--amber);
+}
+
+.toast-item.info .toast-dot {
+  background: var(--rust);
+}
+
+.toast-eyebrow {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.toast-item strong {
+  display: block;
+  line-height: 1.35;
+}
+
+.toast-item p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.toast-item button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toast-item button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 button,
 input,
 select,
@@ -701,7 +793,7 @@ textarea {
   line-height: 1.3;
 }
 
-.rank-list span,
+.rank-list span:not(.rank-number),
 .link-list span {
   display: block;
   margin-top: 4px;
@@ -970,6 +1062,7 @@ textarea {
   justify-content: center;
   gap: 8px;
   margin-top: 24px;
+  margin-bottom: 24px;
 }
 
 .page-button {
@@ -993,6 +1086,37 @@ textarea {
 
 .page-button.disabled {
   opacity: 0.45;
+}
+
+.pagination-summary {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pagination-size .input {
+  width: 84px;
+  min-height: 38px;
+}
+
+.pagination-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pagination-jump .input {
+  width: 78px;
+  min-height: 38px;
 }
 
 .article-shell {
@@ -1970,7 +2094,7 @@ textarea {
 
 .topic-list-item {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 90px;
+  grid-template-columns: 96px minmax(0, 1fr) 90px auto;
   gap: 12px;
   align-items: center;
   border: 1px solid var(--line);
@@ -1984,6 +2108,10 @@ textarea {
   aspect-ratio: 4 / 3;
   border-radius: 8px;
   object-fit: cover;
+}
+
+.topic-list-item .button-secondary {
+  justify-self: end;
 }
 
 .stepper {
@@ -2217,6 +2345,18 @@ textarea {
   gap: 10px;
   border-bottom: 1px solid var(--line);
   padding: 14px;
+}
+
+.user-table-toolbar {
+  grid-template-columns: minmax(0, 1fr) 150px 150px auto;
+}
+
+.user-table-panel td {
+  vertical-align: middle;
+}
+
+.user-table-panel td:nth-child(n + 3):nth-child(-n + 7) {
+  white-space: nowrap;
 }
 
 table {
@@ -2628,6 +2768,7 @@ textarea.input {
   .archive-toolbar,
   .topic-strip-grid,
   .table-toolbar,
+  .user-table-toolbar,
   .editor-grid {
     grid-template-columns: 1fr;
   }
@@ -2685,6 +2826,10 @@ textarea.input {
     aspect-ratio: 16 / 9;
   }
 
+  .topic-list-item .button-secondary {
+    justify-self: start;
+  }
+
   .markdown-area {
     min-height: 360px;
     border-right: 0;
@@ -2709,6 +2854,14 @@ textarea.input {
 
   .auth-copy {
     padding: 28px 22px;
+  }
+
+  .toast-viewport {
+    top: auto;
+    right: 12px;
+    bottom: 14px;
+    left: 12px;
+    width: auto;
   }
 
   .footbar-inner {

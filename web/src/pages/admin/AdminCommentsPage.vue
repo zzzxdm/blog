@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   exportAdminComments,
   getAdminComments,
@@ -22,36 +23,10 @@ const error = ref("");
 const message = ref("");
 const searchQuery = ref("");
 const sortMode = ref("latest");
-
-const visibleComments = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  const riskRank: Record<string, number> = { 高: 3, 中: 2, 低: 1 };
-  const filtered = comments.value.filter((item) => {
-    if (!keyword) {
-      return true;
-    }
-
-    return [
-      item.body,
-      item.authorName,
-      item.authorId,
-      item.postTitle || "",
-      item.postSlug,
-      item.riskLevel || ""
-    ].join(" ").toLowerCase().includes(keyword);
-  });
-
-  return [...filtered].sort((left, right) => {
-    if (sortMode.value === "likes") {
-      return right.likeCount - left.likeCount;
-    }
-    if (sortMode.value === "risk") {
-      return (riskRank[right.riskLevel || "低"] || 0) - (riskRank[left.riskLevel || "低"] || 0);
-    }
-    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
-  });
-});
-const approvableComments = computed(() => visibleComments.value.filter((item) => item.status === "pending"));
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const approvableComments = computed(() => comments.value.filter((item) => item.status === "pending"));
 
 onMounted(load);
 
@@ -60,14 +35,39 @@ async function load() {
   error.value = "";
 
   try {
-    const response = await getAdminComments(status.value);
+    const response = await getAdminComments({
+      status: status.value,
+      q: searchQuery.value,
+      sort: sortMode.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
     comments.value = response.items;
     stats.value = response.stats;
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "评论列表加载失败";
   } finally {
     loading.value = false;
   }
+}
+
+async function applyFilters() {
+  page.value = 1;
+  await load();
+}
+
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
 }
 
 async function setStatus(item: Comment, nextStatus: Comment["status"]) {
@@ -191,9 +191,9 @@ function statusClass(value: Comment["status"]) {
     <p v-if="message" class="muted">{{ message }}</p>
 
     <section class="table-panel" aria-label="评论列表">
-      <form class="table-toolbar" @submit.prevent="load">
+      <form class="table-toolbar" @submit.prevent="applyFilters">
         <input v-model="searchQuery" class="input" type="search" placeholder="搜索评论内容、用户、文章" aria-label="搜索评论">
-        <select v-model="status" class="input" aria-label="评论状态" @change="load">
+        <select v-model="status" class="input" aria-label="评论状态" @change="applyFilters">
           <option value="">全部状态</option>
           <option value="pending">待审核</option>
           <option value="approved">已通过</option>
@@ -201,7 +201,7 @@ function statusClass(value: Comment["status"]) {
           <option value="spam">垃圾评论</option>
           <option value="deleted">已删除</option>
         </select>
-        <select v-model="sortMode" class="input" aria-label="排序">
+        <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
           <option value="latest">最新提交</option>
           <option value="risk">风险优先</option>
           <option value="likes">点赞最多</option>
@@ -222,7 +222,7 @@ function statusClass(value: Comment["status"]) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in visibleComments" :key="item.id">
+          <tr v-for="item in comments" :key="item.id">
             <td>
               <strong>{{ item.body }}</strong>
               <div class="meta-row"><span>{{ item.likeCount }} 次点赞</span><span v-if="item.parentId">回复 {{ item.parentId }}</span></div>
@@ -240,11 +240,23 @@ function statusClass(value: Comment["status"]) {
               </div>
             </td>
           </tr>
-          <tr v-if="visibleComments.length === 0">
+          <tr v-if="comments.length === 0">
             <td colspan="7" class="muted">没有匹配的评论。</td>
           </tr>
         </tbody>
       </table>
+      <PaginationControls
+        v-if="!loading"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :loading="loading"
+        item-label="条评论"
+        show-page-size
+        :page-size-options="[5, 10, 20, 50, 100]"
+        @update:page="setPage"
+        @update:page-size="setPageSize"
+      />
     </section>
   </AdminLayout>
 </template>

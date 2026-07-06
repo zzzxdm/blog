@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   getAdminUsers,
   getAdminSubmissions,
@@ -39,6 +40,9 @@ const editCoverImage = ref("");
 const editSlug = ref("");
 const searchQuery = ref("");
 const sortMode = ref("latest");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
 
 const selected = computed(() => submissions.value.find((item) => item.id === selectedId.value) || submissions.value[0]);
 const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).map((item) => item.trim()).filter(Boolean) || []);
@@ -55,37 +59,6 @@ const authorSubmissionStats = computed(() => {
     result[item.status]++;
   });
   return result;
-});
-const visibleSubmissions = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  const riskRank: Record<string, number> = { 高: 3, 中: 2, 低: 1 };
-  const filtered = submissions.value.filter((item) => {
-    if (!keyword) {
-      return true;
-    }
-
-    return [
-      item.title,
-      item.summary,
-      item.authorName,
-      item.authorId,
-      item.category,
-      item.slug,
-      item.tags.join(" "),
-      item.riskLevel
-    ].join(" ").toLowerCase().includes(keyword);
-  });
-
-  return [...filtered].sort((left, right) => {
-    if (sortMode.value === "risk") {
-      return (riskRank[right.riskLevel] || 0) - (riskRank[left.riskLevel] || 0);
-    }
-    if (sortMode.value === "quality") {
-      return right.wordCount - left.wordCount;
-    }
-
-    return submissionTime(right) - submissionTime(left);
-  });
 });
 
 onMounted(load);
@@ -107,13 +80,22 @@ async function load() {
   error.value = "";
 
   try {
-    const filteredPromise = getAdminSubmissions(filterStatus.value);
-    const allPromise = filterStatus.value ? getAdminSubmissions("") : filteredPromise;
-    const [response, allResponse, userResponse] = await Promise.all([filteredPromise, allPromise, getAdminUsers()]);
+    const filteredPromise = getAdminSubmissions({
+      status: filterStatus.value,
+      q: searchQuery.value,
+      sort: sortMode.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
+    const allPromise = getAdminSubmissions({ all: true });
+    const [response, allResponse, userResponse] = await Promise.all([filteredPromise, allPromise, getAdminUsers({ all: true })]);
     submissions.value = response.items;
     allSubmissions.value = allResponse.items;
     users.value = userResponse.items;
     stats.value = response.stats;
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
     if (!submissions.value.some((item) => item.id === selectedId.value)) {
       selectedId.value = submissions.value[0]?.id || "";
     }
@@ -122,6 +104,22 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+async function applyFilters() {
+  page.value = 1;
+  await load();
+}
+
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
 }
 
 async function review(action: "approve" | "return" | "reject") {
@@ -244,10 +242,6 @@ function formatDate(value?: string) {
   });
 }
 
-function submissionTime(item: Submission) {
-  return new Date(item.submittedAt || item.updatedAt || item.createdAt).getTime();
-}
-
 function statusText(value: Submission["status"]) {
   if (value === "submitted") {
     return "待审核";
@@ -313,16 +307,16 @@ function userStatusText(value?: ManagedUser["status"]) {
     <section class="admin-grid-2">
       <div class="settings-stack">
         <section class="table-panel">
-          <form class="table-toolbar" @submit.prevent="load">
+          <form class="table-toolbar" @submit.prevent="applyFilters">
             <input v-model="searchQuery" class="input" type="search" placeholder="搜索投稿标题、投稿人、标签" aria-label="搜索投稿">
-            <select v-model="filterStatus" class="input" aria-label="投稿状态" @change="load">
+            <select v-model="filterStatus" class="input" aria-label="投稿状态" @change="applyFilters">
               <option value="">全部状态</option>
               <option value="submitted">待审核</option>
               <option value="returned">退回修改</option>
               <option value="published">已发布</option>
               <option value="rejected">已拒绝</option>
             </select>
-            <select v-model="sortMode" class="input" aria-label="排序">
+            <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
               <option value="latest">最近提交</option>
               <option value="risk">高风险优先</option>
               <option value="quality">高质量优先</option>
@@ -342,7 +336,7 @@ function userStatusText(value?: ManagedUser["status"]) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in visibleSubmissions" :key="item.id">
+              <tr v-for="item in submissions" :key="item.id">
                 <td>
                   <strong>{{ item.title }}</strong>
                   <div class="meta-row"><span>{{ item.category }}</span><span>{{ item.wordCount }} 字</span></div>
@@ -353,11 +347,23 @@ function userStatusText(value?: ManagedUser["status"]) {
                 <td>{{ formatDate(item.submittedAt) }}</td>
                 <td><button class="button-secondary" type="button" @click="selectedId = item.id">查看</button></td>
               </tr>
-              <tr v-if="visibleSubmissions.length === 0">
+              <tr v-if="submissions.length === 0">
                 <td colspan="6" class="muted">没有匹配的投稿。</td>
               </tr>
             </tbody>
           </table>
+          <PaginationControls
+            v-if="!loading"
+            :page="page"
+            :page-size="pageSize"
+            :total="total"
+            :loading="loading"
+            item-label="篇投稿"
+            show-page-size
+            :page-size-options="[5, 10, 20, 50, 100]"
+            @update:page="setPage"
+            @update:page-size="setPageSize"
+          />
         </section>
 
         <section v-if="selected" class="editor-panel">

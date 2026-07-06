@@ -11,14 +11,16 @@ type User struct {
 }
 
 type Credentials struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	TurnstileToken string `json:"turnstileToken"`
 }
 
 type RegisterRequest struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"displayName"`
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	DisplayName    string `json:"displayName"`
+	TurnstileToken string `json:"turnstileToken"`
 }
 
 type InviteUserRequest struct {

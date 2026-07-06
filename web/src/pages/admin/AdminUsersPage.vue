@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
+  ApiError,
   deleteAdminUser,
   exportAdminUsers,
   getAdminUsers,
@@ -14,8 +16,10 @@ import {
   type UserStats
 } from "../../shared/api";
 import { downloadJson, exportFileName } from "../../shared/download";
+import { useToastStore } from "../../stores/toast";
 
 const users = ref<ManagedUser[]>([]);
+const toast = useToastStore();
 const stats = ref<UserStats>({ total: 0, emailVerified: 0, authors: 0, muted: 0, banned: 0 });
 const loading = ref(false);
 const exporting = ref(false);
@@ -34,42 +38,62 @@ const selectedId = ref("");
 const searchQuery = ref("");
 const statusFilter = ref("");
 const roleFilter = ref("");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
+const persistentMessage = computed(() => message.value.includes("token") || message.value.includes("临时密码"));
 
 const selectedUser = computed(() => users.value.find((user) => user.id === selectedId.value));
-const visibleUsers = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  return users.value.filter((user) => {
-    const matchesKeyword = !keyword || [
-      user.displayName,
-      user.email,
-      user.id,
-      roleText(user.role),
-      statusText(user.status),
-      user.moderationNote
-    ].join(" ").toLowerCase().includes(keyword);
-    const matchesStatus = statusFilter.value === ""
-      || (statusFilter.value === "unverified" ? !user.emailVerified : user.status === statusFilter.value);
-    const matchesRole = roleFilter.value === "" || user.role === roleFilter.value;
-
-    return matchesKeyword && matchesStatus && matchesRole;
-  });
-});
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
+const visibleUsers = computed(() => users.value);
 
 onMounted(load);
+
+watch([statusFilter, roleFilter], () => {
+  applyFilters();
+});
 
 async function load() {
   loading.value = true;
   error.value = "";
 
   try {
-    const response = await getAdminUsers();
+    const response = await getAdminUsers({
+      page: page.value,
+      pageSize: pageSize.value,
+      q: searchQuery.value.trim(),
+      status: statusFilter.value,
+      role: roleFilter.value
+    });
     users.value = response.items;
     stats.value = response.stats;
+    total.value = response.total;
+    page.value = response.page;
+    if (users.value.length === 0 && total.value > 0 && page.value > totalPages.value) {
+      page.value = totalPages.value;
+      await load();
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户列表加载失败";
   } finally {
     loading.value = false;
   }
+}
+
+function applyFilters() {
+  page.value = 1;
+  void load();
+}
+
+async function goPage(nextPage: number) {
+  page.value = Math.min(Math.max(nextPage, 1), totalPages.value);
+  await load();
+}
+
+async function changePageSize(nextPageSize: number) {
+  pageSize.value = nextPageSize;
+  page.value = 1;
+  await load();
 }
 
 function viewUser(user: ManagedUser) {
@@ -86,6 +110,7 @@ async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
   try {
     await updateAdminUserStatus(user.id, status);
     message.value = "用户状态已更新。";
+    toast.success("用户状态已更新", `${user.displayName}：${statusText(status)}`);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户状态更新失败";
@@ -106,6 +131,7 @@ async function setRole(user: ManagedUser, role: string) {
   try {
     await updateAdminUserRole(user.id, role);
     message.value = "用户角色已更新。";
+    toast.success("用户角色已更新", `${user.displayName}：${roleText(role)}`);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户角色更新失败";
@@ -122,6 +148,7 @@ async function exportUsers() {
   try {
     downloadJson(exportFileName("users"), await exportAdminUsers());
     message.value = "用户数据导出已生成。";
+    toast.success("用户数据已导出", "下载文件已生成。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户导出失败";
   } finally {
@@ -144,10 +171,32 @@ async function inviteUser() {
     inviteName.value = "";
     inviteRole.value = "author";
     inviteOpen.value = false;
-    message.value = result.resetToken ? `已邀请 ${result.user.displayName}，首次设置密码 token：${result.resetToken}` : `已邀请 ${result.user.displayName}。`;
+    if (result.resetToken || result.initialPassword) {
+      const manualSecret = `临时密码：${result.initialPassword || "未返回"}，重置 token：${result.resetToken || "未返回"}`;
+      message.value = result.delivery === "email-failed"
+        ? `已邀请 ${result.user.displayName}，邮件发送失败，${manualSecret}`
+        : `已邀请 ${result.user.displayName}，${manualSecret}`;
+    } else {
+      message.value = `已邀请 ${result.user.displayName}。`;
+    }
+    if (result.delivery === "email-failed") {
+      toast.warning("邀请邮件发送失败", "请复制页面中的临时密码和重置 token 发给用户。");
+    } else {
+      toast.success("用户已邀请", result.delivery === "email" ? `已向 ${result.user.email} 发送临时密码和重置入口。` : "临时密码和重置 token 已显示在页面中。");
+    }
     await load();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "邀请失败";
+    if (err instanceof ApiError && err.status === 409) {
+      const email = inviteEmail.value.trim();
+      searchQuery.value = email;
+      page.value = 1;
+      await load();
+      inviteOpen.value = false;
+      error.value = `该邮箱已在用户列表中：${email}。可以直接选中该用户调整角色，或点击“重置密码”重新发送登录入口。`;
+      toast.warning("用户已存在", "已帮你用该邮箱过滤用户列表。");
+    } else {
+      error.value = err instanceof Error ? err.message : "邀请失败";
+    }
   } finally {
     inviting.value = false;
   }
@@ -160,7 +209,12 @@ async function resetPassword(user: ManagedUser) {
 
   try {
     const result = await requestAdminUserPasswordReset(user.id);
-    message.value = result.resetToken ? `已生成重置 token：${result.resetToken}` : `已向 ${result.user.email} 发送重置入口。`;
+    message.value = result.resetToken ? `邮件发送失败，重置 token：${result.resetToken}` : `已向 ${result.user.email} 发送重置入口。`;
+    if (result.delivery === "email-failed") {
+      toast.warning("重置邮件发送失败", "请复制页面中的 token 发给用户。");
+    } else {
+      toast.success("重置入口已生成", result.delivery === "email" ? `已向 ${result.user.email} 发送重置入口。` : "重置 token 已显示在页面中。");
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "密码重置失败";
   } finally {
@@ -183,6 +237,7 @@ async function deleteUser(user: ManagedUser) {
       selectedId.value = "";
     }
     message.value = "用户已删除。";
+    toast.success("用户已删除", user.displayName);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户删除失败";
@@ -213,6 +268,7 @@ function statusClass(status: ManagedUser["status"]) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("zh-CN", {
+    year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -242,7 +298,7 @@ function formatDate(value: string) {
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="message" class="muted">{{ message }}</p>
+    <p v-if="persistentMessage" class="muted">{{ message }}</p>
 
     <section v-if="selectedUser" class="panel">
       <div class="panel-title">
@@ -295,8 +351,8 @@ function formatDate(value: string) {
       </form>
     </section>
 
-    <section class="table-panel" aria-label="用户列表">
-      <form class="table-toolbar" @submit.prevent="load">
+    <section class="table-panel user-table-panel" aria-label="用户列表">
+      <form class="table-toolbar user-table-toolbar" @submit.prevent="applyFilters">
         <input v-model="searchQuery" class="input" type="search" placeholder="搜索用户名、邮箱、角色" aria-label="搜索用户">
         <select v-model="statusFilter" class="input" aria-label="用户状态">
           <option value="">全部状态</option>
@@ -313,6 +369,7 @@ function formatDate(value: string) {
           <option value="editor">编辑</option>
           <option value="admin">管理员</option>
         </select>
+        <button class="button" type="submit" :disabled="loading">搜索</button>
       </form>
 
       <p v-if="loading" class="muted">正在加载用户...</p>
@@ -324,6 +381,7 @@ function formatDate(value: string) {
             <th>状态</th>
             <th>评论</th>
             <th>收藏</th>
+            <th>注册时间</th>
             <th>最近登录</th>
             <th>操作</th>
           </tr>
@@ -348,6 +406,7 @@ function formatDate(value: string) {
             <td><span class="status" :class="statusClass(user.status)">{{ statusText(user.status) }}</span></td>
             <td>{{ user.commentCount }}</td>
             <td>{{ user.bookmarkCount }}</td>
+            <td>{{ formatDate(user.registeredAt) }}</td>
             <td>{{ formatDate(user.lastLoginAt) }}</td>
             <td>
               <div class="header-actions">
@@ -361,10 +420,22 @@ function formatDate(value: string) {
             </td>
           </tr>
           <tr v-if="visibleUsers.length === 0">
-            <td colspan="7" class="muted">没有匹配的用户。</td>
+            <td colspan="8" class="muted">没有匹配的用户。</td>
           </tr>
         </tbody>
       </table>
+
+      <PaginationControls
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :loading="loading"
+        item-label="个用户"
+        show-page-size
+        :page-size-options="[2, 5, 10, 20, 50, 100]"
+        @update:page="goPage"
+        @update:page-size="changePageSize"
+      />
     </section>
   </AdminLayout>
 </template>

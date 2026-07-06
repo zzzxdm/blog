@@ -19,6 +19,11 @@ func TestUpdateSettingsNormalizesInput(t *testing.T) {
 		SubmissionGuide:     "  原创优先  ",
 		MailProvider:        " ",
 		FromEmail:           " ",
+		TurnstileSiteKey:    "  site-key  ",
+		TurnstileSecretKey:  "  secret-key  ",
+		TurnstileRegister:   true,
+		TurnstileLogin:      true,
+		TurnstileSubmission: true,
 		SessionDays:         -3,
 		BackupCycle:         " ",
 		BackupRetentionDays: 999,
@@ -56,6 +61,9 @@ func TestUpdateSettingsNormalizesInput(t *testing.T) {
 	}
 	if settings.MailProvider != "Resend" || settings.FromEmail != "noreply@example.com" {
 		t.Fatalf("mail settings = %q/%q, want defaults", settings.MailProvider, settings.FromEmail)
+	}
+	if settings.TurnstileSiteKey != "site-key" || settings.TurnstileSecretKey != "secret-key" || !settings.TurnstileRegister || !settings.TurnstileLogin || !settings.TurnstileSubmission {
+		t.Fatalf("turnstile settings not normalized: %+v", settings)
 	}
 	if settings.SessionDays != 7 {
 		t.Fatalf("SessionDays = %d, want default", settings.SessionDays)

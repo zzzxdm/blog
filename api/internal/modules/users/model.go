@@ -27,9 +27,20 @@ type UserStats struct {
 }
 
 type UserListResult struct {
-	Items []ManagedUser `json:"items"`
-	Total int           `json:"total"`
-	Stats UserStats     `json:"stats"`
+	Items    []ManagedUser `json:"items"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"pageSize"`
+	Total    int           `json:"total"`
+	Stats    UserStats     `json:"stats"`
+}
+
+type ListQuery struct {
+	Page     int
+	PageSize int
+	Keyword  string
+	Status   string
+	Role     string
+	All      bool
 }
 
 type PasswordResetResult struct {
@@ -40,10 +51,11 @@ type PasswordResetResult struct {
 }
 
 type InvitationResult struct {
-	OK         bool        `json:"ok"`
-	User       ManagedUser `json:"user"`
-	ResetToken string      `json:"resetToken,omitempty"`
-	Delivery   string      `json:"delivery"`
+	OK              bool        `json:"ok"`
+	User            ManagedUser `json:"user"`
+	InitialPassword string      `json:"initialPassword,omitempty"`
+	ResetToken      string      `json:"resetToken,omitempty"`
+	Delivery        string      `json:"delivery"`
 }
 
 type StatusRequest struct {
@@ -58,6 +70,7 @@ type AccountSettings struct {
 	DisplayName              string    `json:"displayName"`
 	Username                 string    `json:"username"`
 	Email                    string    `json:"email"`
+	EmailVerified            bool      `json:"emailVerified"`
 	AvatarText               string    `json:"avatarText"`
 	Bio                      string    `json:"bio"`
 	TwoFactor                bool      `json:"twoFactor"`

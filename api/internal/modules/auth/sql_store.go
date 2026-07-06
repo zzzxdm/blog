@@ -124,19 +124,19 @@ func (store *SQLStore) Register(request RegisterRequest) (User, string, error) {
 	return user, token, nil
 }
 
-func (store *SQLStore) InviteUser(request InviteUserRequest) (User, string, error) {
+func (store *SQLStore) InviteUser(request InviteUserRequest) (User, InvitationSecrets, error) {
 	normalizedEmail := normalizeEmail(request.Email)
 	displayName := strings.TrimSpace(request.DisplayName)
 	if displayName == "" {
 		displayName = strings.Split(normalizedEmail, "@")[0]
 	}
 	if normalizedEmail == "" {
-		return User{}, "", ErrInvalidCredentials
+		return User{}, InvitationSecrets{}, ErrInvalidCredentials
 	}
 
 	tx, err := store.db.BeginTx(context.Background(), nil)
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 	committed := false
 	defer func() {
@@ -147,19 +147,19 @@ func (store *SQLStore) InviteUser(request InviteUserRequest) (User, string, erro
 
 	var exists bool
 	if err := tx.QueryRowContext(context.Background(), `SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)`, normalizedEmail).Scan(&exists); err != nil {
-		return User{}, "", fmt.Errorf("check invitation email: %w", err)
+		return User{}, InvitationSecrets{}, fmt.Errorf("check invitation email: %w", err)
 	}
 	if exists {
-		return User{}, "", ErrEmailExists
+		return User{}, InvitationSecrets{}, ErrEmailExists
 	}
 
-	tempPassword, err := randomToken()
+	tempPassword, err := randomTemporaryPassword()
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(tempPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 
 	user := User{
@@ -176,26 +176,26 @@ func (store *SQLStore) InviteUser(request InviteUserRequest) (User, string, erro
 		INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, user.ID, user.Email, user.DisplayName, user.Role, user.Status, user.AvatarText, user.EmailVerified, string(hash)); err != nil {
-		return User{}, "", fmt.Errorf("insert invited user: %w", err)
+		return User{}, InvitationSecrets{}, fmt.Errorf("insert invited user: %w", err)
 	}
 
 	resetToken, err := randomToken()
 	if err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 	if _, err := tx.ExecContext(context.Background(), `
 		INSERT INTO password_reset_tokens (token, user_id, expires_at)
 		VALUES ($1, $2, $3)
 	`, resetToken, user.ID, store.now().Add(30*time.Minute)); err != nil {
-		return User{}, "", fmt.Errorf("insert invitation reset token: %w", err)
+		return User{}, InvitationSecrets{}, fmt.Errorf("insert invitation reset token: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return User{}, "", err
+		return User{}, InvitationSecrets{}, err
 	}
 	committed = true
 
-	return user, resetToken, nil
+	return user, InvitationSecrets{InitialPassword: tempPassword, ResetToken: resetToken}, nil
 }
 
 func (store *SQLStore) UpdateRole(userID string, role string) (User, error) {
@@ -475,7 +475,7 @@ func (store *SQLStore) ResetPassword(token string, newPassword string) error {
 		return fmt.Errorf("load password reset token: %w", err)
 	}
 
-	if _, err := tx.ExecContext(context.Background(), "UPDATE users SET password_hash = $2 WHERE id = $1", userID, string(newHash)); err != nil {
+	if _, err := tx.ExecContext(context.Background(), "UPDATE users SET password_hash = $2, email_verified = true WHERE id = $1", userID, string(newHash)); err != nil {
 		return fmt.Errorf("reset password: %w", err)
 	}
 	if _, err := tx.ExecContext(context.Background(), "UPDATE password_reset_tokens SET used_at = now() WHERE token = $1", strings.TrimSpace(token)); err != nil {

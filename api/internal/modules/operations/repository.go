@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,7 @@ type Repository interface {
 	RunBackup(ctx context.Context) (BackupResult, error)
 	GetNavigation(ctx context.Context) (Navigation, error)
 	UpdateNavigation(ctx context.Context, navigation Navigation) (Navigation, error)
-	ListMedia(ctx context.Context) (MediaListResult, error)
+	ListMedia(ctx context.Context, query MediaListQuery) (MediaListResult, error)
 	CreateMedia(ctx context.Context, asset MediaAsset) (MediaAsset, error)
 	GetMedia(ctx context.Context, id string) (MediaAsset, error)
 	UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error)
@@ -105,15 +106,14 @@ func (repo *MemoryRepository) UpdateNavigation(_ context.Context, navigation Nav
 	return cloneNavigation(repo.navigation), nil
 }
 
-func (repo *MemoryRepository) ListMedia(_ context.Context) (MediaListResult, error) {
+func (repo *MemoryRepository) ListMedia(_ context.Context, query MediaListQuery) (MediaListResult, error) {
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
 	items := append([]MediaAsset{}, repo.media...)
-	return MediaListResult{
-		Items: items,
-		Total: len(items),
-	}, nil
+	items = filterMedia(items, query)
+	sortMedia(items, query.Sort)
+	return pagedMediaResult(items, query), nil
 }
 
 func (repo *MemoryRepository) CreateMedia(_ context.Context, asset MediaAsset) (MediaAsset, error) {
@@ -256,6 +256,8 @@ func normalizeSettings(settings Settings) Settings {
 	settings.SubmissionGuide = strings.TrimSpace(settings.SubmissionGuide)
 	settings.MailProvider = defaultString(settings.MailProvider, defaults.MailProvider)
 	settings.FromEmail = defaultString(settings.FromEmail, defaults.FromEmail)
+	settings.TurnstileSiteKey = strings.TrimSpace(settings.TurnstileSiteKey)
+	settings.TurnstileSecretKey = strings.TrimSpace(settings.TurnstileSecretKey)
 	settings.SessionDays = clampInt(settings.SessionDays, 1, 90, defaults.SessionDays)
 	settings.BackupCycle = defaultString(settings.BackupCycle, defaults.BackupCycle)
 	settings.BackupRetentionDays = clampInt(settings.BackupRetentionDays, 1, 365, defaults.BackupRetentionDays)
@@ -329,6 +331,11 @@ func publicSettings(settings Settings) PublicSettings {
 		SubmissionsEnabled:      settings.SubmissionsEnabled,
 		SubmissionLimit:         settings.SubmissionLimit,
 		SubmissionGuide:         settings.SubmissionGuide,
+		TurnstileEnabled:        settings.TurnstileEnabled,
+		TurnstileSiteKey:        settings.TurnstileSiteKey,
+		TurnstileRegister:       settings.TurnstileRegister,
+		TurnstileLogin:          settings.TurnstileLogin,
+		TurnstileSubmission:     settings.TurnstileSubmission,
 		UpdatedAt:               settings.UpdatedAt,
 	}
 }
@@ -428,6 +435,136 @@ func cloneAuditLog(item AuditLog) AuditLog {
 	return item
 }
 
+func pagedMediaResult(items []MediaAsset, query MediaListQuery) MediaListResult {
+	total := len(items)
+	page := normalizePage(query.Page)
+	pageSize := normalizePageSize(query.PageSize)
+	paged := items
+	if query.All {
+		page = 1
+		pageSize = total
+	} else {
+		start := (page - 1) * pageSize
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		paged = items[start:end]
+	}
+
+	return MediaListResult{
+		Items:    paged,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}
+}
+
+func filterMedia(items []MediaAsset, query MediaListQuery) []MediaAsset {
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
+	mediaType := strings.ToLower(strings.TrimSpace(query.Type))
+	filtered := make([]MediaAsset, 0, len(items))
+
+	for _, item := range items {
+		if mediaType != "" && mediaType != "all" && item.Type != mediaType {
+			continue
+		}
+		if keyword != "" && !mediaContainsKeyword(item, keyword) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+
+	return filtered
+}
+
+func mediaContainsKeyword(item MediaAsset, keyword string) bool {
+	haystack := strings.ToLower(strings.Join([]string{
+		item.FileName,
+		item.Alt,
+		item.UploadedBy,
+		item.Category,
+		item.URL,
+		item.Type,
+	}, " "))
+	return strings.Contains(haystack, keyword)
+}
+
+func sortMedia(items []MediaAsset, mode string) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "size":
+		sort.SliceStable(items, func(i, j int) bool {
+			return mediaSizeValue(items[i].SizeLabel) > mediaSizeValue(items[j].SizeLabel)
+		})
+	case "usage":
+		sort.SliceStable(items, func(i, j int) bool {
+			return items[i].UsageCount > items[j].UsageCount
+		})
+	default:
+		sort.SliceStable(items, func(i, j int) bool {
+			return items[i].UploadedAt.After(items[j].UploadedAt)
+		})
+	}
+}
+
+func mediaSizeValue(label string) float64 {
+	value := firstFloat(label)
+	upper := strings.ToUpper(label)
+	switch {
+	case strings.Contains(upper, "MB"):
+		return value * 1024 * 1024
+	case strings.Contains(upper, "KB"):
+		return value * 1024
+	default:
+		return value
+	}
+}
+
+func firstFloat(value string) float64 {
+	number := strings.Builder{}
+	seenDigit := false
+	for _, item := range value {
+		if item >= '0' && item <= '9' || item == '.' {
+			number.WriteRune(item)
+			if item != '.' {
+				seenDigit = true
+			}
+			continue
+		}
+		if seenDigit {
+			break
+		}
+	}
+	if !seenDigit {
+		return 0
+	}
+	parsed, err := strconv.ParseFloat(number.String(), 64)
+	if err != nil {
+		return 0
+	}
+	return parsed
+}
+
+func normalizePage(page int) int {
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize < 1 {
+		return 12
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
+}
+
 func normalizeAuditLogQuery(query AuditLogQuery) AuditLogQuery {
 	query.Action = strings.TrimSpace(query.Action)
 	query.ResourceType = strings.TrimSpace(query.ResourceType)
@@ -522,6 +659,12 @@ func seedSettings() Settings {
 		MailEnabled:             false,
 		MailProvider:            "Resend",
 		FromEmail:               "noreply@example.com",
+		TurnstileEnabled:        false,
+		TurnstileSiteKey:        "",
+		TurnstileSecretKey:      "",
+		TurnstileRegister:       false,
+		TurnstileLogin:          false,
+		TurnstileSubmission:     false,
 		AdminTwoFactorRequired:  true,
 		LoginFailureLock:        true,
 		SessionDays:             7,

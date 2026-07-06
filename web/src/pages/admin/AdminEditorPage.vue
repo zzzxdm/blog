@@ -22,8 +22,10 @@ import {
   type Tag
 } from "../../shared/api";
 import { renderMarkdown } from "../../shared/markdown";
+import { useToastStore } from "../../stores/toast";
 
 const route = useRoute();
+const toast = useToastStore();
 
 const current = ref<AdminPost | null>(null);
 const loading = ref(false);
@@ -169,6 +171,7 @@ async function save(nextStatus: AdminPostStatus) {
     applyPost(saved);
     await loadRevisions(saved.id);
     message.value = "草稿已保存。";
+    toast.success("草稿已保存", `当前版本 ${saved.version}。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "保存失败";
   } finally {
@@ -200,6 +203,7 @@ async function publish() {
     applyPost(published);
     await loadRevisions(published.id);
     message.value = `已发布到 /posts/${published.publishedPostSlug || published.slug}`;
+    toast.success("文章已发布", `/posts/${published.publishedPostSlug || published.slug}`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "发布失败";
   } finally {
@@ -227,6 +231,7 @@ async function schedulePost() {
   await save("scheduled");
   if (!error.value) {
     message.value = `已保存为待发布，预约时间 ${formatDate(new Date(scheduledAt.value).toISOString())}`;
+    toast.success("已保存为待发布", `预约时间 ${formatDate(new Date(scheduledAt.value).toISOString())}`);
   }
 }
 
@@ -251,6 +256,7 @@ async function openPreview() {
     const preview = await createAdminPostPreview(saved.id);
     window.open(preview.previewUrl, "_blank", "noopener");
     message.value = `预览链接已生成，${formatDate(preview.expiresAt)} 前有效。`;
+    toast.success("预览链接已生成", `${formatDate(preview.expiresAt)} 前有效。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "预览生成失败";
   } finally {
@@ -272,6 +278,7 @@ async function restoreRevision(revision: AdminPostRevision) {
     applyPost(restored);
     await loadRevisions(restored.id);
     message.value = `已恢复到版本 ${revision.version}。`;
+    toast.success("版本已恢复", `已恢复到版本 ${revision.version}。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "版本恢复失败";
   } finally {
@@ -398,7 +405,6 @@ function toDateTimeLocal(value: string) {
 
     <p v-if="loading" class="muted">正在加载文章...</p>
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="message" class="muted">{{ message }}</p>
 
     <section class="editor-layout">
       <div class="editor-panel">

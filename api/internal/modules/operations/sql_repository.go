@@ -89,7 +89,7 @@ func (repo *SQLRepository) UpdateNavigation(ctx context.Context, navigation Navi
 	return cloneNavigation(navigation), nil
 }
 
-func (repo *SQLRepository) ListMedia(ctx context.Context) (MediaListResult, error) {
+func (repo *SQLRepository) ListMedia(ctx context.Context, query MediaListQuery) (MediaListResult, error) {
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT id, file_name, url, alt, type, category, size_label, width, height, usage_count, uploaded_by, uploaded_at
 		FROM media_assets
@@ -125,10 +125,10 @@ func (repo *SQLRepository) ListMedia(ctx context.Context) (MediaListResult, erro
 		return MediaListResult{}, fmt.Errorf("iterate media assets: %w", err)
 	}
 
-	return MediaListResult{
-		Items: items,
-		Total: len(items),
-	}, nil
+	items = filterMedia(items, query)
+	sortMedia(items, query.Sort)
+
+	return pagedMediaResult(items, query), nil
 }
 
 func (repo *SQLRepository) CreateMedia(ctx context.Context, asset MediaAsset) (MediaAsset, error) {

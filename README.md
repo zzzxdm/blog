@@ -14,8 +14,13 @@ Start the API:
 
 ```bash
 cd api
-go run ./cmd/server
+go install github.com/air-verse/air@v1.61.7
+air
 ```
+
+The API automatically loads `api/.env` on startup. Existing system environment variables take precedence over values in that file.
+
+If Air is not installed or not on `PATH`, use `go run ./cmd/server` as a fallback.
 
 Start the web app:
 
@@ -34,6 +39,13 @@ Default development accounts:
 
 - Admin: `admin@example.com` / `password`
 - User: `linyi@example.com` / `password`
+
+Turnstile local development:
+
+- If you use a real Cloudflare Turnstile site key locally, add `localhost` and `127.0.0.1` to the widget's allowed hostnames in the Cloudflare dashboard.
+- To test the local flow without hostname binding, use Cloudflare's testing keys:
+  - Site Key: `1x00000000000000000000AA`
+  - Secret Key: `1x0000000000000000000000000000000AA`
 
 ## Verification
 

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 
+import PaginationControls from "../components/PaginationControls.vue";
 import { usePostsStore } from "../stores/posts";
 import { getCategories, type Category, type Post } from "../shared/api";
 
@@ -23,16 +24,6 @@ const selectedTag = computed(() => stringQuery(route.query.tag));
 const total = computed(() => posts.list?.total ?? 0);
 const categoryCount = computed(() => categories.value.length || 4);
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
-const pageNumbers = computed(() => {
-  if (totalPages.value <= 5) {
-    return Array.from({ length: totalPages.value }, (_, index) => index + 1);
-  }
-
-  return [1, currentPage.value - 1, currentPage.value, currentPage.value + 1, totalPages.value]
-    .filter((page) => page >= 1 && page <= totalPages.value)
-    .filter((page, index, pages) => pages.indexOf(page) === index)
-    .sort((left, right) => left - right);
-});
 
 watch(
   () => route.query,
@@ -251,37 +242,14 @@ function tagTone(post: Post, index = 0) {
         </article>
       </section>
 
-      <nav class="pagination" aria-label="归档分页">
-        <button
-          class="page-button"
-          :class="{ disabled: currentPage <= 1 }"
-          type="button"
-          :disabled="currentPage <= 1"
-          @click="goPage(currentPage - 1)"
-        >
-          ←
-        </button>
-        <template v-for="(page, index) in pageNumbers" :key="page">
-          <span v-if="index > 0 && page - pageNumbers[index - 1] > 1" class="page-button">...</span>
-          <button
-            class="page-button"
-            :class="{ current: currentPage === page }"
-            type="button"
-            @click="goPage(page)"
-          >
-            {{ page }}
-          </button>
-        </template>
-        <button
-          class="page-button"
-          :class="{ disabled: currentPage >= totalPages }"
-          type="button"
-          :disabled="currentPage >= totalPages"
-          @click="goPage(currentPage + 1)"
-        >
-          →
-        </button>
-      </nav>
+      <PaginationControls
+        :page="currentPage"
+        :page-size="pageSize"
+        :total="total"
+        :loading="posts.loading"
+        item-label="篇文章"
+        @update:page="goPage"
+      />
     </template>
   </main>
 </template>

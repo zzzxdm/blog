@@ -125,11 +125,10 @@ func (repo *SQLRepository) ListByAuthor(ctx context.Context, userID string, quer
 		return ManageListResult{}, err
 	}
 
-	return ManageListResult{
-		Items: items,
-		Total: len(items),
-		Stats: stats,
-	}, nil
+	items = filterComments(items, query)
+	sortComments(items, query.Sort)
+
+	return pagedManageResult(items, stats, query), nil
 }
 
 func (repo *SQLRepository) AdminList(ctx context.Context, query ListQuery) (ManageListResult, error) {
@@ -146,11 +145,10 @@ func (repo *SQLRepository) AdminList(ctx context.Context, query ListQuery) (Mana
 		return ManageListResult{}, err
 	}
 
-	return ManageListResult{
-		Items: items,
-		Total: len(items),
-		Stats: stats,
-	}, nil
+	items = filterComments(items, query)
+	sortComments(items, query.Sort)
+
+	return pagedManageResult(items, stats, query), nil
 }
 
 func (repo *SQLRepository) UpdateStatus(ctx context.Context, commentID string, status string) (Comment, error) {

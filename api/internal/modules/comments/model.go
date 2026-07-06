@@ -32,7 +32,12 @@ type CreateRequest struct {
 }
 
 type ListQuery struct {
-	Status string
+	Status   string
+	Keyword  string
+	Sort     string
+	Page     int
+	PageSize int
+	All      bool
 }
 
 type ManageStats struct {
@@ -47,9 +52,11 @@ type ManageStats struct {
 }
 
 type ManageListResult struct {
-	Items []Comment   `json:"items"`
-	Total int         `json:"total"`
-	Stats ManageStats `json:"stats"`
+	Items    []Comment   `json:"items"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"pageSize"`
+	Total    int         `json:"total"`
+	Stats    ManageStats `json:"stats"`
 }
 
 type StatusRequest struct {
