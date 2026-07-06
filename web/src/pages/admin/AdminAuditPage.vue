@@ -83,6 +83,7 @@ function actionText(value: string) {
     "comment.moderate": "处理评论",
     "user.update": "更新用户",
     "message.send": "发送站内信",
+    "topic.update": "更新专题",
     "taxonomy.update": "更新分类标签"
   };
 
@@ -101,6 +102,7 @@ function resourceText(value: string) {
     comment: "评论",
     user: "用户",
     message: "站内信",
+    topic: "专题",
     taxonomy: "分类标签"
   };
 

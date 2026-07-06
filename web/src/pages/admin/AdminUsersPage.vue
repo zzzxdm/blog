@@ -10,6 +10,7 @@ import {
   getAdminUsers,
   inviteAdminUser,
   requestAdminUserPasswordReset,
+  restoreAdminUser,
   updateAdminUserRole,
   updateAdminUserStatus,
   type ManagedUser,
@@ -28,6 +29,7 @@ const actingId = ref("");
 const resettingId = ref("");
 const roleActingId = ref("");
 const deletingId = ref("");
+const restoringId = ref("");
 const error = ref("");
 const message = ref("");
 const inviteOpen = ref(false);
@@ -194,6 +196,16 @@ async function inviteUser() {
       inviteOpen.value = false;
       error.value = `该邮箱已在用户列表中：${email}。可以直接选中该用户调整角色，或点击“重置密码”重新发送登录入口。`;
       toast.warning("用户已存在", "已帮你用该邮箱过滤用户列表。");
+    } else if (err instanceof ApiError && err.status === 410) {
+      const email = inviteEmail.value.trim();
+      searchQuery.value = email;
+      statusFilter.value = "deleted";
+      roleFilter.value = "";
+      page.value = 1;
+      await load();
+      inviteOpen.value = false;
+      error.value = `该邮箱对应的账号已被删除：${email}。已帮你筛出已删除用户，可以点击“恢复”重新启用账号。`;
+      toast.warning("账号已删除", "已帮你切到已删除用户列表。");
     } else {
       error.value = err instanceof Error ? err.message : "邀请失败";
     }
@@ -219,6 +231,27 @@ async function resetPassword(user: ManagedUser) {
     error.value = err instanceof Error ? err.message : "密码重置失败";
   } finally {
     resettingId.value = "";
+  }
+}
+
+async function restoreUser(user: ManagedUser) {
+  if (!window.confirm(`确定恢复 ${user.displayName} 吗？恢复后该账号可以重新登录，已失效的旧会话不会恢复。`)) {
+    return;
+  }
+
+  restoringId.value = user.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    await restoreAdminUser(user.id);
+    message.value = "用户已恢复。";
+    toast.success("用户已恢复", `${user.displayName} 可以重新登录。`);
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "用户恢复失败";
+  } finally {
+    restoringId.value = "";
   }
 }
 
@@ -411,6 +444,7 @@ function formatDate(value: string) {
             <td>
               <div class="header-actions">
                 <button class="button-secondary" type="button" @click="viewUser(user)">查看</button>
+                <button v-if="user.status === 'deleted'" class="button-secondary button-success" type="button" :disabled="restoringId === user.id" @click="restoreUser(user)">{{ restoringId === user.id ? "恢复中..." : "恢复" }}</button>
                 <button v-if="user.status !== 'deleted'" class="button-secondary" type="button" :disabled="resettingId === user.id" @click="resetPassword(user)">{{ resettingId === user.id ? "生成中..." : "重置密码" }}</button>
                 <button v-if="user.status === 'active'" class="button-secondary button-danger" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'muted')">禁言</button>
                 <button v-else-if="user.status !== 'deleted'" class="button-secondary button-success" type="button" :disabled="actingId === user.id" @click="setStatus(user, 'active')">解除</button>

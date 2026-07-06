@@ -3,129 +3,185 @@ import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import PaginationControls from "../components/PaginationControls.vue";
-import { getPosts, type Post } from "../shared/api";
-
-type TopicTone = "" | "rust" | "amber";
-
-interface Topic {
-  slug: string;
-  title: string;
-  summary: string;
-  image: string;
-  imageAlt: string;
-  tone: TopicTone;
-  tags: string[];
-  categories: string[];
-}
+import { getTopic, getTopicPosts, getTopics, type Post, type Topic } from "../shared/api";
 
 const route = useRoute();
 const loading = ref(false);
+const postsLoading = ref(false);
 const error = ref("");
-const posts = ref<Post[]>([]);
-const total = ref(0);
-const topicPage = ref(1);
-const topicPageSize = ref(4);
-
-const topics: Topic[] = [
-  {
-    slug: "blog-system",
-    title: "现代化博客系统",
-    summary: "从产品功能、技术架构、用户系统、评论、搜索和后台管理完整设计一个博客系统。",
-    image: "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=900&q=80",
-    imageAlt: "代码编辑器和开发设备",
-    tone: "",
-    tags: ["博客系统", "架构", "内容治理", "评论"],
-    categories: ["工程实践", "产品设计", "用户系统", "内容治理"]
-  },
-  {
-    slug: "vue3-content",
-    title: "Vue3 内容站",
-    summary: "路由、状态管理、接口缓存、SEO meta、图片优化和部署策略。",
-    image: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=900&q=80",
-    imageAlt: "代码编辑器中的程序文件",
-    tone: "rust",
-    tags: ["Vue3", "SEO", "缓存"],
-    categories: ["Vue3"]
-  },
-  {
-    slug: "writing-workflow",
-    title: "写作工作流",
-    summary: "草稿、版本历史、编辑器、发布审批和长期内容维护。",
-    image: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80",
-    imageAlt: "笔记本和写作草稿",
-    tone: "amber",
-    tags: ["工作流", "写作工作流", "Markdown"],
-    categories: ["写作工作流"]
-  },
-  {
-    slug: "resource-list",
-    title: "资源清单",
-    summary: "把工具、部署、数据库和内容运营资料整理成可持续更新的阅读路线。",
-    image: "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&w=900&q=80",
-    imageAlt: "桌面上的计划清单和电脑",
-    tone: "",
-    tags: ["PostgreSQL", "Redis", "全文搜索", "SEO"],
-    categories: ["架构", "运营"]
-  }
-];
+const postsError = ref("");
+const topics = ref<Topic[]>([]);
+const hotTopics = ref<Topic[]>([]);
+const selectedTopic = ref<Topic | null>(null);
+const currentTopicPosts = ref<Post[]>([]);
+const topicTotal = ref(0);
+const topicPostTotal = ref(0);
+const searchQuery = ref("");
+const topicListPage = ref(1);
+const topicListPageSize = ref(9);
+const topicPostPage = ref(1);
+const topicPostPageSize = ref(4);
 
 const currentTopic = computed(() => {
   const topicSlug = stringQuery(route.query.topic);
-  return topics.find((topic) => topic.slug === topicSlug) ?? topics[0];
+  if (topicSlug) {
+    if (searchQuery.value.trim() && !topics.value.some((topic) => topic.slug === topicSlug)) {
+      return topics.value[0] ?? null;
+    }
+    if (selectedTopic.value?.slug === topicSlug) {
+      return selectedTopic.value;
+    }
+    return topics.value.find((topic) => topic.slug === topicSlug) ?? null;
+  }
+
+  return topics.value[0] ?? null;
+});
+const articleCountText = computed(() => {
+  const visiblePostCount = topics.value.reduce((sum, topic) => sum + topic.postCount, 0);
+  return visiblePostCount ? `当前页 ${visiblePostCount} 篇关联文章` : "专题文章持续更新";
+});
+const filterLinks = computed(() => {
+  const topic = currentTopic.value;
+  if (!topic) {
+    return [];
+  }
+
+  const categoryLinks = topic.categories.map((item) => ({
+    key: `category-${item}`,
+    label: item,
+    to: { path: "/archive", query: { category: item } }
+  }));
+  const tagLinks = topic.tags.map((item) => ({
+    key: `tag-${item}`,
+    label: item,
+    to: { path: "/archive", query: { tag: item } }
+  }));
+
+  return [...categoryLinks, ...tagLinks].filter((item, index, list) =>
+    list.findIndex((candidate) => candidate.label === item.label) === index
+  );
 });
 
-const allCurrentTopicPosts = computed(() => topicPosts(currentTopic.value));
-const currentTopicPosts = computed(() => {
-  const start = (topicPage.value - 1) * topicPageSize.value;
-  return allCurrentTopicPosts.value.slice(start, start + topicPageSize.value);
+onMounted(loadInitialTopics);
+
+watch(() => stringQuery(route.query.topic), async (slug, previous) => {
+  if (slug !== previous) {
+    topicPostPage.value = 1;
+  }
+  await syncSelectedTopic();
+  await loadTopicPosts();
 });
 
-const articleCountText = computed(() => `${total.value || posts.value.length} 篇文章`);
-
-watch(() => currentTopic.value.slug, () => {
-  topicPage.value = 1;
+watch([topicPostPage, topicPostPageSize], () => {
+  if (currentTopic.value) {
+    void loadTopicPosts();
+  }
 });
 
-onMounted(async () => {
+async function loadInitialTopics() {
   loading.value = true;
   error.value = "";
 
   try {
-    const response = await getPosts({ page: 1, pageSize: 50 });
-    posts.value = response.items;
-    total.value = response.total;
+    const [response, hotResponse] = await Promise.all([
+      getTopics({ page: topicListPage.value, pageSize: topicListPageSize.value, q: searchQuery.value.trim() }),
+      getTopics({ page: 1, pageSize: 3, featured: true })
+    ]);
+    topics.value = response.items;
+    topicTotal.value = response.total;
+    topicListPage.value = response.page;
+    topicListPageSize.value = response.pageSize;
+    hotTopics.value = hotResponse.items.length ? hotResponse.items : response.items.slice(0, 3);
+    await syncSelectedTopic();
+    await loadTopicPosts();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "专题内容加载失败";
   } finally {
     loading.value = false;
   }
-});
-
-function topicPosts(topic: Topic) {
-  return posts.value.filter((post) => matchesTopic(post, topic));
 }
 
-function matchesTopic(post: Post, topic: Topic) {
-  const postTags = post.tags.map((tag) => tag.toLowerCase());
-  const topicTags = topic.tags.map((tag) => tag.toLowerCase());
+async function loadTopics() {
+  loading.value = true;
+  error.value = "";
 
-  return (
-    topic.categories.includes(post.category) ||
-    topicTags.some((tag) => postTags.includes(tag)) ||
-    topic.tags.some((tag) => post.title.includes(tag) || post.summary.includes(tag))
-  );
+  try {
+    const response = await getTopics({ page: topicListPage.value, pageSize: topicListPageSize.value, q: searchQuery.value.trim() });
+    topics.value = response.items;
+    topicTotal.value = response.total;
+    topicListPage.value = response.page;
+    topicListPageSize.value = response.pageSize;
+    if (!hotTopics.value.length) {
+      hotTopics.value = response.items.slice(0, 3);
+    }
+    await syncSelectedTopic();
+    await loadTopicPosts();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "专题内容加载失败";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function syncSelectedTopic() {
+  const topicSlug = stringQuery(route.query.topic);
+  if (!topicSlug) {
+    selectedTopic.value = null;
+    return;
+  }
+
+  const localTopic = topics.value.find((topic) => topic.slug === topicSlug) ?? hotTopics.value.find((topic) => topic.slug === topicSlug);
+  if (localTopic) {
+    selectedTopic.value = localTopic;
+    return;
+  }
+
+  if (searchQuery.value.trim()) {
+    selectedTopic.value = null;
+    return;
+  }
+
+  if (selectedTopic.value?.slug === topicSlug) {
+    return;
+  }
+
+  try {
+    selectedTopic.value = await getTopic(topicSlug);
+  } catch {
+    selectedTopic.value = null;
+  }
+}
+
+async function loadTopicPosts() {
+  const topic = currentTopic.value;
+  if (!topic) {
+    currentTopicPosts.value = [];
+    topicPostTotal.value = 0;
+    return;
+  }
+
+  postsLoading.value = true;
+  postsError.value = "";
+
+  try {
+    const response = await getTopicPosts(topic.slug, { page: topicPostPage.value, pageSize: topicPostPageSize.value });
+    currentTopicPosts.value = response.items;
+    topicPostTotal.value = response.total;
+    topicPostPage.value = response.page;
+    topicPostPageSize.value = response.pageSize;
+  } catch (err) {
+    postsError.value = err instanceof Error ? err.message : "专题文章加载失败";
+  } finally {
+    postsLoading.value = false;
+  }
 }
 
 function topicArticleCount(topic: Topic) {
-  return topicPosts(topic).length;
+  return topic.postCount;
 }
 
 function topicLatestLabel(topic: Topic) {
-  const latest = topicPosts(topic)
-    .map((post) => post.publishedAt)
-    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0];
-
-  return latest ? formatDate(latest) : "暂无更新";
+  return topic.latestPostAt ? formatDate(topic.latestPostAt) : "暂无更新";
 }
 
 function topicStatus(index: number) {
@@ -141,7 +197,7 @@ function topicStatus(index: number) {
 }
 
 function topicPostIndex(index: number) {
-  return (topicPage.value - 1) * topicPageSize.value + index;
+  return (topicPostPage.value - 1) * topicPostPageSize.value + index;
 }
 
 function topicLink(topic: Topic) {
@@ -152,13 +208,40 @@ function topicReadingLink(topic: Topic) {
   return { ...topicLink(topic), hash: "#topic-reading" };
 }
 
-function setTopicPage(page: number) {
-  topicPage.value = page;
+async function applyTopicSearch() {
+  topicListPage.value = 1;
+  topicPostPage.value = 1;
+  await loadTopics();
 }
 
-function setTopicPageSize(pageSize: number) {
-  topicPageSize.value = pageSize;
-  topicPage.value = 1;
+async function setTopicListPage(page: number) {
+  topicListPage.value = page;
+  await loadTopics();
+}
+
+async function setTopicListPageSize(pageSize: number) {
+  topicListPageSize.value = pageSize;
+  topicListPage.value = 1;
+  await loadTopics();
+}
+
+async function setTopicPostPage(page: number) {
+  topicPostPage.value = page;
+}
+
+async function setTopicPostPageSize(pageSize: number) {
+  topicPostPageSize.value = pageSize;
+  topicPostPage.value = 1;
+}
+
+function topicImage(topic: Topic) {
+  return topic.coverImage || "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=900&q=80";
+}
+
+function filterTone(index: number) {
+  if (index % 3 === 1) return "rust";
+  if (index % 3 === 2) return "amber";
+  return "";
 }
 
 function formatDate(value: string) {
@@ -176,7 +259,7 @@ function stringQuery(value: unknown) {
       <div class="topic-lead">
         <div class="meta-row">
           <span class="tag amber">专题</span>
-          <span>{{ topics.length }} 个重点专题</span>
+          <span>{{ topicTotal }} 个重点专题</span>
           <span>{{ articleCountText }}</span>
         </div>
         <h1>围绕一个问题持续写，而不是只发布零散文章。</h1>
@@ -188,8 +271,9 @@ function stringQuery(value: unknown) {
         <div class="panel-title">
           <h2>热门专题</h2>
         </div>
-        <ol class="rank-list">
-          <li v-for="(topic, index) in topics.slice(0, 3)" :key="topic.slug">
+        <p v-if="loading" class="muted">正在加载专题...</p>
+        <ol v-else-if="hotTopics.length" class="rank-list">
+          <li v-for="(topic, index) in hotTopics.slice(0, 3)" :key="topic.slug">
             <span class="rank-number">{{ index + 1 }}</span>
             <RouterLink :to="topicReadingLink(topic)">
               <strong>{{ topic.title }}</strong>
@@ -197,8 +281,11 @@ function stringQuery(value: unknown) {
             </RouterLink>
           </li>
         </ol>
+        <p v-else class="muted">暂无专题。</p>
       </aside>
     </section>
+
+    <p v-if="error" class="error">{{ error }}</p>
 
     <section class="section-heading">
       <div>
@@ -207,9 +294,14 @@ function stringQuery(value: unknown) {
       </div>
     </section>
 
-    <section class="compact-grid" aria-label="专题列表">
+    <form class="topic-search-toolbar" @submit.prevent="applyTopicSearch">
+      <input v-model="searchQuery" class="input" type="search" placeholder="搜索专题标题、摘要、分类、标签" aria-label="搜索专题">
+      <button class="button" type="submit" :disabled="loading">搜索</button>
+    </form>
+
+    <section v-if="topics.length" class="compact-grid" aria-label="专题列表">
       <article v-for="topic in topics" :key="topic.slug" class="topic-card">
-        <img :src="topic.image" :alt="topic.imageAlt">
+        <img :src="topicImage(topic)" :alt="topic.imageAlt || topic.title">
         <div class="topic-card-body">
           <div class="meta-row">
             <span class="tag" :class="topic.tone">{{ topicArticleCount(topic) }} 篇文章</span>
@@ -223,18 +315,31 @@ function stringQuery(value: unknown) {
         </div>
       </article>
     </section>
+    <p v-else-if="!loading" class="muted">暂无专题。</p>
+    <PaginationControls
+      v-if="topicTotal > 0"
+      :page="topicListPage"
+      :page-size="topicListPageSize"
+      :total="topicTotal"
+      :loading="loading"
+      item-label="个专题"
+      show-page-size
+      :page-size-options="[6, 9, 12, 24]"
+      @update:page="setTopicListPage"
+      @update:page-size="setTopicListPageSize"
+    />
 
-    <section id="topic-reading" class="article-layout">
+    <section v-if="currentTopic" id="topic-reading" class="article-layout">
       <div>
         <div class="section-heading">
           <div>
             <h2>{{ currentTopic.title }}</h2>
-            <p>当前重点专题，按推荐阅读顺序排列。</p>
+            <p>当前重点专题，按发布时间顺序排列。</p>
           </div>
         </div>
 
-        <p v-if="loading" class="muted">正在加载专题文章...</p>
-        <p v-else-if="error" class="error">{{ error }}</p>
+        <p v-if="postsLoading" class="muted">正在加载专题文章...</p>
+        <p v-else-if="postsError" class="error">{{ postsError }}</p>
         <div v-else-if="currentTopicPosts.length" class="topic-list">
           <article v-for="(post, index) in currentTopicPosts" :key="post.id" class="topic-list-item">
             <img :src="post.coverImage" :alt="post.title">
@@ -252,14 +357,15 @@ function stringQuery(value: unknown) {
             <RouterLink class="button-secondary" :to="`/posts/${post.slug}`">继续阅读</RouterLink>
           </article>
           <PaginationControls
-            :page="topicPage"
-            :page-size="topicPageSize"
-            :total="allCurrentTopicPosts.length"
+            :page="topicPostPage"
+            :page-size="topicPostPageSize"
+            :total="topicPostTotal"
+            :loading="postsLoading"
             item-label="篇专题文章"
             show-page-size
             :page-size-options="[4, 8, 12, 20]"
-            @update:page="setTopicPage"
-            @update:page-size="setTopicPageSize"
+            @update:page="setTopicPostPage"
+            @update:page-size="setTopicPostPageSize"
           />
         </div>
         <p v-else class="muted">这个专题暂无文章。</p>
@@ -271,12 +377,15 @@ function stringQuery(value: unknown) {
             <h2>专题筛选</h2>
           </div>
           <div class="tag-cloud">
-            <RouterLink class="tag" to="/archive?category=工程实践">工程实践</RouterLink>
-            <RouterLink class="tag rust" to="/archive?category=架构">架构</RouterLink>
-            <RouterLink class="tag amber" to="/archive?tag=写作工作流">写作</RouterLink>
-            <RouterLink class="tag" to="/archive?tag=SEO">SEO</RouterLink>
-            <RouterLink class="tag rust" to="/archive?category=产品设计">产品设计</RouterLink>
-            <RouterLink class="tag amber" to="/archive?category=运营">运营</RouterLink>
+            <RouterLink
+              v-for="(item, index) in filterLinks"
+              :key="item.key"
+              class="tag"
+              :class="filterTone(index)"
+              :to="item.to"
+            >
+              {{ item.label }}
+            </RouterLink>
           </div>
         </section>
       </aside>

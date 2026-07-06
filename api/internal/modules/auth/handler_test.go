@@ -22,8 +22,10 @@ func (reader staticSettingsReader) SecuritySettings(context.Context) (SecuritySe
 }
 
 type fakeEmailSender struct {
-	token string
-	err   error
+	token              string
+	passwordResetToken string
+	passwordResetUser  User
+	err                error
 }
 
 func (sender *fakeEmailSender) SendEmailVerification(_ context.Context, _ User, token string) error {
@@ -31,8 +33,10 @@ func (sender *fakeEmailSender) SendEmailVerification(_ context.Context, _ User, 
 	return sender.err
 }
 
-func (sender *fakeEmailSender) SendPasswordSetup(context.Context, User, string) error {
-	return nil
+func (sender *fakeEmailSender) SendPasswordSetup(_ context.Context, user User, token string) error {
+	sender.passwordResetUser = user
+	sender.passwordResetToken = token
+	return sender.err
 }
 
 func (sender *fakeEmailSender) SendInvitation(context.Context, User, string, string) error {
@@ -125,6 +129,44 @@ func TestLoginFailureLockBlocksRepeatedAttempts(t *testing.T) {
 	valid := performLogin(router, "linyi@example.com", "password")
 	if valid.Code != http.StatusTooManyRequests {
 		t.Fatalf("valid login while locked status = %d, want 429 with body %q", valid.Code, valid.Body.String())
+	}
+}
+
+func TestLoginReportsDeletedAccount(t *testing.T) {
+	store := NewMemoryStore()
+	if _, err := store.UpdateStatus("user_linyi", "deleted"); err != nil {
+		t.Fatalf("UpdateStatus returned error: %v", err)
+	}
+	router := gin.New()
+	RegisterRoutes(router, store)
+
+	recorder := performLogin(router, "linyi@example.com", "password")
+
+	if recorder.Code != http.StatusGone {
+		t.Fatalf("deleted login status = %d, want 410 with body %q", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRegisterReportsDeletedAccountEmail(t *testing.T) {
+	store := NewMemoryStore()
+	if _, err := store.UpdateStatus("user_linyi", "deleted"); err != nil {
+		t.Fatalf("UpdateStatus returned error: %v", err)
+	}
+	router := gin.New()
+	RegisterRoutes(router, store)
+
+	request := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewBufferString(`{
+		"email":"linyi@example.com",
+		"password":"password",
+		"displayName":"林一新号"
+	}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusGone {
+		t.Fatalf("deleted account email register status = %d, want 410 with body %q", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -324,6 +366,88 @@ func TestRegisterSucceedsWhenEmailVerificationDeliveryFails(t *testing.T) {
 	loginRecorder := performLogin(router, "mail-fail@example.com", "password")
 	if loginRecorder.Code != http.StatusOK {
 		t.Fatalf("expected created account to login, got %d with body %q", loginRecorder.Code, loginRecorder.Body.String())
+	}
+}
+
+func TestForgotPasswordSendsResetEmailWithoutExposingToken(t *testing.T) {
+	store := NewMemoryStore()
+	emailSender := &fakeEmailSender{}
+	router := gin.New()
+	RegisterRoutesWithSettingsAndEmailSender(router, store, nil, emailSender)
+
+	request := httptest.NewRequest(http.MethodPost, "/auth/forgot-password", bytes.NewBufferString(`{
+		"email":"linyi@example.com"
+	}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected forgot password status 200, got %d with body %q", recorder.Code, recorder.Body.String())
+	}
+
+	var response struct {
+		OK         bool   `json:"ok"`
+		ResetToken string `json:"resetToken"`
+		Delivery   string `json:"delivery"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode forgot password response: %v", err)
+	}
+	if !response.OK {
+		t.Fatal("expected ok response")
+	}
+	if response.ResetToken != "" {
+		t.Fatal("did not expect reset token in response when email sender is configured")
+	}
+	if response.Delivery != "email" {
+		t.Fatalf("delivery = %q, want email", response.Delivery)
+	}
+	if emailSender.passwordResetToken == "" {
+		t.Fatal("expected password reset token to be sent by email sender")
+	}
+	if emailSender.passwordResetUser.Email != "linyi@example.com" {
+		t.Fatalf("password reset email user = %q, want linyi@example.com", emailSender.passwordResetUser.Email)
+	}
+
+	if err := store.ResetPassword(emailSender.passwordResetToken, "new-password"); err != nil {
+		t.Fatalf("ResetPassword returned error: %v", err)
+	}
+	if _, _, err := store.Authenticate("linyi@example.com", "new-password"); err != nil {
+		t.Fatalf("Authenticate with reset password returned error: %v", err)
+	}
+}
+
+func TestForgotPasswordRejectsUnknownEmail(t *testing.T) {
+	store := NewMemoryStore()
+	emailSender := &fakeEmailSender{}
+	router := gin.New()
+	RegisterRoutesWithSettingsAndEmailSender(router, store, nil, emailSender)
+
+	request := httptest.NewRequest(http.MethodPost, "/auth/forgot-password", bytes.NewBufferString(`{
+		"email":"missing@example.com"
+	}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected forgot password status 404, got %d with body %q", recorder.Code, recorder.Body.String())
+	}
+
+	var response struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode forgot password response: %v", err)
+	}
+	if response.Error != "email is not registered" {
+		t.Fatalf("error = %q, want email is not registered", response.Error)
+	}
+	if emailSender.passwordResetToken != "" {
+		t.Fatal("did not expect email sender to receive token for unknown email")
 	}
 }
 

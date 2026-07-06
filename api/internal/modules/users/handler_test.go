@@ -84,8 +84,8 @@ func TestUpdateStatusSyncsAuthStoreAndManagedUser(t *testing.T) {
 	}
 
 	_, _, err = authStore.Authenticate("linyi@example.com", "password")
-	if !errors.Is(err, auth.ErrInvalidCredentials) {
-		t.Fatalf("Authenticate banned user error = %v, want ErrInvalidCredentials", err)
+	if !errors.Is(err, auth.ErrAccountBanned) {
+		t.Fatalf("Authenticate banned user error = %v, want ErrAccountBanned", err)
 	}
 
 	_, err = authStore.UserBySession(userToken)
@@ -139,13 +139,81 @@ func TestDeleteSyncsAuthStoreAndManagedUser(t *testing.T) {
 	}
 
 	_, _, err = authStore.Authenticate("linyi@example.com", "password")
-	if !errors.Is(err, auth.ErrInvalidCredentials) {
-		t.Fatalf("Authenticate deleted user error = %v, want ErrInvalidCredentials", err)
+	if !errors.Is(err, auth.ErrAccountDeleted) {
+		t.Fatalf("Authenticate deleted user error = %v, want ErrAccountDeleted", err)
 	}
 
 	_, err = authStore.UserBySession(userToken)
 	if !errors.Is(err, auth.ErrInvalidSession) {
 		t.Fatalf("UserBySession deleted user error = %v, want ErrInvalidSession", err)
+	}
+}
+
+func TestRestoreDeletedUserSyncsAuthStoreAndManagedUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	authStore := auth.NewMemoryStore()
+	repo := NewMemoryRepository()
+	_, token, err := authStore.Authenticate("admin@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate admin returned error: %v", err)
+	}
+	_, userToken, err := authStore.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate user returned error: %v", err)
+	}
+
+	router := gin.New()
+	router.Use(auth.Middleware(authStore))
+	RegisterRoutes(router, repo, authStore)
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/admin/users/user_linyi", nil)
+	deleteRequest.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	deleteRecorder := httptest.NewRecorder()
+	router.ServeHTTP(deleteRecorder, deleteRequest)
+	if deleteRecorder.Code != http.StatusOK {
+		t.Fatalf("expected delete status 200, got %d with body %q", deleteRecorder.Code, deleteRecorder.Body.String())
+	}
+
+	restoreRequest := httptest.NewRequest(http.MethodPost, "/admin/users/user_linyi/restore", nil)
+	restoreRequest.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	restoreRecorder := httptest.NewRecorder()
+	router.ServeHTTP(restoreRecorder, restoreRequest)
+
+	if restoreRecorder.Code != http.StatusOK {
+		t.Fatalf("expected restore status 200, got %d with body %q", restoreRecorder.Code, restoreRecorder.Body.String())
+	}
+
+	var restored ManagedUser
+	if err := json.NewDecoder(restoreRecorder.Body).Decode(&restored); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if restored.Status != "active" {
+		t.Fatalf("response status = %q, want active", restored.Status)
+	}
+	if restored.ModerationNote != "" {
+		t.Fatalf("moderation note = %q, want empty", restored.ModerationNote)
+	}
+
+	managed, err := repo.Get(restoreRequest.Context(), "user_linyi")
+	if err != nil {
+		t.Fatalf("repo.Get returned error: %v", err)
+	}
+	if managed.Status != "active" {
+		t.Fatalf("managed status = %q, want active", managed.Status)
+	}
+
+	_, err = authStore.UserBySession(userToken)
+	if !errors.Is(err, auth.ErrInvalidSession) {
+		t.Fatalf("old user session error = %v, want ErrInvalidSession", err)
+	}
+
+	_, newToken, err := authStore.Authenticate("linyi@example.com", "password")
+	if err != nil {
+		t.Fatalf("Authenticate restored user returned error: %v", err)
+	}
+	if newToken == "" {
+		t.Fatal("expected restored user login to create a new session")
 	}
 }
 

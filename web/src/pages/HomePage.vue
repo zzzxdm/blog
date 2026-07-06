@@ -7,20 +7,23 @@ import {
   getCategories,
   getSiteSettings,
   getTags,
+  getTopics,
   type Category,
   type Post,
   type SiteSettings,
-  type Tag
+  type Tag,
+  type Topic
 } from "../shared/api";
 
 type TopicLink = {
   key: string;
   label: string;
   count: number;
-  tone: "" | "rust" | "amber";
+  tone: "" | "rust" | "amber" | "gray";
   to: {
     path: string;
     query: Record<string, string>;
+    hash?: string;
   };
 };
 
@@ -28,6 +31,7 @@ const posts = usePostsStore();
 const siteSettings = ref<SiteSettings | null>(null);
 const categories = ref<Category[]>([]);
 const tags = ref<Tag[]>([]);
+const managedTopics = ref<Topic[]>([]);
 const topicLinkLimit = 6;
 
 const allPosts = computed(() => posts.list?.items ?? []);
@@ -68,6 +72,16 @@ const categorySummary = computed(() => {
 });
 const totalCommentCount = computed(() => allPosts.value.reduce((sum, post) => sum + post.commentCount, 0));
 const topicLinks = computed<TopicLink[]>(() => {
+  if (managedTopics.value.length) {
+    return managedTopics.value.slice(0, topicLinkLimit).map((topic, index) => ({
+      key: `topic-${topic.id}`,
+      label: topic.title,
+      count: topic.postCount,
+      tone: topic.tone || topicTone(index),
+      to: { path: "/topics", query: { topic: topic.slug }, hash: "#topic-reading" }
+    }));
+  }
+
   const taxonomyLinks = [
     ...categories.value
       .filter((item) => item.name)
@@ -93,12 +107,13 @@ const topicLinks = computed<TopicLink[]>(() => {
     .slice(0, topicLinkLimit)
     .map((item, index) => ({ ...item, tone: topicTone(index) }));
 });
-const featuredTopicCount = computed(() => categories.value.length + tags.value.length || topicLinks.value.length);
+const featuredTopicCount = computed(() => managedTopics.value.length || categories.value.length + tags.value.length || topicLinks.value.length);
 
 onMounted(() => {
   void posts.loadList({ page: 1, pageSize: 12 });
   void loadSiteSettings();
   void loadTaxonomies();
+  void loadManagedTopics();
   startFeatureCarousel();
 });
 
@@ -129,6 +144,15 @@ async function loadTaxonomies() {
   } catch {
     categories.value = [];
     tags.value = [];
+  }
+}
+
+async function loadManagedTopics() {
+  try {
+    const response = await getTopics({ page: 1, pageSize: 100, featured: true });
+    managedTopics.value = response.items;
+  } catch {
+    managedTopics.value = [];
   }
 }
 

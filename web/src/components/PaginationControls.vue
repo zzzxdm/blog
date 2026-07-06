@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 const props = withDefaults(defineProps<{
   page: number;
@@ -27,6 +27,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.page
 const start = computed(() => props.total > 0 ? (props.page - 1) * props.pageSize + 1 : 0);
 const end = computed(() => Math.min(props.page * props.pageSize, props.total));
 const jumpPage = ref(props.page);
+const jumpInputId = useId();
 const pageItems = computed(() => {
   if (totalPages.value <= 5) {
     return Array.from({ length: totalPages.value }, (_, index) => index + 1);
@@ -103,11 +104,11 @@ watch(() => props.page, (page) => {
       第 {{ page }} / {{ totalPages }} 页，显示 {{ start }}-{{ end }} / {{ total }} {{ itemLabel }}
     </span>
     <form v-if="totalPages > 1" class="pagination-jump" @submit.prevent="submitJump">
-      <label for="pagination-jump-page">跳至</label>
+      <label :for="jumpInputId">跳至</label>
       <input
         v-model.number="jumpPage"
         class="input"
-        id="pagination-jump-page"
+        :id="jumpInputId"
         type="number"
         min="1"
         :max="totalPages"

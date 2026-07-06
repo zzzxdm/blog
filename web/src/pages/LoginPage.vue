@@ -130,8 +130,14 @@ async function submit() {
     if (submittedMode === "forgot") {
       const response = await forgotPassword(email.value);
       resetToken.value = response.resetToken || "";
-      mode.value = "reset";
-      message.value = response.resetToken ? `重置 token：${response.resetToken}` : "如果邮箱存在，重置入口会发送到该邮箱。";
+      if (response.resetToken) {
+        mode.value = "reset";
+        message.value = `重置 token：${response.resetToken}`;
+        return;
+      }
+
+      message.value = "重置入口已发送到该邮箱，请前往邮箱查看。";
+      toast.success("重置入口已发送", "请前往邮箱查看。");
       return;
     }
 
@@ -144,7 +150,7 @@ async function submit() {
     toast.success("密码已重置", "请使用新密码登录。");
     await router.replace({ name: "login", query: redirectQuery() });
   } catch (error) {
-    errorTitle.value = failureTitle(submittedMode);
+    errorTitle.value = failureTitle(submittedMode, error);
     errorMessage.value = friendlyErrorMessage(error, submittedMode);
     if (submittedMode === "login" || submittedMode === "register") {
       resetTurnstile();
@@ -154,7 +160,8 @@ async function submit() {
   }
 }
 
-function failureTitle(failedMode: AuthMode) {
+function failureTitle(failedMode: AuthMode, error?: unknown) {
+  if (error instanceof ApiError && error.status === 429) return "请求过于频繁";
   if (failedMode === "register") return "注册失败";
   if (failedMode === "forgot") return "找回密码失败";
   if (failedMode === "reset") return "重置密码失败";
@@ -164,15 +171,19 @@ function failureTitle(failedMode: AuthMode) {
 
 function friendlyErrorMessage(error: unknown, failedMode: AuthMode) {
   if (error instanceof ApiError) {
+    if (error.status === 429) return error.message;
+
     if (failedMode === "login") {
+      if (error.status === 410) return "该账号已被删除，不能继续登录。请联系管理员处理。";
+      if (error.status === 403) return "该账号已被封禁，不能登录。请联系管理员处理。";
       if (error.status === 401) return "邮箱或密码不正确。";
-      if (error.status === 429) return "登录失败次数过多，请稍后再试。";
       if (error.message.includes("turnstile")) return "人机验证未通过，请重新验证后再登录。";
       if (error.status === 400) return "请输入有效的邮箱和密码。";
       return "登录失败，请稍后再试。";
     }
 
     if (failedMode === "register") {
+      if (error.status === 410) return "该邮箱对应的账号已被删除，不能直接重新注册。请联系管理员处理。";
       if (error.status === 409) return "该邮箱已注册，请直接登录或找回密码。";
       if (error.message.includes("turnstile")) return "人机验证未通过，请重新验证后再注册。";
       if (error.message.includes("email verification")) return "验证邮件发送失败，请检查邮箱服务配置后再试。";
@@ -188,6 +199,13 @@ function friendlyErrorMessage(error: unknown, failedMode: AuthMode) {
     if (failedMode === "verify") {
       if (error.status === 400) return "验证 token 无效或已过期，请重新获取验证入口。";
       return "邮箱验证失败，请稍后再试。";
+    }
+
+    if (failedMode === "forgot") {
+      if (error.message.includes("password reset email")) return "重置邮件发送失败，请稍后再试或联系管理员。";
+      if (error.status === 404) return "该邮箱未注册，请检查邮箱地址或先注册账号。";
+      if (error.status === 400) return "请输入有效的邮箱地址。";
+      return "找回密码请求失败，请稍后再试。";
     }
 
     if (error.status === 400) return "请输入有效的邮箱地址。";

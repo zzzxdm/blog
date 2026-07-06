@@ -38,6 +38,7 @@ func (handler *Handler) ListCategories(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load categories"})
 		return
 	}
+	categories = filterCategories(categories, ctx.Query("q"))
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"items":    pageItems(categories, ctx),
@@ -53,6 +54,7 @@ func (handler *Handler) ListTags(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load tags"})
 		return
 	}
+	tags = filterTags(tags, ctx.Query("q"))
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"items":    pageItems(tags, ctx),
@@ -225,4 +227,36 @@ func parsePositiveInt(value string) int {
 		return 0
 	}
 	return parsed
+}
+
+func filterCategories(items []Category, keyword string) []Category {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	if keyword == "" {
+		return items
+	}
+
+	filtered := make([]Category, 0, len(items))
+	for _, item := range items {
+		text := strings.ToLower(strings.Join([]string{item.Name, item.Slug, item.Description}, " "))
+		if strings.Contains(text, keyword) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func filterTags(items []Tag, keyword string) []Tag {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	if keyword == "" {
+		return items
+	}
+
+	filtered := make([]Tag, 0, len(items))
+	for _, item := range items {
+		text := strings.ToLower(strings.Join([]string{item.Name, item.Slug}, " "))
+		if strings.Contains(text, keyword) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }

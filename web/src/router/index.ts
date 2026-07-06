@@ -60,6 +60,7 @@ export const router = createRouter({
     { path: "/admin/taxonomies", name: "admin-taxonomies", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/categories", name: "admin-categories", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/tags", name: "admin-tags", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
+    { path: "/admin/topics", name: "admin-topics", component: () => import("../pages/admin/AdminTopicsPage.vue"), meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/comments", name: "admin-comments", component: AdminCommentsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/users", name: "admin-users", component: AdminUsersPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/messages", name: "admin-messages", component: AdminMessagesPage, meta: { hideChrome: true, requiresAdmin: true } },

@@ -21,6 +21,7 @@ import (
 	"blog/api/internal/modules/reactions"
 	"blog/api/internal/modules/submissions"
 	"blog/api/internal/modules/taxonomies"
+	"blog/api/internal/modules/topics"
 	"blog/api/internal/modules/users"
 	appserver "blog/api/internal/server"
 )
@@ -39,6 +40,7 @@ func main() {
 	var userRepo users.Repository = users.NewMemoryRepository()
 	var adminPostRepo adminposts.Repository = adminposts.NewMemoryRepository()
 	var taxonomyRepo taxonomies.Repository = taxonomies.NewMemoryRepository()
+	var topicRepo topics.Repository = topics.NewMemoryRepository()
 
 	db, err := database.Open(ctx, cfg)
 	if err != nil {
@@ -71,6 +73,7 @@ func main() {
 			sqlOperationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
 			sqlUserRepo, userErr := users.NewSQLRepository(setupCtx, db)
 			sqlAdminPostRepo, adminPostErr := adminposts.NewSQLRepository(setupCtx, db)
+			sqlTopicRepo := topics.NewSQLRepository(db)
 			cancelSetup()
 
 			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil || userErr != nil || adminPostErr != nil {
@@ -91,6 +94,7 @@ func main() {
 				userRepo = sqlUserRepo
 				adminPostRepo = sqlAdminPostRepo
 				taxonomyRepo = taxonomies.NewSQLRepository(db)
+				topicRepo = sqlTopicRepo
 			}
 		}
 	}
@@ -106,6 +110,7 @@ func main() {
 		UserRepo:       userRepo,
 		AdminPostRepo:  adminPostRepo,
 		TaxonomyRepo:   taxonomyRepo,
+		TopicRepo:      topicRepo,
 	})
 
 	schedulerCtx, stopScheduler := context.WithCancel(context.Background())

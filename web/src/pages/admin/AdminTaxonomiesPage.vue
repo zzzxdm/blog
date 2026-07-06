@@ -39,6 +39,8 @@ const categoryTotal = ref(0);
 const tagPage = ref(1);
 const tagPageSize = ref(10);
 const tagTotal = ref(0);
+const categorySearch = ref("");
+const tagSearch = ref("");
 
 const categoryPostTotal = computed(() => categories.value.reduce((sum, item) => sum + item.postCount, 0));
 const tagPostTotal = computed(() => tags.value.reduce((sum, item) => sum + item.postCount, 0));
@@ -53,8 +55,8 @@ async function load() {
 
   try {
     const [categoryResult, tagResult] = await Promise.all([
-      getCategories({ page: categoryPage.value, pageSize: categoryPageSize.value }),
-      getTags({ page: tagPage.value, pageSize: tagPageSize.value })
+      getCategories({ page: categoryPage.value, pageSize: categoryPageSize.value, q: categorySearch.value.trim() }),
+      getTags({ page: tagPage.value, pageSize: tagPageSize.value, q: tagSearch.value.trim() })
     ]);
     categories.value = categoryResult.items;
     tags.value = tagResult.items;
@@ -69,6 +71,16 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+async function searchCategories() {
+  categoryPage.value = 1;
+  await load();
+}
+
+async function searchTags() {
+  tagPage.value = 1;
+  await load();
 }
 
 async function setCategoryPage(value: number) {
@@ -257,6 +269,10 @@ function nextCategorySortOrder() {
           <h2>分类</h2>
           <button class="button-secondary" type="button" @click="resetCategoryForm">新建分类</button>
         </div>
+        <form class="table-toolbar taxonomy-table-toolbar" @submit.prevent="searchCategories">
+          <input v-model="categorySearch" class="input" type="search" placeholder="搜索分类名称、Slug、描述" aria-label="搜索分类">
+          <button class="button" type="submit" :disabled="loading">搜索</button>
+        </form>
         <table>
           <thead>
             <tr>
@@ -322,6 +338,10 @@ function nextCategorySortOrder() {
           <h2>标签</h2>
           <button class="button-secondary" type="button" @click="resetTagForm">新建标签</button>
         </div>
+        <form class="table-toolbar taxonomy-table-toolbar" @submit.prevent="searchTags">
+          <input v-model="tagSearch" class="input" type="search" placeholder="搜索标签名称或 Slug" aria-label="搜索标签">
+          <button class="button" type="submit" :disabled="loading">搜索</button>
+        </form>
         <table>
           <thead>
             <tr>

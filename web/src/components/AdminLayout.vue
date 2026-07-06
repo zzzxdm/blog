@@ -25,6 +25,7 @@ const navItems = [
   { label: "投稿", to: "/admin/submissions" },
   { label: "写作", to: "/admin/editor" },
   { label: "分类标签", to: "/admin/taxonomies" },
+  { label: "专题", to: "/admin/topics" },
   { label: "评论", to: "/admin/comments" },
   { label: "用户", to: "/admin/users" },
   { label: "站内信", to: "/admin/messages" },

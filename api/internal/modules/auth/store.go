@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"strings"
@@ -14,6 +15,8 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailExists        = errors.New("email already exists")
+	ErrAccountBanned      = errors.New("account banned")
+	ErrAccountDeleted     = errors.New("account deleted")
 	ErrInvalidSession     = errors.New("invalid session")
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrInvalidRole        = errors.New("invalid role")
@@ -48,7 +51,7 @@ type Store interface {
 	ChangePassword(userID string, currentPassword string, newPassword string) error
 	RequestEmailVerification(userID string) (string, error)
 	VerifyEmail(token string) (User, error)
-	RequestPasswordReset(email string) (string, error)
+	RequestPasswordReset(email string) (User, string, error)
 	ResetPassword(token string, newPassword string) error
 	ListSessions(userID string, currentToken string) ([]SessionInfo, error)
 	DeleteUserSession(userID string, sessionID string) error
@@ -141,7 +144,16 @@ func (store *MemoryStore) Authenticate(email string, password string) (User, str
 	user := store.usersByID[userID]
 	store.mu.RUnlock()
 
-	if !ok || user.Status == "banned" || user.Status == "deleted" || bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
+	if !ok {
+		return User{}, "", ErrInvalidCredentials
+	}
+	if user.Status == "deleted" {
+		return User{}, "", ErrAccountDeleted
+	}
+	if user.Status == "banned" {
+		return User{}, "", ErrAccountBanned
+	}
+	if bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
 		return User{}, "", ErrInvalidCredentials
 	}
 
@@ -171,12 +183,19 @@ func (store *MemoryStore) Register(request RegisterRequest) (User, string, error
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	if _, ok := store.usersByEmail[normalizedEmail]; ok {
+	if existingID, ok := store.usersByEmail[normalizedEmail]; ok {
+		if store.usersByID[existingID].Status == "deleted" {
+			return User{}, "", ErrAccountDeleted
+		}
 		return User{}, "", ErrEmailExists
+	}
+	userID, err := store.nextUserIDLocked()
+	if err != nil {
+		return User{}, "", err
 	}
 
 	user := User{
-		ID:            "user_" + strings.ReplaceAll(strings.Split(normalizedEmail, "@")[0], ".", "_"),
+		ID:            userID,
 		Email:         normalizedEmail,
 		DisplayName:   displayName,
 		Role:          "user",
@@ -220,8 +239,15 @@ func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, Invitatio
 	if normalizedEmail == "" {
 		return User{}, InvitationSecrets{}, ErrInvalidCredentials
 	}
-	if _, ok := store.usersByEmail[normalizedEmail]; ok {
+	if existingID, ok := store.usersByEmail[normalizedEmail]; ok {
+		if store.usersByID[existingID].Status == "deleted" {
+			return User{}, InvitationSecrets{}, ErrAccountDeleted
+		}
 		return User{}, InvitationSecrets{}, ErrEmailExists
+	}
+	userID, err := store.nextUserIDLocked()
+	if err != nil {
+		return User{}, InvitationSecrets{}, err
 	}
 
 	resetToken, err := randomToken()
@@ -238,7 +264,7 @@ func (store *MemoryStore) InviteUser(request InviteUserRequest) (User, Invitatio
 	}
 
 	user := User{
-		ID:            uniqueUserID(normalizedEmail),
+		ID:            userID,
 		Email:         normalizedEmail,
 		DisplayName:   displayName,
 		Role:          normalizeRole(request.Role),
@@ -408,12 +434,12 @@ func (store *MemoryStore) VerifyEmail(token string) (User, error) {
 	return user, nil
 }
 
-func (store *MemoryStore) RequestPasswordReset(email string) (string, error) {
+func (store *MemoryStore) RequestPasswordReset(email string) (User, string, error) {
 	normalizedEmail := normalizeEmail(email)
 
 	token, err := randomToken()
 	if err != nil {
-		return "", err
+		return User{}, "", err
 	}
 
 	store.mu.Lock()
@@ -421,12 +447,12 @@ func (store *MemoryStore) RequestPasswordReset(email string) (string, error) {
 
 	userID, ok := store.usersByEmail[normalizedEmail]
 	if !ok {
-		return "", nil
+		return User{}, "", nil
 	}
 
 	user := store.usersByID[userID]
 	if user.Status == "banned" || user.Status == "deleted" {
-		return "", nil
+		return User{}, "", nil
 	}
 
 	store.resetTokens[token] = authToken{
@@ -434,7 +460,7 @@ func (store *MemoryStore) RequestPasswordReset(email string) (string, error) {
 		ExpiresAt: store.now().Add(30 * time.Minute),
 	}
 
-	return token, nil
+	return user, token, nil
 }
 
 func (store *MemoryStore) ResetPassword(token string, newPassword string) error {
@@ -560,6 +586,20 @@ func (store *MemoryStore) mustSeed(user User, password string) {
 	store.passwordHashes[user.ID] = hash
 }
 
+func (store *MemoryStore) nextUserIDLocked() (string, error) {
+	for attempts := 0; attempts < 5; attempts++ {
+		id, err := randomUserID()
+		if err != nil {
+			return "", err
+		}
+		if _, exists := store.usersByID[id]; !exists {
+			return id, nil
+		}
+	}
+
+	return "", errors.New("failed to generate unique user id")
+}
+
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
@@ -580,6 +620,16 @@ func randomTemporaryPassword() (string, error) {
 	}
 
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func randomUserID() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(bytes)
+	return "usr_" + strings.ToLower(encoded), nil
 }
 
 func firstRune(value string) string {

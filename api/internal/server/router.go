@@ -17,6 +17,7 @@ import (
 	"blog/api/internal/modules/seo"
 	"blog/api/internal/modules/submissions"
 	"blog/api/internal/modules/taxonomies"
+	"blog/api/internal/modules/topics"
 	"blog/api/internal/modules/users"
 
 	"github.com/gin-gonic/gin"
@@ -41,6 +42,7 @@ type Repositories struct {
 	UserRepo          users.Repository
 	AdminPostRepo     adminposts.Repository
 	TaxonomyRepo      taxonomies.Repository
+	TopicRepo         topics.Repository
 	AuthEmailSender   auth.EmailSender
 	TurnstileVerifier auth.TurnstileVerifier
 }
@@ -102,6 +104,9 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	if repos.TaxonomyRepo == nil {
 		repos.TaxonomyRepo = taxonomies.NewMemoryRepository()
 	}
+	if repos.TopicRepo == nil {
+		repos.TopicRepo = topics.NewMemoryRepository()
+	}
 	if repos.AuthEmailSender == nil {
 		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)
 		if err == nil && emailSender != nil {
@@ -136,6 +141,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 
 	auth.RegisterRoutesWithDependencies(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo}, repos.AuthEmailSender, repos.TurnstileVerifier)
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
+	topics.RegisterRoutes(api, repos.TopicRepo, repos.PostRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
 	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)

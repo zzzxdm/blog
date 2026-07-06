@@ -1,6 +1,33 @@
 package auth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestNewUsersGetOpaqueIDs(t *testing.T) {
+	store := NewMemoryStore()
+
+	registered, _, err := store.Register(RegisterRequest{
+		Email:       "pretty.id@example.com",
+		Password:    "password",
+		DisplayName: "Pretty ID",
+	})
+	if err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+	assertOpaqueUserID(t, registered.ID, "pretty")
+
+	invited, _, err := store.InviteUser(InviteUserRequest{
+		Email:       "invited.person@example.com",
+		DisplayName: "Invited Person",
+		Role:        "author",
+	})
+	if err != nil {
+		t.Fatalf("InviteUser returned error: %v", err)
+	}
+	assertOpaqueUserID(t, invited.ID, "invited")
+}
 
 func TestInvitePasswordSetupMarksEmailVerified(t *testing.T) {
 	store := NewMemoryStore()
@@ -36,5 +63,16 @@ func TestInvitePasswordSetupMarksEmailVerified(t *testing.T) {
 	}
 	if !user.EmailVerified {
 		t.Fatal("expected password setup through emailed token to verify email")
+	}
+}
+
+func assertOpaqueUserID(t *testing.T, id string, emailLocalPart string) {
+	t.Helper()
+
+	if !strings.HasPrefix(id, "usr_") {
+		t.Fatalf("id = %q, want usr_ prefix", id)
+	}
+	if strings.Contains(id, emailLocalPart) || strings.Contains(id, ".") || strings.Contains(id, "@") {
+		t.Fatalf("id = %q should not expose email-derived text", id)
 	}
 }

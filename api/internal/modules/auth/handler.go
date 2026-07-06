@@ -176,6 +176,14 @@ func (handler *Handler) Login(ctx *gin.Context) {
 
 	user, token, err := handler.store.Authenticate(request.Email, request.Password)
 	if err != nil {
+		if errors.Is(err, ErrAccountDeleted) {
+			ctx.JSON(http.StatusGone, gin.H{"error": "account has been deleted"})
+			return
+		}
+		if errors.Is(err, ErrAccountBanned) {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "account has been banned"})
+			return
+		}
 		if errors.Is(err, ErrInvalidCredentials) {
 			if security.LoginFailureLock && handler.recordLoginFailure(request.Email, time.Now()) {
 				ctx.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked"})
@@ -220,6 +228,10 @@ func (handler *Handler) Register(ctx *gin.Context) {
 
 	user, token, err := handler.store.Register(request)
 	if err != nil {
+		if errors.Is(err, ErrAccountDeleted) {
+			ctx.JSON(http.StatusGone, gin.H{"error": "account has been deleted"})
+			return
+		}
 		if errors.Is(err, ErrEmailExists) {
 			ctx.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
 			return
@@ -470,17 +482,43 @@ func (handler *Handler) ForgotPassword(ctx *gin.Context) {
 		return
 	}
 
-	token, err := handler.store.RequestPasswordReset(request.Email)
+	user, token, err := handler.store.RequestPasswordReset(request.Email)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
 		return
 	}
+	if token == "" {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "email is not registered"})
+		return
+	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"ok":         true,
-		"resetToken": token,
-		"delivery":   "dev-response",
-	})
+	response, ok := handler.deliverPasswordReset(ctx, user, token)
+	if !ok {
+		return
+	}
+	response["ok"] = true
+	ctx.JSON(http.StatusOK, response)
+}
+
+func (handler *Handler) deliverPasswordReset(ctx *gin.Context, user User, token string) (gin.H, bool) {
+	if handler.emailSender == nil {
+		response := gin.H{"delivery": "dev-response"}
+		if token != "" {
+			response["resetToken"] = token
+		}
+		return response, true
+	}
+
+	if token == "" {
+		return gin.H{"delivery": "email"}, true
+	}
+
+	if err := handler.emailSender.SendPasswordSetup(ctx.Request.Context(), user, token); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send password reset email"})
+		return nil, false
+	}
+
+	return gin.H{"delivery": "email"}, true
 }
 
 func (handler *Handler) ResetPassword(ctx *gin.Context) {

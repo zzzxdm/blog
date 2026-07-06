@@ -1127,7 +1127,7 @@ func TestAccountSessionsExportAndDelete(t *testing.T) {
 	loginReq.Header.Set("Content-Type", "application/json")
 	loginRec := httptest.NewRecorder()
 	router.ServeHTTP(loginRec, loginReq)
-	if loginRec.Code != http.StatusUnauthorized {
+	if loginRec.Code != http.StatusGone {
 		t.Fatalf("expected deleted account login rejected, got status=%d body=%q", loginRec.Code, loginRec.Body.String())
 	}
 }

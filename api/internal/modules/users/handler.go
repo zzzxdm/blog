@@ -41,6 +41,7 @@ func RegisterRoutesWithEmailSender(router gin.IRouter, repo Repository, authStor
 	router.PUT("/admin/users/:id/role", handler.UpdateRole)
 	router.PUT("/admin/users/:id/status", handler.UpdateStatus)
 	router.DELETE("/admin/users/:id", handler.Delete)
+	router.POST("/admin/users/:id/restore", handler.Restore)
 	router.POST("/admin/users/:id/password-reset", handler.RequestPasswordReset)
 	router.GET("/account/settings", handler.GetAccount)
 	router.PUT("/account/settings", handler.UpdateAccount)
@@ -155,6 +156,10 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 	if err != nil {
 		if errors.Is(err, auth.ErrEmailExists) {
 			ctx.JSON(http.StatusConflict, gin.H{"error": "该邮箱已存在，不能重复邀请。请在用户列表中搜索该邮箱，可直接调整角色或发送密码重置邮件。"})
+			return
+		}
+		if errors.Is(err, auth.ErrAccountDeleted) {
+			ctx.JSON(http.StatusGone, gin.H{"error": "该邮箱对应的账号已被删除，不能直接重新邀请。请确认是否需要恢复账号或换用其他邮箱。"})
 			return
 		}
 
@@ -324,6 +329,56 @@ func (handler *Handler) Delete(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, managed)
 }
 
+func (handler *Handler) Restore(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	userID := ctx.Param("id")
+	if handler.authStore != nil {
+		updated, err := handler.authStore.UpdateStatus(userID, "active")
+		if err != nil {
+			if errors.Is(err, auth.ErrInvalidSession) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+			if errors.Is(err, auth.ErrInvalidStatus) {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user status"})
+				return
+			}
+
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore user"})
+			return
+		}
+
+		managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync restored user"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, managed)
+		return
+	}
+
+	managed, err := handler.repo.UpdateStatus(ctx.Request.Context(), userID, "active")
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		if errors.Is(err, ErrInvalidStatus) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user status"})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore user"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, managed)
+}
+
 func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 	if _, ok := auth.RequireAdmin(ctx); !ok {
 		return
@@ -344,7 +399,7 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 		return
 	}
 
-	token, err := handler.authStore.RequestPasswordReset(user.Email)
+	_, token, err := handler.authStore.RequestPasswordReset(user.Email)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
 		return

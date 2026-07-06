@@ -58,6 +58,28 @@ export interface Tag {
   postCount: number;
 }
 
+export type TopicTone = "" | "rust" | "amber" | "gray";
+export type TopicStatus = "active" | "draft";
+
+export interface Topic {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  coverImage: string;
+  imageAlt: string;
+  tone: TopicTone;
+  status: TopicStatus;
+  featured: boolean;
+  sortOrder: number;
+  categories: string[];
+  tags: string[];
+  postCount: number;
+  latestPostAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TaxonomyListResponse<T> {
   items: T[];
   page: number;
@@ -75,6 +97,20 @@ export interface SaveCategoryPayload {
 export interface SaveTagPayload {
   slug: string;
   name: string;
+}
+
+export interface TopicPayload {
+  slug: string;
+  title: string;
+  summary: string;
+  coverImage: string;
+  imageAlt: string;
+  tone: TopicTone;
+  status: TopicStatus;
+  featured: boolean;
+  sortOrder: number;
+  categories: string[];
+  tags: string[];
 }
 
 export interface User {
@@ -738,6 +774,16 @@ export interface PostListParams {
 export interface TaxonomyListParams {
   page?: number;
   pageSize?: number;
+  q?: string;
+}
+
+export interface TopicListParams {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  status?: string;
+  featured?: boolean;
+  all?: boolean;
 }
 
 export interface ManageListParams {
@@ -812,6 +858,45 @@ export async function getCategories(params: TaxonomyListParams = {}): Promise<Ta
 export async function getTags(params: TaxonomyListParams = {}): Promise<TaxonomyListResponse<Tag>> {
   const query = toQuery(params);
   return request<TaxonomyListResponse<Tag>>(`/tags${query}`);
+}
+
+export async function getTopics(params: TopicListParams = {}): Promise<ListResponse<Topic>> {
+  const query = toQuery(params);
+  return request<ListResponse<Topic>>(`/topics${query}`);
+}
+
+export async function getTopic(slug: string): Promise<Topic> {
+  return request<Topic>(`/topics/${encodeURIComponent(slug)}`);
+}
+
+export async function getTopicPosts(slug: string, params: PostListParams = {}): Promise<ListResponse<Post>> {
+  const query = toQuery(params);
+  return request<ListResponse<Post>>(`/topics/${encodeURIComponent(slug)}/posts${query}`);
+}
+
+export async function getAdminTopics(params: TopicListParams = {}): Promise<ListResponse<Topic>> {
+  const query = toQuery(params);
+  return request<ListResponse<Topic>>(`/admin/topics${query}`);
+}
+
+export async function createAdminTopic(payload: TopicPayload): Promise<Topic> {
+  return request<Topic>("/admin/topics", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateAdminTopic(id: string, payload: TopicPayload): Promise<Topic> {
+  return request<Topic>(`/admin/topics/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteAdminTopic(id: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/admin/topics/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
 }
 
 export async function createAdminCategory(payload: SaveCategoryPayload): Promise<Category> {
@@ -1233,8 +1318,7 @@ export async function uploadAdminMedia(file: File, payload: { alt?: string; cate
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => null) as { error?: string } | null;
-    throw new ApiError(response.status, error?.error || `Request failed: ${response.status}`);
+    throw await apiErrorFromResponse(response);
   }
 
   return response.json() as Promise<MediaAsset>;
@@ -1309,6 +1393,12 @@ export async function updateAdminUserStatus(id: string, status: ManagedUser["sta
 export async function deleteAdminUser(id: string): Promise<ManagedUser> {
   return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}`, {
     method: "DELETE"
+  });
+}
+
+export async function restoreAdminUser(id: string): Promise<ManagedUser> {
+  return request<ManagedUser>(`/admin/users/${encodeURIComponent(id)}/restore`, {
+    method: "POST"
   });
 }
 
@@ -1411,11 +1501,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new ApiError(response.status, payload?.error || `Request failed: ${response.status}`);
+    throw await apiErrorFromResponse(response);
   }
 
   return response.json() as Promise<T>;
+}
+
+async function apiErrorFromResponse(response: Response): Promise<ApiError> {
+  const payload = await response.json().catch(() => null) as { error?: string } | null;
+  return new ApiError(response.status, apiErrorMessage(response.status, payload?.error, response.headers.get("Retry-After")));
+}
+
+function apiErrorMessage(status: number, serverMessage?: string, retryAfter?: string | null) {
+  if (status === 429) {
+    return rateLimitMessage(retryAfter);
+  }
+
+  return serverMessage?.trim() || `Request failed: ${status}`;
+}
+
+function rateLimitMessage(retryAfter?: string | null) {
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    if (seconds < 60) {
+      return `请求过于频繁，请 ${Math.ceil(seconds)} 秒后再试。`;
+    }
+
+    return `请求过于频繁，请 ${Math.ceil(seconds / 60)} 分钟后再试。`;
+  }
+
+  return "请求过于频繁，请稍后再试。";
 }
 
 function toQuery(params: object): string {

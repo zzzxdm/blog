@@ -93,6 +93,8 @@ func auditAction(method string, path string) string {
 		return "user.update"
 	case strings.Contains(path, "/admin/messages"):
 		return "message.send"
+	case strings.Contains(path, "/admin/topics"):
+		return "topic.update"
 	case strings.Contains(path, "/admin/categories"), strings.Contains(path, "/admin/tags"):
 		return "taxonomy.update"
 	default:
@@ -117,6 +119,8 @@ func auditResource(path string) (string, string, string) {
 		return "navigation", "", "导航设置"
 	case "categories", "tags":
 		resourceType = "taxonomy"
+	case "topics":
+		resourceType = "topic"
 	case "submissions":
 		resourceType = "submission"
 	}

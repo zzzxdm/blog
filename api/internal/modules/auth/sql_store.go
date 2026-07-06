@@ -38,7 +38,13 @@ func (store *SQLStore) Authenticate(email string, password string) (User, string
 		return User{}, "", err
 	}
 
-	if (user.Status == "banned" || user.Status == "deleted") || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+	if user.Status == "deleted" {
+		return User{}, "", ErrAccountDeleted
+	}
+	if user.Status == "banned" {
+		return User{}, "", ErrAccountBanned
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 		return User{}, "", ErrInvalidCredentials
 	}
 
@@ -75,12 +81,20 @@ func (store *SQLStore) Register(request RegisterRequest) (User, string, error) {
 		}
 	}()
 
-	var exists bool
-	if err := tx.QueryRowContext(context.Background(), `SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)`, normalizedEmail).Scan(&exists); err != nil {
+	var existingStatus string
+	err = tx.QueryRowContext(context.Background(), `SELECT status FROM users WHERE email = $1`, normalizedEmail).Scan(&existingStatus)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return User{}, "", fmt.Errorf("check email: %w", err)
 	}
-	if exists {
+	if existingStatus == "deleted" {
+		return User{}, "", ErrAccountDeleted
+	}
+	if existingStatus != "" {
 		return User{}, "", ErrEmailExists
+	}
+	userID, err := store.nextUserID(context.Background(), tx)
+	if err != nil {
+		return User{}, "", err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
@@ -89,7 +103,7 @@ func (store *SQLStore) Register(request RegisterRequest) (User, string, error) {
 	}
 
 	user := User{
-		ID:          uniqueUserID(normalizedEmail),
+		ID:          userID,
 		Email:       normalizedEmail,
 		DisplayName: displayName,
 		Role:        "user",
@@ -145,12 +159,20 @@ func (store *SQLStore) InviteUser(request InviteUserRequest) (User, InvitationSe
 		}
 	}()
 
-	var exists bool
-	if err := tx.QueryRowContext(context.Background(), `SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)`, normalizedEmail).Scan(&exists); err != nil {
+	var existingStatus string
+	err = tx.QueryRowContext(context.Background(), `SELECT status FROM users WHERE email = $1`, normalizedEmail).Scan(&existingStatus)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return User{}, InvitationSecrets{}, fmt.Errorf("check invitation email: %w", err)
 	}
-	if exists {
+	if existingStatus == "deleted" {
+		return User{}, InvitationSecrets{}, ErrAccountDeleted
+	}
+	if existingStatus != "" {
 		return User{}, InvitationSecrets{}, ErrEmailExists
+	}
+	userID, err := store.nextUserID(context.Background(), tx)
+	if err != nil {
+		return User{}, InvitationSecrets{}, err
 	}
 
 	tempPassword, err := randomTemporaryPassword()
@@ -163,7 +185,7 @@ func (store *SQLStore) InviteUser(request InviteUserRequest) (User, InvitationSe
 	}
 
 	user := User{
-		ID:            uniqueUserID(normalizedEmail),
+		ID:            userID,
 		Email:         normalizedEmail,
 		DisplayName:   displayName,
 		Role:          normalizeRole(request.Role),
@@ -416,31 +438,31 @@ func (store *SQLStore) VerifyEmail(token string) (User, error) {
 	return user, nil
 }
 
-func (store *SQLStore) RequestPasswordReset(email string) (string, error) {
+func (store *SQLStore) RequestPasswordReset(email string) (User, string, error) {
 	user, _, err := store.userByEmail(context.Background(), email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
+			return User{}, "", nil
 		}
-		return "", err
+		return User{}, "", err
 	}
 	if user.Status == "banned" || user.Status == "deleted" {
-		return "", nil
+		return User{}, "", nil
 	}
 
 	token, err := randomToken()
 	if err != nil {
-		return "", err
+		return User{}, "", err
 	}
 
 	if _, err := store.db.ExecContext(context.Background(), `
 		INSERT INTO password_reset_tokens (token, user_id, expires_at)
 		VALUES ($1, $2, $3)
 	`, token, user.ID, store.now().Add(30*time.Minute)); err != nil {
-		return "", fmt.Errorf("insert password reset token: %w", err)
+		return User{}, "", fmt.Errorf("insert password reset token: %w", err)
 	}
 
-	return token, nil
+	return user, token, nil
 }
 
 func (store *SQLStore) ResetPassword(token string, newPassword string) error {
@@ -728,13 +750,23 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 	return nil
 }
 
-func uniqueUserID(email string) string {
-	local := strings.Split(normalizeEmail(email), "@")[0]
-	local = strings.ReplaceAll(local, ".", "_")
-	local = strings.ReplaceAll(local, "-", "_")
-	if local == "" {
-		local = "user"
+func (store *SQLStore) nextUserID(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}) (string, error) {
+	for attempts := 0; attempts < 5; attempts++ {
+		id, err := randomUserID()
+		if err != nil {
+			return "", err
+		}
+
+		var exists bool
+		if err := queryer.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1)`, id).Scan(&exists); err != nil {
+			return "", fmt.Errorf("check generated user id: %w", err)
+		}
+		if !exists {
+			return id, nil
+		}
 	}
 
-	return fmt.Sprintf("user_%s_%d", local, time.Now().UnixNano())
+	return "", errors.New("failed to generate unique user id")
 }
