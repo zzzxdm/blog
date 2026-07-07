@@ -8,6 +8,10 @@ const (
 	StatusReturned  = "returned"
 	StatusRejected  = "rejected"
 	StatusPublished = "published"
+	StatusArchived  = "archived"
+
+	VisibilityPublic  = "public"
+	VisibilityPrivate = "private"
 
 	ActionApprove = "approve"
 	ActionReturn  = "return"
@@ -26,6 +30,7 @@ type Submission struct {
 	Tags              []string   `json:"tags"`
 	CoverImage        string     `json:"coverImage"`
 	Slug              string     `json:"slug"`
+	Visibility        string     `json:"visibility"`
 	Status            string     `json:"status"`
 	ReviewNote        string     `json:"reviewNote"`
 	ReviewerID        string     `json:"reviewerId,omitempty"`
@@ -56,6 +61,7 @@ type Stats struct {
 	Returned  int `json:"returned"`
 	Rejected  int `json:"rejected"`
 	Published int `json:"published"`
+	Archived  int `json:"archived"`
 	Total     int `json:"total"`
 }
 
@@ -75,6 +81,7 @@ type SaveRequest struct {
 	Tags           []string `json:"tags"`
 	CoverImage     string   `json:"coverImage"`
 	Slug           string   `json:"slug"`
+	Visibility     string   `json:"visibility"`
 	Submit         bool     `json:"submit"`
 	TurnstileToken string   `json:"turnstileToken"`
 }

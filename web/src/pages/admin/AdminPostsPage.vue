@@ -5,20 +5,28 @@ import { useRouter } from "vue-router";
 import AdminLayout from "../../components/AdminLayout.vue";
 import PaginationControls from "../../components/PaginationControls.vue";
 import {
+  archiveAdminPost,
   createAdminPost,
   getAdminPosts,
+  publishAdminPost,
   type AdminPost,
   type AdminPostPayload,
   type AdminPostStats,
   type AdminPostVisibility
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useConfirmStore } from "../../stores/confirm";
+import { useToastStore } from "../../stores/toast";
 
 const router = useRouter();
+const confirmDialog = useConfirmStore();
+const toast = useToastStore();
 const posts = ref<AdminPost[]>([]);
 const stats = ref<AdminPostStats>({ published: 0, draft: 0, review: 0, scheduled: 0, monthlyViews: "0", total: 0 });
 const loading = ref(false);
 const importing = ref(false);
+const archivingId = ref("");
+const restoringId = ref("");
 const error = ref("");
 const message = ref("");
 const importInput = ref<HTMLInputElement | null>(null);
@@ -97,6 +105,60 @@ async function importMarkdown(event: Event) {
     error.value = err instanceof Error ? err.message : "Markdown 导入失败";
   } finally {
     importing.value = false;
+  }
+}
+
+async function archivePost(post: AdminPost) {
+  const confirmed = await confirmDialog.open({
+    title: "下架已发布文章",
+    message: `确认下架《${post.title}》吗？下架后公开列表和搜索中将不再展示。`,
+    confirmText: "下架文章",
+    tone: "danger"
+  });
+  if (!confirmed) {
+    return;
+  }
+
+  archivingId.value = post.id;
+  error.value = "";
+  message.value = "";
+  try {
+    const archived = await archiveAdminPost(post.id);
+    message.value = `已下架：${archived.title}`;
+    toast.success("文章已下架", archived.title);
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "文章下架失败";
+    toast.error("文章下架失败", error.value);
+  } finally {
+    archivingId.value = "";
+  }
+}
+
+async function restorePost(post: AdminPost) {
+  const confirmed = await confirmDialog.open({
+    title: "重新上架文章",
+    message: `确认重新上架《${post.title}》吗？上架后会重新进入公开访问和搜索范围。`,
+    confirmText: "重新上架",
+    tone: "success"
+  });
+  if (!confirmed) {
+    return;
+  }
+
+  restoringId.value = post.id;
+  error.value = "";
+  message.value = "";
+  try {
+    const restored = await publishAdminPost(post.id);
+    message.value = `已重新上架：${restored.title}`;
+    toast.success("文章已重新上架", restored.title);
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "文章重新上架失败";
+    toast.error("重新上架失败", error.value);
+  } finally {
+    restoringId.value = "";
   }
 }
 
@@ -280,7 +342,17 @@ function formatDate(value: string) {
             <td>{{ post.viewCount }}</td>
             <td>{{ post.commentCount }}</td>
             <td>{{ formatDate(post.updatedAt) }}</td>
-            <td><RouterLink class="button-secondary" :to="`/admin/editor?id=${post.id}`">编辑</RouterLink></td>
+            <td>
+              <div class="header-actions">
+                <RouterLink class="button-secondary" :to="`/admin/editor?id=${post.id}`">编辑</RouterLink>
+                <button v-if="post.status === 'published'" class="button-secondary" type="button" :disabled="archivingId === post.id" @click="archivePost(post)">
+                  {{ archivingId === post.id ? "下架中..." : "下架" }}
+                </button>
+                <button v-if="post.status === 'archived'" class="button-secondary" type="button" :disabled="restoringId === post.id" @click="restorePost(post)">
+                  {{ restoringId === post.id ? "上架中..." : "重新上架" }}
+                </button>
+              </div>
+            </td>
           </tr>
           <tr v-if="posts.length === 0">
             <td colspan="7" class="muted">没有匹配的文章。</td>

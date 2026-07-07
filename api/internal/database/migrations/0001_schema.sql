@@ -24,9 +24,11 @@ CREATE TABLE IF NOT EXISTS posts (
   title text NOT NULL,
   summary text NOT NULL DEFAULT '',
   content text NOT NULL DEFAULT '',
+  visibility text NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'private')),
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'rejected', 'scheduled', 'published', 'archived')),
   source text NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'submission')),
   category_id bigint NOT NULL,
+  author_id bigint,
   author_name text NOT NULL DEFAULT '管理员',
   cover_image text NOT NULL DEFAULT '',
   reading_time integer NOT NULL DEFAULT 1 CHECK (reading_time > 0),
@@ -45,6 +47,8 @@ CREATE TABLE IF NOT EXISTS post_tags (
   tag_id bigint NOT NULL,
   PRIMARY KEY (post_id, tag_id)
 );
+CREATE INDEX IF NOT EXISTS idx_posts_status_visibility_published_at ON posts (status, visibility, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_author_id_visibility ON posts (author_id, visibility);
 CREATE INDEX IF NOT EXISTS idx_posts_status_published_at ON posts (status, published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_category_id ON posts (category_id);
 CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON posts USING gin (search_vector);
@@ -596,7 +600,8 @@ CREATE TABLE IF NOT EXISTS submissions (
   tags text[] NOT NULL DEFAULT '{}',
   cover_image text NOT NULL DEFAULT '',
   slug text NOT NULL DEFAULT '',
-  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'returned', 'rejected', 'published')),
+  visibility text NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'private')),
+  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'returned', 'rejected', 'published', 'archived')),
   review_note text NOT NULL DEFAULT '',
   reviewer_id bigint,
   published_post_slug text,
@@ -609,7 +614,9 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_submissions_author_updated_at ON submissions (author_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_author_visibility_updated_at ON submissions (author_id, visibility, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_submissions_status_submitted_at ON submissions (status, submitted_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_submissions_visibility_status ON submissions (visibility, status);
 CREATE INDEX IF NOT EXISTS idx_submissions_slug ON submissions (slug);
 
 DROP TRIGGER IF EXISTS touch_submissions_updated_at ON submissions;

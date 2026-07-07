@@ -17,8 +17,10 @@ import {
   type Tag
 } from "../../shared/api";
 import { useConfirmStore } from "../../stores/confirm";
+import { useToastStore } from "../../stores/toast";
 
 const confirmDialog = useConfirmStore();
+const toast = useToastStore();
 const categories = ref<Category[]>([]);
 const tags = ref<Tag[]>([]);
 const loading = ref(false);
@@ -156,6 +158,10 @@ async function saveCategory() {
 
 async function removeCategory(item: Category) {
   if (item.postCount > 0) {
+    const text = `分类「${item.name}」仍被 ${item.postCount} 篇文章引用，请先调整这些文章的分类后再删除。`;
+    message.value = text;
+    error.value = "";
+    toast.warning("分类正在使用中", text);
     return;
   }
 
@@ -179,9 +185,11 @@ async function removeCategory(item: Category) {
       resetCategoryForm();
     }
     message.value = "分类已删除。";
+    toast.success("分类已删除", item.name);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "分类删除失败";
+    toast.error("分类删除失败", error.value);
   } finally {
     actingId.value = "";
   }
@@ -229,6 +237,10 @@ async function saveTag() {
 
 async function removeTag(item: Tag) {
   if (item.postCount > 0) {
+    const text = `标签「${item.name}」仍被 ${item.postCount} 篇文章引用，请先从这些文章中移除或替换该标签。`;
+    message.value = text;
+    error.value = "";
+    toast.warning("标签正在使用中", text);
     return;
   }
 
@@ -252,9 +264,11 @@ async function removeTag(item: Tag) {
       resetTagForm();
     }
     message.value = "标签已删除。";
+    toast.success("标签已删除", item.name);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "标签删除失败";
+    toast.error("标签删除失败", error.value);
   } finally {
     actingId.value = "";
   }
@@ -321,7 +335,7 @@ function nextCategorySortOrder() {
               <td>
                 <div class="header-actions">
                   <button class="button-secondary" type="button" @click="editCategory(item)">编辑</button>
-                  <button class="button-secondary" type="button" :disabled="item.postCount > 0 || actingId === item.id" @click="removeCategory(item)">删除</button>
+                  <button class="button-secondary" type="button" :disabled="actingId === item.id" @click="removeCategory(item)">删除</button>
                 </div>
               </td>
             </tr>
@@ -390,7 +404,7 @@ function nextCategorySortOrder() {
               <td>
                 <div class="header-actions">
                   <button class="button-secondary" type="button" @click="editTag(item)">编辑</button>
-                  <button class="button-secondary" type="button" :disabled="item.postCount > 0 || actingId === item.id" @click="removeTag(item)">删除</button>
+                  <button class="button-secondary" type="button" :disabled="actingId === item.id" @click="removeTag(item)">删除</button>
                 </div>
               </td>
             </tr>

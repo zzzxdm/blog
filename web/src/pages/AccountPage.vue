@@ -25,7 +25,7 @@ const messageStore = useMessageStore();
 
 const account = ref<AccountSettings | null>(null);
 const submissions = ref<Submission[]>([]);
-const submissionStats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const submissionStats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, archived: 0, total: 0 });
 const comments = ref<Comment[]>([]);
 const bookmarks = ref<BookmarkItem[]>([]);
 const messages = ref<StationMessage[]>([]);
@@ -123,6 +123,7 @@ function formatTime(value?: string) {
             <RouterLink :class="{ active: active('/account') }" to="/account">概览</RouterLink>
             <RouterLink :class="{ active: active('/account/comments') }" to="/account/comments">我的评论</RouterLink>
             <RouterLink :class="{ active: active('/account/bookmarks') }" to="/account/bookmarks">我的收藏</RouterLink>
+            <RouterLink :class="{ active: active('/account/private-posts') }" to="/account/private-posts">私密文章</RouterLink>
             <RouterLink :class="{ active: active('/account/submissions') }" to="/account/submissions">我的投稿</RouterLink>
             <RouterLink :class="{ active: active('/account/messages') }" to="/account/messages">
               <span>站内信</span>
@@ -196,6 +197,14 @@ function formatTime(value?: string) {
             </li>
           </ul>
           <p v-if="bookmarks.length === 0" class="muted">还没有收藏文章。</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h2>私密文章</h2>
+            <RouterLink class="button-secondary" to="/account/private-posts">查看入口</RouterLink>
+          </div>
+          <p class="muted">私密文章不会出现在公开列表和搜索里，登录后可在这里查看你有权限访问的内容。</p>
         </section>
 
         <section class="panel">

@@ -56,6 +56,7 @@ func (repo *SQLRepository) CountSubmittedSince(ctx context.Context, userID strin
 		WHERE author_id = $1
 			AND submitted_at >= $2
 			AND ($3 = '' OR id <> $3)
+			AND visibility = 'public'
 	`, userID, since, strings.TrimSpace(excludeID)).Scan(&total); err != nil {
 		return 0, fmt.Errorf("count submitted submissions: %w", err)
 	}
@@ -90,10 +91,10 @@ func (repo *SQLRepository) Create(ctx context.Context, request SaveRequest, user
 
 	if _, err := repo.db.ExecContext(ctx, `
 		INSERT INTO submissions (
-			id, author_id, title, summary, content, category, tags, cover_image, slug,
+			id, author_id, title, summary, content, category, tags, cover_image, slug, visibility,
 			status, review_note, version, created_at, updated_at, submitted_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, '', $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '', $12, $13, $14, $15)
 	`, submission.ID,
 		submission.AuthorID,
 		submission.Title,
@@ -103,6 +104,7 @@ func (repo *SQLRepository) Create(ctx context.Context, request SaveRequest, user
 		repo.tagsValue(submission.Tags),
 		submission.CoverImage,
 		submission.Slug,
+		submission.Visibility,
 		submission.Status,
 		submission.Version,
 		submission.CreatedAt,
@@ -127,7 +129,7 @@ func (repo *SQLRepository) Update(ctx context.Context, submissionID string, user
 	if current.AuthorID != userID {
 		return Submission{}, ErrForbidden
 	}
-	if current.Status == StatusPublished {
+	if (current.Status == StatusPublished || current.Status == StatusArchived) && (current.Visibility != VisibilityPrivate || !request.Submit) {
 		return Submission{}, ErrForbidden
 	}
 
@@ -152,10 +154,11 @@ func (repo *SQLRepository) Update(ctx context.Context, submissionID string, user
 			tags = $6,
 			cover_image = $7,
 			slug = $8,
-			status = $9,
-			review_note = $10,
-			submitted_at = $11,
-			reviewed_at = $12,
+			visibility = $9,
+			status = $10,
+			review_note = $11,
+			submitted_at = $12,
+			reviewed_at = $13,
 			version = version + 1
 		WHERE id = $1
 	`, submissionID,
@@ -166,6 +169,7 @@ func (repo *SQLRepository) Update(ctx context.Context, submissionID string, user
 		repo.tagsValue(updated.Tags),
 		updated.CoverImage,
 		updated.Slug,
+		updated.Visibility,
 		status,
 		reviewNote,
 		submittedAt,
@@ -185,7 +189,7 @@ func (repo *SQLRepository) Submit(ctx context.Context, submissionID string, user
 	if current.AuthorID != userID {
 		return Submission{}, ErrForbidden
 	}
-	if current.Status == StatusPublished {
+	if current.Status == StatusPublished || current.Status == StatusArchived {
 		return Submission{}, ErrForbidden
 	}
 	if err := validateSubmissionReady(current); err != nil {
@@ -207,16 +211,54 @@ func (repo *SQLRepository) Submit(ctx context.Context, submissionID string, user
 	return repo.Get(ctx, submissionID)
 }
 
+func (repo *SQLRepository) MarkPublished(ctx context.Context, submissionID string, userID string, publishedPostSlug string) (Submission, error) {
+	if strings.TrimSpace(publishedPostSlug) == "" {
+		return Submission{}, ErrInvalidSubmission
+	}
+
+	current, err := repo.Get(ctx, submissionID)
+	if err != nil {
+		return Submission{}, err
+	}
+	if current.AuthorID != userID {
+		return Submission{}, ErrForbidden
+	}
+	if err := validateSubmissionReady(current); err != nil {
+		return Submission{}, err
+	}
+
+	now := time.Now()
+	submittedAt := current.SubmittedAt
+	if submittedAt == nil {
+		submittedAt = &now
+	}
+	if _, err := repo.db.ExecContext(ctx, `
+		UPDATE submissions
+		SET status = $2,
+			review_note = '',
+			published_post_slug = $3,
+			submitted_at = $4,
+			reviewed_at = NULL,
+			published_at = $5,
+			version = version + 1
+		WHERE id = $1
+	`, submissionID, StatusPublished, strings.TrimSpace(publishedPostSlug), submittedAt, now); err != nil {
+		return Submission{}, fmt.Errorf("mark submission published: %w", err)
+	}
+
+	return repo.Get(ctx, submissionID)
+}
+
 func (repo *SQLRepository) DeleteByAuthor(ctx context.Context, submissionID string, userID string) (Submission, error) {
 	current, err := repo.Get(ctx, submissionID)
 	if err != nil {
 		return Submission{}, err
 	}
-	if current.AuthorID != userID || current.Status == StatusPublished {
+	if current.AuthorID != userID || current.Status == StatusPublished || current.Status == StatusArchived {
 		return Submission{}, ErrForbidden
 	}
 
-	result, err := repo.db.ExecContext(ctx, "DELETE FROM submissions WHERE id = $1 AND author_id = $2 AND status <> $3", submissionID, userID, StatusPublished)
+	result, err := repo.db.ExecContext(ctx, "DELETE FROM submissions WHERE id = $1 AND author_id = $2 AND status NOT IN ($3, $4)", submissionID, userID, StatusPublished, StatusArchived)
 	if err != nil {
 		return Submission{}, fmt.Errorf("delete submission: %w", err)
 	}
@@ -272,7 +314,7 @@ func (repo *SQLRepository) AdminUpdate(ctx context.Context, submissionID string,
 	if err != nil {
 		return Submission{}, err
 	}
-	if current.Status == StatusPublished {
+	if current.Status == StatusPublished || current.Status == StatusArchived {
 		return Submission{}, ErrForbidden
 	}
 
@@ -286,7 +328,8 @@ func (repo *SQLRepository) AdminUpdate(ctx context.Context, submissionID string,
 			tags = $6,
 			cover_image = $7,
 			slug = $8,
-			updated_at = $9,
+			visibility = $9,
+			updated_at = $10,
 			version = version + 1
 		WHERE id = $1
 	`, submissionID,
@@ -297,6 +340,7 @@ func (repo *SQLRepository) AdminUpdate(ctx context.Context, submissionID string,
 		repo.tagsValue(updated.Tags),
 		updated.CoverImage,
 		updated.Slug,
+		updated.Visibility,
 		time.Now(),
 	); err != nil {
 		return Submission{}, fmt.Errorf("admin update submission: %w", err)
@@ -324,7 +368,7 @@ func (repo *SQLRepository) Review(ctx context.Context, submissionID string, revi
 
 	status := StatusRejected
 	var publishedAt any
-	publishedSlug := ""
+	publishedSlug := current.PublishedPostSlug
 	switch action {
 	case ActionApprove:
 		status = StatusPublished
@@ -332,8 +376,10 @@ func (repo *SQLRepository) Review(ctx context.Context, submissionID string, revi
 		publishedSlug = strings.TrimSpace(publishedPostSlug)
 	case ActionReturn:
 		status = StatusReturned
+		publishedAt = current.PublishedAt
 	case ActionReject:
 		status = StatusRejected
+		publishedAt = current.PublishedAt
 	}
 
 	if _, err := repo.db.ExecContext(ctx, `
@@ -347,6 +393,54 @@ func (repo *SQLRepository) Review(ctx context.Context, submissionID string, revi
 		WHERE id = $1
 	`, submissionID, status, strings.TrimSpace(request.Note), reviewer.ID, publishedSlug, publishedAt, time.Now()); err != nil {
 		return Submission{}, fmt.Errorf("review submission: %w", err)
+	}
+
+	return repo.Get(ctx, submissionID)
+}
+
+func (repo *SQLRepository) ArchivePublished(ctx context.Context, submissionID string, reviewer auth.User) (Submission, error) {
+	current, err := repo.Get(ctx, submissionID)
+	if err != nil {
+		return Submission{}, err
+	}
+	if current.Status != StatusPublished || strings.TrimSpace(current.PublishedPostSlug) == "" {
+		return Submission{}, ErrInvalidReview
+	}
+
+	if _, err := repo.db.ExecContext(ctx, `
+		UPDATE submissions
+		SET status = $2,
+			review_note = $3,
+			reviewer_id = $4,
+			reviewed_at = $5
+		WHERE id = $1
+	`, submissionID, StatusArchived, "管理员已下架该文章", reviewer.ID, time.Now()); err != nil {
+		return Submission{}, fmt.Errorf("archive published submission: %w", err)
+	}
+
+	return repo.Get(ctx, submissionID)
+}
+
+func (repo *SQLRepository) RestorePublished(ctx context.Context, submissionID string, reviewer auth.User) (Submission, error) {
+	current, err := repo.Get(ctx, submissionID)
+	if err != nil {
+		return Submission{}, err
+	}
+	if current.Status != StatusArchived || strings.TrimSpace(current.PublishedPostSlug) == "" {
+		return Submission{}, ErrInvalidReview
+	}
+
+	now := time.Now()
+	if _, err := repo.db.ExecContext(ctx, `
+		UPDATE submissions
+		SET status = $2,
+			review_note = $3,
+			reviewer_id = $4,
+			reviewed_at = $5,
+			published_at = COALESCE(published_at, $5)
+		WHERE id = $1
+	`, submissionID, StatusPublished, "管理员已重新上架该文章", reviewer.ID, now); err != nil {
+		return Submission{}, fmt.Errorf("restore published submission: %w", err)
 	}
 
 	return repo.Get(ctx, submissionID)
@@ -371,6 +465,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 			`+tagsExpression+`,
 			s.cover_image,
 			s.slug,
+			s.visibility,
 			s.status,
 			s.review_note,
 			COALESCE(s.reviewer_id, ''),
@@ -410,6 +505,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 			&tagsValue,
 			&submission.CoverImage,
 			&submission.Slug,
+			&submission.Visibility,
 			&submission.Status,
 			&submission.ReviewNote,
 			&submission.ReviewerID,
@@ -449,10 +545,11 @@ func (repo *SQLRepository) stats(ctx context.Context, where string, arg any) (St
 			count(*),
 			COALESCE(sum(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0),
 			COALESCE(sum(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END), 0),
-			COALESCE(sum(CASE WHEN status = 'returned' THEN 1 ELSE 0 END), 0),
-			COALESCE(sum(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0),
-			COALESCE(sum(CASE WHEN status = 'published' THEN 1 ELSE 0 END), 0)
-		FROM submissions
+				COALESCE(sum(CASE WHEN status = 'returned' THEN 1 ELSE 0 END), 0),
+				COALESCE(sum(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0),
+				COALESCE(sum(CASE WHEN status = 'published' THEN 1 ELSE 0 END), 0),
+				COALESCE(sum(CASE WHEN status = 'archived' THEN 1 ELSE 0 END), 0)
+			FROM submissions
 		` + where
 
 	var row *sql.Row
@@ -463,7 +560,7 @@ func (repo *SQLRepository) stats(ctx context.Context, where string, arg any) (St
 	}
 
 	var stats Stats
-	if err := row.Scan(&stats.Total, &stats.Draft, &stats.Submitted, &stats.Returned, &stats.Rejected, &stats.Published); err != nil {
+	if err := row.Scan(&stats.Total, &stats.Draft, &stats.Submitted, &stats.Returned, &stats.Rejected, &stats.Published, &stats.Archived); err != nil {
 		return Stats{}, fmt.Errorf("scan submission stats: %w", err)
 	}
 
@@ -474,11 +571,11 @@ func (repo *SQLRepository) ensureSeedSubmissions(ctx context.Context) error {
 	for _, submission := range seedSubmissions() {
 		if _, err := repo.db.ExecContext(ctx, `
 			INSERT INTO submissions (
-				id, author_id, title, summary, content, category, tags, cover_image, slug,
+				id, author_id, title, summary, content, category, tags, cover_image, slug, visibility,
 				status, review_note, reviewer_id, published_post_slug, version,
 				created_at, updated_at, submitted_at, reviewed_at, published_at
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, ''), NULLIF($13, ''), $14, $15, $16, $17, $18, $19)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), NULLIF($14, ''), $15, $16, $17, $18, $19, $20)
 			ON CONFLICT (id) DO NOTHING
 		`,
 			submission.ID,
@@ -490,6 +587,7 @@ func (repo *SQLRepository) ensureSeedSubmissions(ctx context.Context) error {
 			repo.tagsValue(submission.Tags),
 			submission.CoverImage,
 			submission.Slug,
+			submission.Visibility,
 			submission.Status,
 			submission.ReviewNote,
 			submission.ReviewerID,

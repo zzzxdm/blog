@@ -259,6 +259,7 @@ func (repo *SQLRepository) queryStatsTotals(ctx context.Context, spec statsRange
 		FROM posts p
 		LEFT JOIN post_interaction_stats interactions ON interactions.post_slug = p.slug
 		WHERE p.status = 'published'
+			AND p.visibility = 'public'
 			AND COALESCE(p.published_at, p.created_at) >= $1
 			AND COALESCE(p.published_at, p.created_at) < $2
 	`, spec.Start, spec.End).Scan(
@@ -285,6 +286,7 @@ func (repo *SQLRepository) queryStatsTrend(ctx context.Context, spec statsRangeS
 			p.view_count
 		FROM posts p
 		WHERE p.status = 'published'
+			AND p.visibility = 'public'
 			AND COALESCE(p.published_at, p.created_at) >= $1
 			AND COALESCE(p.published_at, p.created_at) < $2
 		ORDER BY COALESCE(p.published_at, p.created_at) ASC
@@ -365,6 +367,7 @@ func (repo *SQLRepository) queryTopPosts(ctx context.Context, spec statsRangeSpe
 		FROM posts p
 		LEFT JOIN post_interaction_stats interactions ON interactions.post_slug = p.slug
 		WHERE p.status = 'published'
+			AND p.visibility = 'public'
 			AND COALESCE(p.published_at, p.created_at) >= $1
 			AND COALESCE(p.published_at, p.created_at) < $2
 		ORDER BY p.view_count DESC, interaction_count DESC, COALESCE(p.published_at, p.created_at) DESC
@@ -409,6 +412,7 @@ func (repo *SQLRepository) queryStatsSources(ctx context.Context, spec statsRang
 			COALESCE(sum(p.view_count), 0) AS views
 		FROM posts p
 		WHERE p.status = 'published'
+			AND p.visibility = 'public'
 			AND COALESCE(p.published_at, p.created_at) >= $1
 			AND COALESCE(p.published_at, p.created_at) < $2
 		GROUP BY p.source
@@ -473,6 +477,7 @@ func (repo *SQLRepository) queryTopTags(ctx context.Context, spec statsRangeSpec
 		JOIN post_tags pt ON pt.post_id = p.id
 		JOIN tags t ON t.id = pt.tag_id
 		WHERE p.status = 'published'
+			AND p.visibility = 'public'
 			AND COALESCE(p.published_at, p.created_at) >= $1
 			AND COALESCE(p.published_at, p.created_at) < $2
 		GROUP BY t.name

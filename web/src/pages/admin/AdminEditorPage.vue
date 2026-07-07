@@ -183,9 +183,8 @@ async function save(nextStatus: AdminPostStatus) {
 }
 
 async function publish() {
-  if (visibility.value !== "public") {
-    error.value = "非公开文章暂不支持发布到公开站点。";
-    message.value = "";
+  if (visibility.value === "members") {
+    notifyPublishBlocked("发布");
     return;
   }
   if (!title.value.trim() || !content.value.trim()) {
@@ -215,9 +214,8 @@ async function publish() {
 }
 
 async function schedulePost() {
-  if (visibility.value !== "public") {
-    error.value = "非公开文章暂不支持定时发布到公开站点。";
-    message.value = "";
+  if (visibility.value === "members") {
+    notifyPublishBlocked("定时发布");
     return;
   }
   if (!scheduledAt.value) {
@@ -236,6 +234,13 @@ async function schedulePost() {
     message.value = `已保存为待发布，预约时间 ${formatDate(new Date(scheduledAt.value).toISOString())}`;
     toast.success("已保存为待发布", `预约时间 ${formatDate(new Date(scheduledAt.value).toISOString())}`);
   }
+}
+
+function notifyPublishBlocked(action: string) {
+  const text = `${visibilityText(visibility.value)}文章暂不支持${action}，请先把可见性改为公开或私密。`;
+  error.value = text;
+  message.value = "";
+  toast.warning("无法发布", text);
 }
 
 async function openPreview() {
@@ -397,7 +402,7 @@ function toDateTimeLocal(value: string) {
 <template>
   <AdminLayout title="编辑文章" :description="description" mobile-title="写作" primary-action="发布">
     <template #mobile-action>
-      <button class="button" type="button" :disabled="saving || visibility !== 'public'" title="私密和会员可见文章暂不支持发布到公开站点" @click="publish">
+      <button class="button" type="button" :disabled="saving" title="私密文章可发布为受限访问，会员可见暂不支持发布" @click="publish">
         {{ saving ? "发布中..." : "发布" }}
       </button>
     </template>
@@ -407,7 +412,7 @@ function toDateTimeLocal(value: string) {
         <RouterLink v-if="current?.publishedPostSlug" class="button-secondary" :to="`/posts/${current.publishedPostSlug}`">查看已发布</RouterLink>
         <button class="button-secondary" type="button" :disabled="previewing || saving" @click="openPreview">{{ previewing ? "生成中..." : "预览" }}</button>
         <button class="button-secondary" type="button" :disabled="saving" @click="saveDraft">{{ saving ? "保存中..." : "保存草稿" }}</button>
-        <button class="button" type="button" :disabled="saving || visibility !== 'public'" title="私密和会员可见文章暂不支持发布到公开站点" @click="publish">{{ saving ? "发布中..." : "发布" }}</button>
+        <button class="button" type="button" :disabled="saving" title="私密文章可发布为受限访问，会员可见暂不支持发布" @click="publish">{{ saving ? "发布中..." : "发布" }}</button>
       </div>
     </template>
 

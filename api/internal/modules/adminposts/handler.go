@@ -22,15 +22,16 @@ const previewTokenSecret = "blog-admin-post-preview-v1"
 
 type Handler struct {
 	repo      Repository
-	publisher posts.Publisher
+	publisher posts.AdminPublisher
+	archiver  posts.Archiver
 }
 
-func NewHandler(repo Repository, publisher posts.Publisher) *Handler {
-	return &Handler{repo: repo, publisher: publisher}
+func NewHandler(repo Repository, publisher posts.AdminPublisher, archiver posts.Archiver) *Handler {
+	return &Handler{repo: repo, publisher: publisher, archiver: archiver}
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository, publisher posts.Publisher) {
-	handler := NewHandler(repo, publisher)
+func RegisterRoutes(router gin.IRouter, repo Repository, publisher posts.AdminPublisher, archiver posts.Archiver) {
+	handler := NewHandler(repo, publisher, archiver)
 
 	router.GET("/admin/posts", handler.List)
 	router.GET("/admin/posts/:id", handler.Get)
@@ -41,6 +42,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, publisher posts.Publish
 	router.DELETE("/admin/posts/:id", handler.Delete)
 	router.POST("/admin/posts/:id/preview", handler.CreatePreview)
 	router.POST("/admin/posts/:id/publish", handler.Publish)
+	router.POST("/admin/posts/:id/archive", handler.Archive)
 	router.POST("/admin/posts/:id/revisions/:revisionId/restore", handler.RestoreRevision)
 }
 
@@ -142,7 +144,8 @@ func (handler *Handler) Delete(ctx *gin.Context) {
 }
 
 func (handler *Handler) save(ctx *gin.Context, id string) {
-	if _, ok := auth.RequireAdmin(ctx); !ok {
+	admin, ok := auth.RequireAdmin(ctx)
+	if !ok {
 		return
 	}
 
@@ -152,7 +155,7 @@ func (handler *Handler) save(ctx *gin.Context, id string) {
 		return
 	}
 
-	post, err := handler.repo.Save(ctx.Request.Context(), id, request)
+	post, err := handler.repo.Save(ctx.Request.Context(), id, request, admin)
 	if err != nil {
 		handler.writeError(ctx, err)
 		return
@@ -166,12 +169,31 @@ func (handler *Handler) save(ctx *gin.Context, id string) {
 }
 
 func (handler *Handler) Publish(ctx *gin.Context) {
+	admin, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+
+	post, err := handler.repo.Publish(ctx.Request.Context(), ctx.Param("id"), handler.publisher, admin)
+	if err != nil {
+		handler.writeError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, post)
+}
+
+func (handler *Handler) Archive(ctx *gin.Context) {
 	if _, ok := auth.RequireAdmin(ctx); !ok {
 		return
 	}
 
-	post, err := handler.repo.Publish(ctx.Request.Context(), ctx.Param("id"), handler.publisher)
+	post, err := handler.repo.Archive(ctx.Request.Context(), ctx.Param("id"), handler.archiver)
 	if err != nil {
+		if errors.Is(err, posts.ErrNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "published post not found"})
+			return
+		}
 		handler.writeError(ctx, err)
 		return
 	}

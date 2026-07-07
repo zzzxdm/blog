@@ -6,6 +6,8 @@ import PaginationControls from "../../components/PaginationControls.vue";
 import {
   getAdminUsers,
   getAdminSubmissions,
+  archiveSubmission,
+  restoreSubmission,
   reviewSubmission,
   updateAdminSubmission,
   updateAdminUserRole,
@@ -15,11 +17,16 @@ import {
   type SubmissionStats
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useConfirmStore } from "../../stores/confirm";
+import { useToastStore } from "../../stores/toast";
+
+const confirmDialog = useConfirmStore();
+const toast = useToastStore();
 
 const submissions = ref<Submission[]>([]);
 const allSubmissions = ref<Submission[]>([]);
 const users = ref<ManagedUser[]>([]);
-const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, archived: 0, total: 0 });
 const selectedId = ref("");
 const filterStatus = ref("submitted");
 const loading = ref(false);
@@ -27,6 +34,8 @@ const acting = ref(false);
 const editing = ref(false);
 const savingEdit = ref(false);
 const upgradingAuthor = ref(false);
+const archiving = ref(false);
+const restoring = ref(false);
 const error = ref("");
 const message = ref("");
 const reviewNote = ref("内容结构清楚，可以发布。建议把标题和摘要再压缩一点。");
@@ -50,7 +59,7 @@ const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).ma
 const selectedAuthorUser = computed(() => users.value.find((user) => user.id === selected.value?.authorId));
 const authorSubmissionStats = computed(() => {
   const authorId = selected.value?.authorId || "";
-  const result = { total: 0, submitted: 0, returned: 0, rejected: 0, published: 0, draft: 0 };
+  const result = { total: 0, submitted: 0, returned: 0, rejected: 0, published: 0, archived: 0, draft: 0 };
   allSubmissions.value.forEach((item) => {
     if (item.authorId !== authorId) {
       return;
@@ -148,6 +157,66 @@ async function review(action: "approve" | "return" | "reject") {
   }
 }
 
+async function archiveSelected() {
+  if (!selected.value?.publishedPostSlug) {
+    return;
+  }
+  const confirmed = await confirmDialog.open({
+    title: "下架已发布文章",
+    message: `确认下架《${selected.value.title}》吗？下架后公开列表和搜索中将不再展示。`,
+    confirmText: "下架文章",
+    tone: "danger"
+  });
+  if (!confirmed) {
+    return;
+  }
+
+  archiving.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    await archiveSubmission(selected.value.id);
+    message.value = `已下架《${selected.value.title}》。`;
+    toast.success("文章已下架", selected.value.title);
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "文章下架失败";
+    toast.error("文章下架失败", error.value);
+  } finally {
+    archiving.value = false;
+  }
+}
+
+async function restoreSelected() {
+  if (!selected.value?.publishedPostSlug) {
+    return;
+  }
+  const confirmed = await confirmDialog.open({
+    title: "重新上架文章",
+    message: `确认重新上架《${selected.value.title}》吗？上架后会重新进入公开访问和搜索范围。`,
+    confirmText: "重新上架",
+    tone: "success"
+  });
+  if (!confirmed) {
+    return;
+  }
+
+  restoring.value = true;
+  error.value = "";
+  message.value = "";
+  try {
+    await restoreSubmission(selected.value.id);
+    message.value = `已重新上架《${selected.value.title}》。`;
+    toast.success("文章已重新上架", selected.value.title);
+    await load();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "文章重新上架失败";
+    toast.error("重新上架失败", error.value);
+  } finally {
+    restoring.value = false;
+  }
+}
+
 function seedEdit(item: Submission) {
   editTitle.value = item.title;
   editSummary.value = item.summary;
@@ -183,6 +252,7 @@ function editPayload(): SubmissionPayload {
     tags: editTags.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean),
     coverImage: editCoverImage.value,
     slug: editSlug.value,
+    visibility: selected.value?.visibility || "public",
     submit: false
   };
 }
@@ -234,6 +304,10 @@ function formatDate(value?: string) {
   return formatDateTime(value, "未提交");
 }
 
+function visibilityText(value: Submission["visibility"]) {
+  return value === "private" ? "私密" : "公开";
+}
+
 function statusText(value: Submission["status"]) {
   if (value === "submitted") {
     return "待审核";
@@ -247,6 +321,9 @@ function statusText(value: Submission["status"]) {
   if (value === "published") {
     return "已发布";
   }
+  if (value === "archived") {
+    return "已下架";
+  }
   return "草稿";
 }
 
@@ -259,6 +336,9 @@ function statusClass(value: Submission["status"]) {
   }
   if (value === "published") {
     return "published";
+  }
+  if (value === "archived") {
+    return "muted";
   }
   return "draft";
 }
@@ -305,7 +385,8 @@ function userStatusText(value?: ManagedUser["status"]) {
               <option value="">全部状态</option>
               <option value="submitted">待审核</option>
               <option value="returned">退回修改</option>
-              <option value="published">已发布</option>
+	              <option value="published">已发布</option>
+	              <option value="archived">已下架</option>
               <option value="rejected">已拒绝</option>
             </select>
             <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
@@ -331,7 +412,7 @@ function userStatusText(value?: ManagedUser["status"]) {
               <tr v-for="item in submissions" :key="item.id">
                 <td>
                   <strong>{{ item.title }}</strong>
-                  <div class="meta-row"><span>{{ item.category }}</span><span>{{ item.wordCount }} 字</span></div>
+                  <div class="meta-row"><span>{{ item.category }}</span><span>{{ visibilityText(item.visibility) }}</span><span>{{ item.wordCount }} 字</span></div>
                 </td>
                 <td>{{ item.authorName }}<div class="meta-row"><span>版本 {{ item.version }}</span></div></td>
                 <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
@@ -361,9 +442,10 @@ function userStatusText(value?: ManagedUser["status"]) {
         <section v-if="selected" class="editor-panel">
           <div class="editor-toolbar">
             <div class="meta-row">
-              <span class="tag">投稿预览</span>
-              <span>{{ selected.category }}</span>
-              <span>{{ selected.wordCount }} 字</span>
+	              <span class="tag">投稿预览</span>
+	              <span>{{ selected.category }}</span>
+	              <span>{{ visibilityText(selected.visibility) }}</span>
+	              <span>{{ selected.wordCount }} 字</span>
             </div>
             <button class="button-secondary" type="button" :disabled="savingEdit" @click="editing ? cancelEdit() : beginEdit()">{{ editing ? "退出编辑" : "编辑内容" }}</button>
           </div>
@@ -406,6 +488,8 @@ function userStatusText(value?: ManagedUser["status"]) {
             <button class="button" type="button" :disabled="acting" @click="review('approve')">通过并发布</button>
             <button class="button-secondary" type="button" :disabled="acting" @click="review('return')">退回修改</button>
             <button class="button-secondary" type="button" :disabled="acting" @click="review('reject')">拒绝投稿</button>
+            <button v-if="selected.status === 'published' && selected.publishedPostSlug" class="button-secondary" type="button" :disabled="archiving" @click="archiveSelected">{{ archiving ? "下架中..." : "下架文章" }}</button>
+            <button v-if="selected.status === 'archived' && selected.publishedPostSlug" class="button-secondary" type="button" :disabled="restoring" @click="restoreSelected">{{ restoring ? "上架中..." : "重新上架" }}</button>
           </div>
         </section>
 

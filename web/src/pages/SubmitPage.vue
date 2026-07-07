@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
+import { ElOption, ElSelect } from "element-plus";
+import "element-plus/es/components/select/style/css";
 
 import {
   createSubmission,
@@ -13,6 +15,7 @@ import {
   type SiteSettings,
   type Submission,
   type SubmissionPayload,
+  type SubmissionVisibility,
   type Tag
 } from "../shared/api";
 import { renderMarkdown } from "../shared/markdown";
@@ -51,18 +54,36 @@ const linkUrl = ref("https://");
 const title = ref("");
 const summary = ref("");
 const category = ref("工程实践");
-const tagsText = ref("");
+const selectedTags = ref<string[]>([]);
 const slug = ref("");
+const visibility = ref<SubmissionVisibility>("public");
 const coverImage = ref("https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=700&q=80");
 const content = ref("");
 
-const tags = computed(() => tagsText.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean));
+const normalizedTags = computed(() => normalizeTags(selectedTags.value));
+const tagSelectOptions = computed(() => {
+  const options = new Map<string, { value: string; label: string; meta: string }>();
+  tagOptions.value.forEach((item) => {
+    options.set(item.name, {
+      value: item.name,
+      label: item.name,
+      meta: `${item.slug} · ${item.postCount} 篇`
+    });
+  });
+  normalizedTags.value.forEach((value) => {
+    if (!options.has(value)) {
+      options.set(value, { value, label: value, meta: "已选" });
+    }
+  });
+  return [...options.values()];
+});
 const renderedPreviewContent = computed(() => renderMarkdown(content.value));
 const status = computed(() => current.value?.status || "draft");
+const isPrivate = computed(() => visibility.value === "private");
 const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
-const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交文章草稿，审核通过后会发布到站点。");
+const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交公开投稿或私密文章，公开投稿审核通过后会发布到站点。");
 const submissionLimit = computed(() => siteSettings.value?.submissionLimit || "每天最多 3 篇");
-const canEdit = computed(() => submissionsEnabled.value && (!current.value || current.value.status === "draft" || current.value.status === "returned"));
+const canEdit = computed(() => submissionsEnabled.value && (!current.value || current.value.status === "draft" || current.value.status === "returned" || (current.value.status === "published" && current.value.visibility === "private")));
 const turnstileRequired = computed(() => Boolean(
   auth.user &&
   canEdit.value &&
@@ -119,7 +140,7 @@ async function loadSubmissionFromQuery() {
   error.value = "";
 
   try {
-    const response = await getMySubmissions();
+    const response = await getMySubmissions({ all: true });
     const item = response.items.find((submission) => submission.id === id);
     if (!item) {
       error.value = "投稿不存在或无权访问。";
@@ -127,6 +148,9 @@ async function loadSubmissionFromQuery() {
     }
 
     applySubmission(item);
+    if (route.query.visibility === "public") {
+      visibility.value = "public";
+    }
     if (!canEdit.value) {
       message.value = "当前投稿已进入审核流程，暂不能修改。";
     }
@@ -142,8 +166,9 @@ function applySubmission(submission: Submission) {
   title.value = submission.title;
   summary.value = submission.summary;
   category.value = submission.category;
-  tagsText.value = submission.tags.join(", ");
+  selectedTags.value = normalizeTags(submission.tags);
   slug.value = submission.slug;
+  visibility.value = submission.visibility;
   coverImage.value = submission.coverImage;
   content.value = submission.content;
 }
@@ -154,12 +179,21 @@ function payload(submit = false): SubmissionPayload {
     summary: summary.value,
     content: content.value,
     category: category.value,
-    tags: tags.value,
+    tags: normalizedTags.value,
     coverImage: coverImage.value,
     slug: slug.value,
+    visibility: visibility.value,
     submit,
     turnstileToken: submit ? turnstileToken.value : ""
   };
+}
+
+function normalizeTags(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function normalizeSelectedTags() {
+  selectedTags.value = normalizeTags(selectedTags.value);
 }
 
 async function saveDraft() {
@@ -185,7 +219,7 @@ async function persist(submit: boolean) {
     return;
   }
   if (submit && !content.value.trim()) {
-    error.value = "请填写正文后再提交审核";
+    error.value = isPrivate.value ? "请填写正文后再发布私密文章" : "请填写正文后再提交审核";
     message.value = "";
     return;
   }
@@ -206,8 +240,10 @@ async function persist(submit: boolean) {
     if (submit) {
       resetTurnstile();
     }
-    message.value = submit ? "已提交审核，审核结果会通过站内信通知你。" : "草稿已保存。";
-    toast.success(submit ? "已提交审核" : "草稿已保存", submit ? "审核结果会通过站内信通知你。" : "内容已保存在你的投稿列表。");
+    const submitTitle = isPrivate.value ? "私密文章已发布" : "已提交审核";
+    const submitMessage = isPrivate.value ? "只有你和管理员可以访问这篇文章。" : "审核结果会通过站内信通知你。";
+    message.value = submit ? submitMessage : "草稿已保存。";
+    toast.success(submit ? submitTitle : "草稿已保存", submit ? submitMessage : "内容已保存在你的投稿列表。");
   } catch (err) {
     error.value = submissionErrorMessage(err);
     if (submit) {
@@ -380,7 +416,10 @@ function statusText(value: string) {
     return "已拒绝";
   }
   if (value === "published") {
-    return "已发布";
+    return visibility.value === "private" ? "私密已发布" : "已发布";
+  }
+  if (value === "archived") {
+    return "已下架";
   }
   return "草稿";
 }
@@ -394,6 +433,9 @@ function statusClass(value: string) {
   }
   if (value === "published") {
     return "published";
+  }
+  if (value === "archived") {
+    return "muted";
   }
   return "draft";
 }
@@ -465,15 +507,15 @@ function statusClass(value: string) {
             <div class="step" :class="{ current: status === 'draft' || status === 'returned', done: status === 'submitted' || status === 'published' }">
               <span class="step-index">2</span>
               <div>
-                <strong>提交审核</strong>
-                <div class="meta-row"><span>编辑会检查质量、格式和安全</span></div>
+                <strong>{{ isPrivate ? "私密发布" : "提交审核" }}</strong>
+                <div class="meta-row"><span>{{ isPrivate ? "私密文章不进入公开审核队列" : "编辑会检查质量、格式和安全" }}</span></div>
               </div>
             </div>
             <div class="step" :class="{ current: status === 'submitted', done: status === 'published' }">
               <span class="step-index">3</span>
               <div>
-                <strong>通过后发布</strong>
-                <div class="meta-row"><span>发布后进入公开文章列表</span></div>
+                <strong>{{ isPrivate ? "仅作者可见" : "通过后发布" }}</strong>
+                <div class="meta-row"><span>{{ isPrivate ? "之后可改为公开并提交审核" : "发布后进入公开文章列表" }}</span></div>
               </div>
             </div>
           </div>
@@ -484,6 +526,13 @@ function statusClass(value: string) {
             <h2>文章信息</h2>
           </div>
           <div class="settings-stack">
+            <div class="field">
+              <label for="visibility">可见性</label>
+              <select v-model="visibility" class="input" id="visibility" :disabled="!canEdit">
+                <option value="public">公开：提交后进入审核，通过后公开展示</option>
+                <option value="private">私密：直接发布，仅作者和管理员可见</option>
+              </select>
+            </div>
             <div class="field">
               <label for="title">标题</label>
               <input v-model="title" class="input" id="title" :disabled="!canEdit">
@@ -505,10 +554,24 @@ function statusClass(value: string) {
             </div>
             <div class="field">
               <label for="tags">标签</label>
-              <input v-model="tagsText" class="input" id="tags" list="submit-tag-options" :disabled="!canEdit">
-              <datalist id="submit-tag-options">
-                <option v-for="item in tagOptions" :key="item.id" :value="item.name"></option>
-              </datalist>
+              <ElSelect
+                v-model="selectedTags"
+                class="element-select"
+                input-id="tags"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                placeholder="选择或输入标签"
+                :disabled="!canEdit"
+                @change="normalizeSelectedTags"
+              >
+                <ElOption v-for="item in tagSelectOptions" :key="item.value" :label="item.label" :value="item.value">
+                  <span>{{ item.label }}</span>
+                  <span class="select-option-meta">{{ item.meta }}</span>
+                </ElOption>
+              </ElSelect>
             </div>
           </div>
         </section>
@@ -520,7 +583,7 @@ function statusClass(value: string) {
           <div class="settings-stack">
             <img
               :src="coverImage"
-              alt="投稿封面预览"
+              alt="文章封面预览"
               style="border-radius: 8px; aspect-ratio: 16 / 9; object-fit: cover;"
             >
             <input v-model="coverImage" class="input" aria-label="封面图片 URL" :disabled="!canEdit">
@@ -533,9 +596,9 @@ function statusClass(value: string) {
           </div>
           <div class="settings-stack">
             <div class="review-note">
-              <strong>投稿不会直接公开</strong>
-              <p>提交后进入待审核状态。编辑可能会通过、退回修改或拒绝投稿。</p>
-              <p>当前频率限制：{{ submissionLimit }}。</p>
+              <strong>{{ isPrivate ? "私密文章会直接发布" : "公开文章需要审核" }}</strong>
+              <p>{{ isPrivate ? "发布后仅你和管理员可以访问，之后可改为公开并提交审核。" : "提交后进入待审核状态。编辑可能会通过、退回修改或拒绝投稿。" }}</p>
+              <p v-if="!isPrivate">当前频率限制：{{ submissionLimit }}。</p>
 	            </div>
 		            <p v-if="error" class="error">{{ error }}</p>
 		            <div v-if="turnstileRequired" class="field">
@@ -543,11 +606,11 @@ function statusClass(value: string) {
 		              <div ref="turnstileEl"></div>
 		              <p v-if="turnstileError" class="error" role="alert">{{ turnstileError }}</p>
 		            </div>
-	            <button class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="saveDraft">
-	              {{ saving ? "保存中..." : "保存草稿" }}
-	            </button>
+            <button class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit || status === 'published'" @click="saveDraft">
+              {{ saving ? "保存中..." : "保存草稿" }}
+            </button>
             <button class="button" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="submitForReview">
-              {{ saving ? "提交中..." : "提交审核" }}
+              {{ saving ? "提交中..." : (isPrivate ? "发布私密文章" : "提交审核") }}
             </button>
           </div>
         </section>

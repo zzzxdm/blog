@@ -211,7 +211,7 @@ async function runBackup() {
       <section class="panel">
         <div class="panel-title"><h2>投稿策略</h2></div>
         <div class="settings-stack">
-          <label class="setting-row"><div><strong>开放用户投稿</strong><div class="meta-row"><span>登录用户可以提交文章审核</span></div></div><input v-model="settings.submissionsEnabled" type="checkbox"></label>
+          <label class="setting-row"><div><strong>开放用户投稿</strong><div class="meta-row"><span>登录用户可以提交投稿审核</span></div></div><input v-model="settings.submissionsEnabled" type="checkbox"></label>
           <label class="setting-row"><div><strong>固定人工审核</strong><div class="meta-row"><span>通过后才进入公开文章列表</span></div></div><input v-model="settings.submissionManualReview" type="checkbox" disabled></label>
           <div class="field"><label for="submission-limit">投稿频率限制</label><select v-model="settings.submissionLimit" class="input" id="submission-limit"><option>每天最多 3 篇</option><option>每天最多 1 篇</option><option>每周最多 3 篇</option></select></div>
           <div class="field"><label for="submission-guide">投稿说明</label><textarea v-model="settings.submissionGuide" class="input" id="submission-guide"></textarea></div>

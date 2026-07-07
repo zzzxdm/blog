@@ -43,7 +43,7 @@ func main() {
 
 	schedulerCtx, stopScheduler := context.WithCancel(context.Background())
 	defer stopScheduler()
-	if publisher, ok := repositories.PostRepo.(posts.Publisher); ok {
+	if publisher, ok := repositories.PostRepo.(posts.AdminPublisher); ok {
 		adminposts.StartScheduledPublisher(schedulerCtx, repositories.AdminPostRepo, publisher, time.Minute)
 	}
 

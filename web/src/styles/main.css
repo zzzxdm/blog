@@ -13,6 +13,19 @@
   --code: #19231f;
   --theme-shell: #17251f;
   --shadow: 0 18px 40px rgba(32, 39, 34, 0.08);
+  --el-color-primary: var(--green);
+  --el-color-primary-light-3: color-mix(in srgb, var(--green) 70%, #fff);
+  --el-color-primary-light-5: color-mix(in srgb, var(--green) 50%, #fff);
+  --el-color-primary-light-7: color-mix(in srgb, var(--green) 30%, #fff);
+  --el-color-primary-light-8: var(--surface-2);
+  --el-color-primary-light-9: var(--surface-2);
+  --el-color-primary-dark-2: var(--green-2);
+  --el-fill-color-light: var(--surface-2);
+  --el-fill-color-blank: var(--surface);
+  --el-border-color: var(--line);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink);
+  --el-text-color-secondary: var(--muted);
 }
 
 :root[data-theme="dark"] {
@@ -2729,12 +2742,56 @@ td {
 .element-select .el-select__wrapper {
   min-height: 40px;
   border-radius: 8px;
-  background: #fffefa;
+  background: var(--surface);
   box-shadow: 0 0 0 1px var(--line) inset;
 }
 
 .element-select .el-select__wrapper.is-focused {
-  box-shadow: 0 0 0 1px var(--green) inset;
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+.element-select .el-tag {
+  --el-tag-bg-color: var(--surface-2);
+  --el-tag-border-color: var(--line);
+  --el-tag-hover-color: var(--el-color-primary);
+  --el-tag-text-color: var(--ink);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.el-select-dropdown__item.is-selected,
+.el-select-dropdown__item.is-hovering {
+  background: var(--surface-2);
+  color: var(--el-color-primary);
+}
+
+.el-select-dropdown__item:hover {
+  background: var(--surface-2);
+  color: var(--el-color-primary);
+}
+
+.el-select-dropdown__item.is-selected {
+  font-weight: 900;
+}
+
+.el-select-dropdown__item.selected,
+.el-select-dropdown__item.hover {
+  background: var(--surface-2);
+  color: var(--el-color-primary);
+}
+
+.el-popper.is-light {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.el-select-dropdown {
+  background: var(--surface);
+}
+
+.el-select-dropdown__empty,
+.el-select-dropdown__loading {
+  color: var(--muted);
 }
 
 .select-option-meta {

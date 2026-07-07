@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"blog/api/internal/modules/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,6 +31,8 @@ func RegisterPublicRoutes(router gin.IRouter, repo Repository) {
 	router.GET("/categories/:slug/posts", handler.ListCategoryPosts)
 	router.GET("/tags/:slug/posts", handler.ListTagPosts)
 	router.GET("/search", handler.Search)
+	router.GET("/me/private-posts", handler.ListPrivate)
+	router.POST("/admin/published-posts/:slug/archive", handler.Archive)
 }
 
 func (handler *Handler) List(ctx *gin.Context) {
@@ -37,6 +41,55 @@ func (handler *Handler) List(ctx *gin.Context) {
 
 func (handler *Handler) Search(ctx *gin.Context) {
 	handler.list(ctx, true)
+}
+
+func (handler *Handler) ListPrivate(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+	lister, ok := handler.repo.(PrivateLister)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "private post listing is unavailable"})
+		return
+	}
+
+	result, err := lister.ListPrivate(ctx.Request.Context(), Viewer{ID: user.ID, Role: user.Role}, ListQuery{
+		Keyword:  strings.TrimSpace(ctx.Query("q")),
+		Category: strings.TrimSpace(ctx.Query("category")),
+		Tag:      strings.TrimSpace(ctx.Query("tag")),
+		Author:   strings.TrimSpace(ctx.Query("author")),
+		Sort:     strings.TrimSpace(ctx.Query("sort")),
+		Page:     intQuery(ctx, "page", 1),
+		PageSize: intQuery(ctx, "pageSize", 10),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load private posts"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
+func (handler *Handler) Archive(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+	archiver, ok := handler.repo.(Archiver)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post archiving is unavailable"})
+		return
+	}
+	if err := archiver.Archive(ctx.Request.Context(), ctx.Param("slug")); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive post"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func (handler *Handler) ListCategoryPosts(ctx *gin.Context) {
@@ -81,6 +134,14 @@ func (handler *Handler) Stats(ctx *gin.Context) {
 
 func (handler *Handler) getPostForPublicView(ctx *gin.Context) (Post, error) {
 	slug := ctx.Param("slug")
+	user, _ := auth.CurrentUser(ctx)
+	viewer := Viewer{ID: user.ID, Role: user.Role}
+	if recorder, ok := handler.repo.(RestrictedViewRecorder); ok {
+		return recorder.RecordRestrictedView(ctx.Request.Context(), slug, viewer)
+	}
+	if getter, ok := handler.repo.(RestrictedGetter); ok {
+		return getter.GetBySlugForViewer(ctx.Request.Context(), slug, viewer)
+	}
 	if recorder, ok := handler.repo.(ViewRecorder); ok {
 		return recorder.RecordView(ctx.Request.Context(), slug)
 	}

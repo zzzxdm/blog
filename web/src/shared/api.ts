@@ -24,9 +24,11 @@ export interface Post {
   title: string;
   summary: string;
   content: string;
+  visibility: "public" | "private";
   category: string;
   tags: string[];
   coverImage: string;
+  authorId: string;
   authorName: string;
   readingTime: number;
   viewCount: number;
@@ -225,7 +227,8 @@ export interface ReactionSummary {
   bookmarked: boolean;
 }
 
-export type SubmissionStatus = "draft" | "submitted" | "returned" | "rejected" | "published";
+export type SubmissionStatus = "draft" | "submitted" | "returned" | "rejected" | "published" | "archived";
+export type SubmissionVisibility = "public" | "private";
 
 export interface Submission {
   id: string;
@@ -239,6 +242,7 @@ export interface Submission {
   tags: string[];
   coverImage: string;
   slug: string;
+  visibility: SubmissionVisibility;
   status: SubmissionStatus;
   reviewNote: string;
   reviewerId?: string;
@@ -260,6 +264,7 @@ export interface SubmissionStats {
   returned: number;
   rejected: number;
   published: number;
+  archived: number;
   total: number;
 }
 
@@ -279,6 +284,7 @@ export interface SubmissionPayload {
   tags: string[];
   coverImage: string;
   slug: string;
+  visibility: SubmissionVisibility;
   submit?: boolean;
   turnstileToken?: string;
 }
@@ -841,6 +847,11 @@ export async function getPostBySlug(slug: string): Promise<Post> {
   return request<Post>(`/posts/${encodeURIComponent(slug)}`);
 }
 
+export async function getMyPrivatePosts(params: PostListParams = {}): Promise<ListResponse<Post>> {
+  const query = toQuery(params);
+  return request<ListResponse<Post>>(`/me/private-posts${query}`);
+}
+
 export async function getSiteStats(): Promise<SiteStats> {
   return request<SiteStats>("/site-stats");
 }
@@ -1142,6 +1153,18 @@ export async function reviewSubmission(id: string, payload: ReviewPayload): Prom
   return request<Submission>(`/admin/submissions/${encodeURIComponent(id)}/review`, {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function archiveSubmission(id: string): Promise<Submission> {
+  return request<Submission>(`/admin/submissions/${encodeURIComponent(id)}/archive`, {
+    method: "POST"
+  });
+}
+
+export async function restoreSubmission(id: string): Promise<Submission> {
+  return request<Submission>(`/admin/submissions/${encodeURIComponent(id)}/restore`, {
+    method: "POST"
   });
 }
 
@@ -1471,6 +1494,12 @@ export async function deleteAdminPost(id: string): Promise<{ ok: boolean; post: 
 
 export async function publishAdminPost(id: string): Promise<AdminPost> {
   return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/publish`, {
+    method: "POST"
+  });
+}
+
+export async function archiveAdminPost(id: string): Promise<AdminPost> {
+  return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/archive`, {
     method: "POST"
   });
 }

@@ -11,7 +11,7 @@ import {
 import { formatDateTime } from "../../shared/datetime";
 
 const submissions = ref<Submission[]>([]);
-const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, total: 0 });
+const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, archived: 0, total: 0 });
 const loading = ref(false);
 const error = ref("");
 const status = ref("");
@@ -69,6 +69,10 @@ function formatDate(value?: string) {
   return formatDateTime(value, "未提交");
 }
 
+function visibilityText(value: Submission["visibility"]) {
+  return value === "private" ? "私密" : "公开";
+}
+
 function statusText(value: Submission["status"]) {
   if (value === "submitted") {
     return "待审核";
@@ -82,6 +86,9 @@ function statusText(value: Submission["status"]) {
   if (value === "published") {
     return "已发布";
   }
+  if (value === "archived") {
+    return "已下架";
+  }
   return "草稿";
 }
 
@@ -94,6 +101,9 @@ function statusClass(value: Submission["status"]) {
   }
   if (value === "published") {
     return "published";
+  }
+  if (value === "archived") {
+    return "muted";
   }
   return "draft";
 }
@@ -120,7 +130,8 @@ function statusClass(value: Submission["status"]) {
           <option value="draft">草稿</option>
           <option value="submitted">待审核</option>
           <option value="returned">退回修改</option>
-          <option value="published">已发布</option>
+              <option value="published">已发布</option>
+              <option value="archived">已下架</option>
         </select>
         <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
           <option value="updated">最近更新</option>
@@ -134,22 +145,29 @@ function statusClass(value: Submission["status"]) {
 
       <table v-else>
         <thead>
-          <tr><th>投稿</th><th>状态</th><th>分类</th><th>提交时间</th><th>审核意见</th><th>操作</th></tr>
+          <tr><th>投稿</th><th>状态</th><th>可见性</th><th>分类</th><th>提交时间</th><th>审核意见</th><th>操作</th></tr>
         </thead>
         <tbody>
           <tr v-for="item in submissions" :key="item.id">
             <td><strong>{{ item.title }}</strong><div class="meta-row"><span>版本 {{ item.version }}</span><span>{{ item.wordCount }} 字</span></div></td>
             <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
+            <td>{{ visibilityText(item.visibility) }}</td>
             <td>{{ item.category }}</td>
             <td>{{ formatDate(item.submittedAt) }}</td>
-            <td>{{ item.reviewNote || (item.status === "submitted" ? "等待编辑审核" : "未提交审核") }}</td>
+            <td>{{ item.reviewNote || (item.visibility === "private" && item.status === "published" ? "私密发布，无需审核" : (item.status === "submitted" ? "等待编辑审核" : "未提交审核")) }}</td>
             <td>
-              <RouterLink v-if="item.status === 'published' && item.publishedPostSlug" class="button-secondary" :to="`/posts/${item.publishedPostSlug}`">查看文章</RouterLink>
-              <RouterLink v-else class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}`">{{ item.status === "draft" || item.status === "returned" ? "继续编辑" : "查看" }}</RouterLink>
+              <div class="header-actions">
+                <template v-if="item.status === 'published' && item.publishedPostSlug">
+                  <RouterLink class="button-secondary" :to="`/posts/${item.publishedPostSlug}`">查看文章</RouterLink>
+                  <RouterLink v-if="item.visibility === 'private'" class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}&visibility=public`">转公开投稿</RouterLink>
+                </template>
+                <span v-else-if="item.status === 'archived'" class="muted">已下架</span>
+                <RouterLink v-else class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}`">{{ item.status === "draft" || item.status === "returned" ? "继续编辑" : "查看" }}</RouterLink>
+              </div>
             </td>
           </tr>
           <tr v-if="submissions.length === 0">
-            <td colspan="6" class="muted">没有匹配的投稿。</td>
+            <td colspan="7" class="muted">没有匹配的投稿。</td>
           </tr>
         </tbody>
       </table>

@@ -27,6 +27,7 @@ type AdminPost struct {
 	Category          string     `json:"category"`
 	Tags              []string   `json:"tags"`
 	CoverImage        string     `json:"coverImage"`
+	AuthorID          string     `json:"authorId,omitempty"`
 	AuthorName        string     `json:"authorName"`
 	ReadingTime       int        `json:"readingTime"`
 	ViewCount         int        `json:"viewCount"`
@@ -53,6 +54,7 @@ type Revision struct {
 	Category       string    `json:"category"`
 	Tags           []string  `json:"tags"`
 	CoverImage     string    `json:"coverImage"`
+	AuthorID       string    `json:"authorId,omitempty"`
 	SEOtitle       string    `json:"seoTitle"`
 	SEODescription string    `json:"seoDescription"`
 	AuthorName     string    `json:"authorName"`

@@ -28,6 +28,7 @@ const navItems = [
   { label: "概览", to: "/account" },
   { label: "我的评论", to: "/account/comments" },
   { label: "我的收藏", to: "/account/bookmarks" },
+  { label: "私密文章", to: "/account/private-posts" },
   { label: "我的投稿", to: "/account/submissions" },
   { label: "站内信", to: "/account/messages" },
   { label: "账号设置", to: "/account/settings" }

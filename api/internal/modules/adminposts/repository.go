@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/posts"
 )
 
@@ -21,10 +22,11 @@ var (
 type Repository interface {
 	List(ctx context.Context, query ListQuery) (ListResult, error)
 	Get(ctx context.Context, id string) (AdminPost, error)
-	Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error)
+	Save(ctx context.Context, id string, request SaveRequest, actor auth.User) (AdminPost, error)
 	Delete(ctx context.Context, id string) (AdminPost, error)
-	Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error)
-	PublishDue(ctx context.Context, publisher posts.Publisher, now time.Time) (int, error)
+	Publish(ctx context.Context, id string, publisher posts.AdminPublisher, actor auth.User) (AdminPost, error)
+	Archive(ctx context.Context, id string, archiver posts.Archiver) (AdminPost, error)
+	PublishDue(ctx context.Context, publisher posts.AdminPublisher, now time.Time) (int, error)
 	ListRevisions(ctx context.Context, id string) (RevisionListResult, error)
 	RestoreRevision(ctx context.Context, id string, revisionID string) (AdminPost, error)
 }
@@ -222,6 +224,7 @@ func snapshotRevision(item AdminPost, createdAt time.Time) Revision {
 		Category:       item.Category,
 		Tags:           append([]string{}, item.Tags...),
 		CoverImage:     item.CoverImage,
+		AuthorID:       item.AuthorID,
 		SEOtitle:       item.SEOtitle,
 		SEODescription: item.SEODescription,
 		AuthorName:     item.AuthorName,
@@ -275,6 +278,7 @@ func restoreFromRevision(item AdminPost, revision Revision) AdminPost {
 	item.Category = defaultString(strings.TrimSpace(revision.Category), item.Category)
 	item.Tags = normalizeTags(revision.Tags)
 	item.CoverImage = revision.CoverImage
+	item.AuthorID = revision.AuthorID
 	item.SEOtitle = defaultString(strings.TrimSpace(revision.SEOtitle), revision.Title)
 	item.SEODescription = defaultString(strings.TrimSpace(revision.SEODescription), revision.Summary)
 	return item

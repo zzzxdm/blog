@@ -11,6 +11,11 @@ import (
 var ErrNotFound = errors.New("post not found")
 var ErrInvalidPost = errors.New("invalid post")
 
+const (
+	VisibilityPublic  = "public"
+	VisibilityPrivate = "private"
+)
+
 type Repository interface {
 	List(ctx context.Context, query ListQuery) (ListResult, error)
 	GetBySlug(ctx context.Context, slug string) (Post, error)
@@ -139,6 +144,26 @@ func defaultString(value string, fallback string) string {
 	}
 
 	return value
+}
+
+func normalizeVisibility(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case VisibilityPrivate:
+		return VisibilityPrivate
+	default:
+		return VisibilityPublic
+	}
+}
+
+func canViewPost(post Post, viewer Viewer) bool {
+	if normalizeVisibility(post.Visibility) == VisibilityPublic {
+		return true
+	}
+	if viewer.Role == "admin" {
+		return true
+	}
+
+	return strings.TrimSpace(post.AuthorID) != "" && strings.TrimSpace(post.AuthorID) == strings.TrimSpace(viewer.ID)
 }
 
 func sortPosts(posts []Post, sortMode string) {

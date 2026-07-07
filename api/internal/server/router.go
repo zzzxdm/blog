@@ -110,12 +110,24 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	operations.RegisterRoutes(api, repos.OperationsRepo, uploadDir(cfg.UploadDir))
 	users.RegisterRoutesWithEmailSender(api, repos.UserRepo, repos.AuthStore, repos.AuthEmailSender)
 
-	var publisher posts.Publisher
-	if item, ok := repos.PostRepo.(posts.Publisher); ok {
+	var publisher posts.SubmissionPublisher
+	if item, ok := repos.PostRepo.(posts.SubmissionPublisher); ok {
 		publisher = item
 	}
-	adminposts.RegisterRoutes(api, repos.AdminPostRepo, publisher)
-	submissions.RegisterRoutesWithTurnstile(api, repos.SubmissionRepo, repos.MessageRepo, publisher, repos.OperationsRepo, repos.TurnstileVerifier)
+	var adminPublisher posts.AdminPublisher
+	if item, ok := repos.PostRepo.(posts.AdminPublisher); ok {
+		adminPublisher = item
+	}
+	var postArchiver posts.Archiver
+	if item, ok := repos.PostRepo.(posts.Archiver); ok {
+		postArchiver = item
+	}
+	var postRestorer posts.Restorer
+	if item, ok := repos.PostRepo.(posts.Restorer); ok {
+		postRestorer = item
+	}
+	adminposts.RegisterRoutes(api, repos.AdminPostRepo, adminPublisher, postArchiver)
+	submissions.RegisterRoutesWithTurnstile(api, repos.SubmissionRepo, repos.MessageRepo, publisher, postArchiver, postRestorer, repos.OperationsRepo, repos.TurnstileVerifier)
 
 	return router
 }

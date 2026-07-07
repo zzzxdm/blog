@@ -23,11 +23,14 @@ type Repository interface {
 	Create(ctx context.Context, request SaveRequest, user auth.User) (Submission, error)
 	Update(ctx context.Context, submissionID string, userID string, request SaveRequest) (Submission, error)
 	Submit(ctx context.Context, submissionID string, userID string) (Submission, error)
+	MarkPublished(ctx context.Context, submissionID string, userID string, publishedPostSlug string) (Submission, error)
 	DeleteByAuthor(ctx context.Context, submissionID string, userID string) (Submission, error)
 	AdminList(ctx context.Context, query ListQuery) (ListResult, error)
 	Get(ctx context.Context, submissionID string) (Submission, error)
 	AdminUpdate(ctx context.Context, submissionID string, request SaveRequest) (Submission, error)
 	Review(ctx context.Context, submissionID string, reviewer auth.User, request ReviewRequest, publishedPostSlug string) (Submission, error)
+	ArchivePublished(ctx context.Context, submissionID string, reviewer auth.User) (Submission, error)
+	RestorePublished(ctx context.Context, submissionID string, reviewer auth.User) (Submission, error)
 }
 
 func countStatus(stats Stats, status string) Stats {
@@ -43,6 +46,8 @@ func countStatus(stats Stats, status string) Stats {
 		stats.Rejected++
 	case StatusPublished:
 		stats.Published++
+	case StatusArchived:
+		stats.Archived++
 	}
 
 	return stats
@@ -102,15 +107,26 @@ func applySave(submission Submission, request SaveRequest) Submission {
 	submission.Tags = normalizeTags(request.Tags)
 	submission.CoverImage = defaultString(strings.TrimSpace(request.CoverImage), "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1400&q=80")
 	submission.Slug = strings.TrimSpace(request.Slug)
+	submission.Visibility = normalizeVisibility(request.Visibility)
 
 	return normalizeSubmission(submission)
 }
 
 func normalizeSubmission(submission Submission) Submission {
+	submission.Visibility = normalizeVisibility(submission.Visibility)
 	submission.Tags = append([]string{}, submission.Tags...)
 	submission.WordCount = len([]rune(strings.TrimSpace(submission.Content)))
 	submission.RiskLevel = riskLevel(submission.Content)
 	return submission
+}
+
+func normalizeVisibility(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case VisibilityPrivate:
+		return VisibilityPrivate
+	default:
+		return VisibilityPublic
+	}
 }
 
 func validateSave(request SaveRequest, submit bool) error {
@@ -278,6 +294,7 @@ func seedSubmissions() []Submission {
 			Tags:         []string{"评论", "用户系统", "审核"},
 			CoverImage:   "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=700&q=80",
 			Slug:         "user-comment-system-design",
+			Visibility:   VisibilityPublic,
 			Status:       StatusDraft,
 			Version:      1,
 			CreatedAt:    now.Add(-2 * time.Hour),
@@ -295,6 +312,7 @@ func seedSubmissions() []Submission {
 			Tags:         []string{"投稿", "反垃圾", "内容治理"},
 			CoverImage:   "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=700&q=80",
 			Slug:         "submission-anti-spam",
+			Visibility:   VisibilityPublic,
 			Status:       StatusSubmitted,
 			Version:      2,
 			CreatedAt:    now.Add(-30 * time.Hour),
@@ -313,6 +331,7 @@ func seedSubmissions() []Submission {
 			Tags:         []string{"Markdown", "写作工作流"},
 			CoverImage:   "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=700&q=80",
 			Slug:         "maintainable-technical-writing",
+			Visibility:   VisibilityPublic,
 			Status:       StatusReturned,
 			ReviewNote:   "摘要过短，建议明确文章解决的问题；正文中有一段代码没有解释上下文；封面图缺少 alt 文本。",
 			ReviewerID:   "5002",
@@ -335,6 +354,7 @@ func seedSubmissions() []Submission {
 			Tags:              []string{"版本历史", "内容治理"},
 			CoverImage:        "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=700&q=80",
 			Slug:              "post-version-history",
+			Visibility:        VisibilityPublic,
 			Status:            StatusPublished,
 			ReviewNote:        "审核通过",
 			ReviewerID:        "5002",
@@ -359,6 +379,7 @@ func seedSubmissions() []Submission {
 			Tags:         []string{"信息架构", "首页"},
 			CoverImage:   "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=700&q=80",
 			Slug:         "blog-home-reader-path",
+			Visibility:   VisibilityPublic,
 			Status:       StatusSubmitted,
 			Version:      1,
 			CreatedAt:    now.Add(-8 * time.Hour),

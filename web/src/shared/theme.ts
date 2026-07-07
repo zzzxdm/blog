@@ -149,11 +149,13 @@ function setThemeVariables(primary: string) {
   const darkMode = document.documentElement.dataset.theme === "dark";
   const option = themeOptions.find((item) => item.value === primary);
   const palette = darkMode ? option?.darkPalette ?? createDarkPalette(primary) : lightPalette;
+  const accent = option ? (darkMode ? option.darkAccent : option.accent) : themeAccentColor(primary);
 
   setPaletteVariables(palette);
   document.documentElement.style.setProperty("--green", primary);
-  document.documentElement.style.setProperty("--green-2", option ? (darkMode ? option.darkAccent : option.accent) : themeAccentColor(primary));
+  document.documentElement.style.setProperty("--green-2", accent);
   document.documentElement.style.setProperty("--theme-shell", option ? (darkMode ? option.darkShell : option.shell) : darkenHex(primary, darkMode ? 0.68 : 0.48));
+  setElementPlusVariables(primary, accent);
 }
 
 function setPaletteVariables(palette: ThemePalette) {
@@ -165,6 +167,23 @@ function setPaletteVariables(palette: ThemePalette) {
   document.documentElement.style.setProperty("--line", palette.line);
   document.documentElement.style.setProperty("--code", palette.code);
   document.documentElement.style.setProperty("--shadow", palette.shadow);
+}
+
+function setElementPlusVariables(primary: string, accent: string) {
+  const style = document.documentElement.style;
+  style.setProperty("--el-color-primary", primary);
+  style.setProperty("--el-color-primary-dark-2", accent);
+  style.setProperty("--el-color-primary-light-3", lightenHex(primary, 0.3));
+  style.setProperty("--el-color-primary-light-5", lightenHex(primary, 0.5));
+  style.setProperty("--el-color-primary-light-7", lightenHex(primary, 0.7));
+  style.setProperty("--el-color-primary-light-8", lightenHex(primary, 0.82));
+  style.setProperty("--el-color-primary-light-9", lightenHex(primary, 0.9));
+  style.setProperty("--el-fill-color-light", "var(--surface-2)");
+  style.setProperty("--el-fill-color-blank", "var(--surface)");
+  style.setProperty("--el-border-color", "var(--line)");
+  style.setProperty("--el-text-color-primary", "var(--ink)");
+  style.setProperty("--el-text-color-regular", "var(--ink)");
+  style.setProperty("--el-text-color-secondary", "var(--muted)");
 }
 
 function getStoredPrimaryColor() {

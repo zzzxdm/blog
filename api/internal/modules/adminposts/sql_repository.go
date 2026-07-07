@@ -10,6 +10,7 @@ import (
 
 	"blog/api/internal/database"
 	"blog/api/internal/idgen"
+	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/posts"
 )
 
@@ -86,7 +87,7 @@ func (repo *SQLRepository) Get(ctx context.Context, id string) (AdminPost, error
 	return decodeAdminPost(data)
 }
 
-func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequest) (AdminPost, error) {
+func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequest, actor auth.User) (AdminPost, error) {
 	title := strings.TrimSpace(request.Title)
 	content := strings.TrimSpace(request.Content)
 	if title == "" {
@@ -122,6 +123,12 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	item.Category = defaultString(strings.TrimSpace(request.Category), "工程实践")
 	item.Tags = normalizeTags(request.Tags)
 	item.CoverImage = defaultString(strings.TrimSpace(request.CoverImage), "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80")
+	if strings.TrimSpace(item.AuthorID) == "" {
+		item.AuthorID = strings.TrimSpace(actor.ID)
+	}
+	if strings.TrimSpace(item.AuthorName) == "" && strings.TrimSpace(actor.DisplayName) != "" {
+		item.AuthorName = strings.TrimSpace(actor.DisplayName)
+	}
 	item.SEOtitle = defaultString(strings.TrimSpace(request.SEOtitle), title)
 	item.SEODescription = defaultString(strings.TrimSpace(request.SEODescription), item.Summary)
 	item.ScheduledAt = scheduledAt
@@ -144,7 +151,7 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 		if item.ScheduledAt == nil || strings.TrimSpace(item.Content) == "" {
 			return AdminPost{}, ErrInvalidPost
 		}
-		if item.Visibility != VisibilityPublic {
+		if item.Visibility == VisibilityMembers {
 			return AdminPost{}, ErrPostNotPublic
 		}
 	}
@@ -205,7 +212,7 @@ func applyPublicPostStats(item AdminPost, viewCount sql.NullInt64, commentCount 
 	return item
 }
 
-func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher posts.Publisher) (AdminPost, error) {
+func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher posts.AdminPublisher, actor auth.User) (AdminPost, error) {
 	item, err := repo.Get(ctx, id)
 	if err != nil {
 		return AdminPost{}, err
@@ -214,26 +221,31 @@ func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher pos
 		return AdminPost{}, ErrInvalidPost
 	}
 	item.Visibility = normalizeVisibility(item.Visibility)
-	if item.Visibility != VisibilityPublic {
+	if item.Visibility == VisibilityMembers {
 		return AdminPost{}, ErrPostNotPublic
-	}
-	if item.Status == StatusPublished && item.PublishedPostSlug != "" {
-		return clonePost(item), nil
 	}
 	if publisher == nil {
 		return AdminPost{}, ErrInvalidPost
 	}
+	if strings.TrimSpace(item.AuthorID) == "" {
+		item.AuthorID = strings.TrimSpace(actor.ID)
+	}
+	if strings.TrimSpace(item.AuthorName) == "" && strings.TrimSpace(actor.DisplayName) != "" {
+		item.AuthorName = strings.TrimSpace(actor.DisplayName)
+	}
 
-	published, err := publisher.Publish(ctx, posts.PublishInput{
+	published, err := publisher.PublishAdmin(ctx, posts.PublishInput{
 		Slug:       item.Slug,
 		Title:      item.Title,
 		Summary:    item.Summary,
 		Content:    item.Content,
+		Visibility: item.Visibility,
 		Category:   item.Category,
 		Tags:       item.Tags,
 		CoverImage: item.CoverImage,
+		AuthorID:   item.AuthorID,
 		AuthorName: item.AuthorName,
-	})
+	}, item.PublishedPostSlug)
 	if err != nil {
 		return AdminPost{}, err
 	}
@@ -255,7 +267,39 @@ func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher pos
 	return clonePost(item), nil
 }
 
-func (repo *SQLRepository) PublishDue(ctx context.Context, publisher posts.Publisher, now time.Time) (int, error) {
+func (repo *SQLRepository) Archive(ctx context.Context, id string, archiver posts.Archiver) (AdminPost, error) {
+	item, err := repo.Get(ctx, id)
+	if err != nil {
+		return AdminPost{}, err
+	}
+	if archiver == nil {
+		return AdminPost{}, ErrInvalidPost
+	}
+
+	targetSlug := strings.TrimSpace(item.PublishedPostSlug)
+	if targetSlug == "" {
+		targetSlug = strings.TrimSpace(item.Slug)
+	}
+	if targetSlug != "" && item.Status == StatusPublished {
+		if err := archiver.Archive(ctx, targetSlug); err != nil {
+			return AdminPost{}, err
+		}
+	}
+
+	now := repo.now()
+	item.Status = StatusArchived
+	item.UpdatedAt = now
+	item.Version++
+	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+
+	if err := repo.savePost(ctx, item, false); err != nil {
+		return AdminPost{}, err
+	}
+
+	return clonePost(item), nil
+}
+
+func (repo *SQLRepository) PublishDue(ctx context.Context, publisher posts.AdminPublisher, now time.Time) (int, error) {
 	if publisher == nil {
 		return 0, ErrInvalidPost
 	}
@@ -294,7 +338,8 @@ func (repo *SQLRepository) PublishDue(ctx context.Context, publisher posts.Publi
 			continue
 		}
 
-		if _, err := repo.Publish(ctx, id, publisher); err != nil {
+		actor := auth.User{ID: item.AuthorID, DisplayName: item.AuthorName, Role: "admin"}
+		if _, err := repo.Publish(ctx, id, publisher, actor); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}

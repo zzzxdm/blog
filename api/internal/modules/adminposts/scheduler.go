@@ -8,7 +8,7 @@ import (
 	"blog/api/internal/modules/posts"
 )
 
-func StartScheduledPublisher(ctx context.Context, repo Repository, publisher posts.Publisher, interval time.Duration) {
+func StartScheduledPublisher(ctx context.Context, repo Repository, publisher posts.AdminPublisher, interval time.Duration) {
 	if repo == nil || publisher == nil {
 		return
 	}
@@ -33,7 +33,7 @@ func StartScheduledPublisher(ctx context.Context, repo Repository, publisher pos
 	}()
 }
 
-func publishDue(ctx context.Context, repo Repository, publisher posts.Publisher) {
+func publishDue(ctx context.Context, repo Repository, publisher posts.AdminPublisher) {
 	publishCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 

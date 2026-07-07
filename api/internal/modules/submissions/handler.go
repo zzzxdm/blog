@@ -20,7 +20,9 @@ import (
 type Handler struct {
 	repo              Repository
 	messages          messages.Repository
-	publisher         posts.Publisher
+	publisher         posts.SubmissionPublisher
+	archiver          posts.Archiver
+	restorer          posts.Restorer
 	settings          settingsReader
 	turnstileVerifier auth.TurnstileVerifier
 }
@@ -29,11 +31,11 @@ type settingsReader interface {
 	GetSettings(ctx context.Context) (operations.Settings, error)
 }
 
-func NewHandler(repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader) *Handler {
-	return NewHandlerWithTurnstile(repo, messageRepo, publisher, settings, nil)
+func NewHandler(repo Repository, messageRepo messages.Repository, publisher posts.SubmissionPublisher, archiver posts.Archiver, restorer posts.Restorer, settings settingsReader) *Handler {
+	return NewHandlerWithTurnstile(repo, messageRepo, publisher, archiver, restorer, settings, nil)
 }
 
-func NewHandlerWithTurnstile(repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader, turnstileVerifier auth.TurnstileVerifier) *Handler {
+func NewHandlerWithTurnstile(repo Repository, messageRepo messages.Repository, publisher posts.SubmissionPublisher, archiver posts.Archiver, restorer posts.Restorer, settings settingsReader, turnstileVerifier auth.TurnstileVerifier) *Handler {
 	if turnstileVerifier == nil {
 		turnstileVerifier = auth.NewHTTPTurnstileVerifier()
 	}
@@ -42,17 +44,19 @@ func NewHandlerWithTurnstile(repo Repository, messageRepo messages.Repository, p
 		repo:              repo,
 		messages:          messageRepo,
 		publisher:         publisher,
+		archiver:          archiver,
+		restorer:          restorer,
 		settings:          settings,
 		turnstileVerifier: turnstileVerifier,
 	}
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader) {
-	RegisterRoutesWithTurnstile(router, repo, messageRepo, publisher, settings, nil)
+func RegisterRoutes(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.SubmissionPublisher, archiver posts.Archiver, restorer posts.Restorer, settings settingsReader) {
+	RegisterRoutesWithTurnstile(router, repo, messageRepo, publisher, archiver, restorer, settings, nil)
 }
 
-func RegisterRoutesWithTurnstile(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.Publisher, settings settingsReader, turnstileVerifier auth.TurnstileVerifier) {
-	handler := NewHandlerWithTurnstile(repo, messageRepo, publisher, settings, turnstileVerifier)
+func RegisterRoutesWithTurnstile(router gin.IRouter, repo Repository, messageRepo messages.Repository, publisher posts.SubmissionPublisher, archiver posts.Archiver, restorer posts.Restorer, settings settingsReader, turnstileVerifier auth.TurnstileVerifier) {
+	handler := NewHandlerWithTurnstile(repo, messageRepo, publisher, archiver, restorer, settings, turnstileVerifier)
 
 	router.GET("/submissions", handler.ListMine)
 	router.GET("/me/submissions", handler.ListMine)
@@ -67,6 +71,8 @@ func RegisterRoutesWithTurnstile(router gin.IRouter, repo Repository, messageRep
 	router.POST("/admin/submissions/:id/review", handler.Review)
 	router.POST("/admin/submissions/:id/approve", handler.Approve)
 	router.POST("/admin/submissions/:id/reject", handler.Reject)
+	router.POST("/admin/submissions/:id/archive", handler.ArchivePublished)
+	router.POST("/admin/submissions/:id/restore", handler.RestorePublished)
 }
 
 func (handler *Handler) ListMine(ctx *gin.Context) {
@@ -117,7 +123,7 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	if request.Submit && !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
-	if request.Submit && !handler.requireSubmissionSlot(ctx, user.ID, settings, "") {
+	if request.Submit && normalizeVisibility(request.Visibility) == VisibilityPublic && !handler.requireSubmissionSlot(ctx, user.ID, settings, "") {
 		return
 	}
 
@@ -125,6 +131,12 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	if err != nil {
 		handler.writeSubmissionError(ctx, err)
 		return
+	}
+	if request.Submit && submission.Visibility == VisibilityPrivate {
+		submission, err = handler.publishPrivateSubmission(ctx, user, submission)
+		if err != nil {
+			return
+		}
 	}
 
 	ctx.JSON(http.StatusCreated, submission)
@@ -156,7 +168,7 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	if request.Submit && !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
-	if request.Submit && !handler.requireSubmissionSlot(ctx, user.ID, settings, ctx.Param("id")) {
+	if request.Submit && normalizeVisibility(request.Visibility) == VisibilityPublic && !handler.requireSubmissionSlot(ctx, user.ID, settings, ctx.Param("id")) {
 		return
 	}
 
@@ -164,6 +176,12 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	if err != nil {
 		handler.writeSubmissionError(ctx, err)
 		return
+	}
+	if request.Submit && submission.Visibility == VisibilityPrivate {
+		submission, err = handler.publishPrivateSubmission(ctx, user, submission)
+		if err != nil {
+			return
+		}
 	}
 
 	ctx.JSON(http.StatusOK, submission)
@@ -203,11 +221,16 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 	if !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
-	if !handler.requireSubmissionSlot(ctx, user.ID, settings, current.ID) {
+	if current.Visibility == VisibilityPublic && !handler.requireSubmissionSlot(ctx, user.ID, settings, current.ID) {
 		return
 	}
 
-	submission, err := handler.repo.Submit(ctx.Request.Context(), ctx.Param("id"), user.ID)
+	var submission Submission
+	if current.Visibility == VisibilityPrivate {
+		submission, err = handler.publishPrivateSubmission(ctx, user, current)
+	} else {
+		submission, err = handler.repo.Submit(ctx.Request.Context(), ctx.Param("id"), user.ID)
+	}
 	if err != nil {
 		handler.writeSubmissionError(ctx, err)
 		return
@@ -390,6 +413,106 @@ func (handler *Handler) Reject(ctx *gin.Context) {
 	handler.reviewWithRequest(ctx, reviewer, request)
 }
 
+func (handler *Handler) ArchivePublished(ctx *gin.Context) {
+	reviewer, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+	if handler.archiver == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post archiver is unavailable"})
+		return
+	}
+
+	current, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+	if current.Status != StatusPublished || strings.TrimSpace(current.PublishedPostSlug) == "" {
+		handler.writeSubmissionError(ctx, ErrInvalidReview)
+		return
+	}
+	if err := handler.archiver.Archive(ctx.Request.Context(), current.PublishedPostSlug); err != nil {
+		if errors.Is(err, posts.ErrNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "published post not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive published post"})
+		return
+	}
+
+	submission, err := handler.repo.ArchivePublished(ctx.Request.Context(), ctx.Param("id"), reviewer)
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+	if handler.messages != nil {
+		_, _ = handler.messages.Create(ctx.Request.Context(), messages.CreateRequest{
+			RecipientID:   submission.AuthorID,
+			RecipientName: submission.AuthorName,
+			Type:          messages.TypeReview,
+			Priority:      "normal",
+			Title:         "你的文章已下架",
+			Body:          fmt.Sprintf("《%s》已由管理员下架，不再公开展示。", submission.Title),
+			TargetType:    "submission",
+			TargetID:      submission.ID,
+			TargetTitle:   submission.Title,
+		}, reviewer)
+	}
+
+	ctx.JSON(http.StatusOK, submission)
+}
+
+func (handler *Handler) RestorePublished(ctx *gin.Context) {
+	reviewer, ok := auth.RequireAdmin(ctx)
+	if !ok {
+		return
+	}
+	if handler.restorer == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post restorer is unavailable"})
+		return
+	}
+
+	current, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+	if current.Status != StatusArchived || strings.TrimSpace(current.PublishedPostSlug) == "" {
+		handler.writeSubmissionError(ctx, ErrInvalidReview)
+		return
+	}
+	if err := handler.restorer.Restore(ctx.Request.Context(), current.PublishedPostSlug); err != nil {
+		if errors.Is(err, posts.ErrNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "archived post not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore published post"})
+		return
+	}
+
+	submission, err := handler.repo.RestorePublished(ctx.Request.Context(), ctx.Param("id"), reviewer)
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return
+	}
+	if handler.messages != nil {
+		_, _ = handler.messages.Create(ctx.Request.Context(), messages.CreateRequest{
+			RecipientID:   submission.AuthorID,
+			RecipientName: submission.AuthorName,
+			Type:          messages.TypeReview,
+			Priority:      "normal",
+			Title:         "你的文章已重新上架",
+			Body:          fmt.Sprintf("《%s》已由管理员重新上架。", submission.Title),
+			TargetType:    "submission",
+			TargetID:      submission.ID,
+			TargetTitle:   submission.Title,
+		}, reviewer)
+	}
+
+	ctx.JSON(http.StatusOK, submission)
+}
+
 func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, request ReviewRequest) {
 	publishedPostSlug := ""
 	if strings.ToLower(strings.TrimSpace(request.Action)) == ActionApprove {
@@ -408,16 +531,18 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 			return
 		}
 
-		post, err := handler.publisher.Publish(ctx.Request.Context(), posts.PublishInput{
+		post, err := handler.publisher.PublishSubmission(ctx.Request.Context(), posts.PublishInput{
 			Slug:       defaultString(strings.TrimSpace(request.Slug), submission.Slug),
 			Title:      submission.Title,
 			Summary:    submission.Summary,
 			Content:    submission.Content,
+			Visibility: posts.VisibilityPublic,
 			Category:   defaultString(strings.TrimSpace(request.Category), submission.Category),
 			Tags:       submission.Tags,
 			CoverImage: submission.CoverImage,
+			AuthorID:   submission.AuthorID,
 			AuthorName: submission.AuthorName,
-		})
+		}, submission.PublishedPostSlug)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish submission"})
 			return
@@ -437,6 +562,42 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 	}
 
 	ctx.JSON(http.StatusOK, submission)
+}
+
+func (handler *Handler) publishPrivateSubmission(ctx *gin.Context, user auth.User, submission Submission) (Submission, error) {
+	if handler.publisher == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post publisher is unavailable"})
+		return Submission{}, ErrInvalidSubmission
+	}
+	if err := validateSubmissionReady(submission); err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return Submission{}, err
+	}
+
+	post, err := handler.publisher.PublishSubmission(ctx.Request.Context(), posts.PublishInput{
+		Slug:       submission.Slug,
+		Title:      submission.Title,
+		Summary:    submission.Summary,
+		Content:    submission.Content,
+		Visibility: posts.VisibilityPrivate,
+		Category:   submission.Category,
+		Tags:       submission.Tags,
+		CoverImage: submission.CoverImage,
+		AuthorID:   submission.AuthorID,
+		AuthorName: defaultString(strings.TrimSpace(submission.AuthorName), user.DisplayName),
+	}, submission.PublishedPostSlug)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish private article"})
+		return Submission{}, err
+	}
+
+	published, err := handler.repo.MarkPublished(ctx.Request.Context(), submission.ID, user.ID, post.Slug)
+	if err != nil {
+		handler.writeSubmissionError(ctx, err)
+		return Submission{}, err
+	}
+
+	return published, nil
 }
 
 func (handler *Handler) writeSubmissionError(ctx *gin.Context, err error) {

@@ -4,6 +4,7 @@ import AccountPage from "../pages/AccountPage.vue";
 import AccountBookmarksPage from "../pages/account/AccountBookmarksPage.vue";
 import AccountCommentsPage from "../pages/account/AccountCommentsPage.vue";
 import AccountMessagesPage from "../pages/account/AccountMessagesPage.vue";
+import AccountPrivatePostsPage from "../pages/account/AccountPrivatePostsPage.vue";
 import AccountSettingsPage from "../pages/account/AccountSettingsPage.vue";
 import AccountSubmissionsPage from "../pages/account/AccountSubmissionsPage.vue";
 import AdminAuditPage from "../pages/admin/AdminAuditPage.vue";
@@ -50,6 +51,7 @@ export const router = createRouter({
     { path: "/account", name: "account", component: AccountPage, meta: { requiresAuth: true } },
     { path: "/account/comments", name: "account-comments", component: AccountCommentsPage, meta: { requiresAuth: true } },
     { path: "/account/bookmarks", name: "account-bookmarks", component: AccountBookmarksPage, meta: { requiresAuth: true } },
+    { path: "/account/private-posts", name: "account-private-posts", component: AccountPrivatePostsPage, meta: { requiresAuth: true } },
     { path: "/account/submissions", name: "account-submissions", component: AccountSubmissionsPage, meta: { requiresAuth: true } },
     { path: "/account/messages", name: "account-messages", component: AccountMessagesPage, meta: { requiresAuth: true } },
     { path: "/account/settings", name: "account-settings", component: AccountSettingsPage, meta: { requiresAuth: true } },
