@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"blog/api/internal/idgen"
 	"blog/api/internal/modules/auth"
 
 	"github.com/gin-gonic/gin"
@@ -378,7 +379,7 @@ func (handler *Handler) UploadMedia(ctx *gin.Context) {
 	}
 
 	asset := MediaAsset{
-		ID:         fmt.Sprintf("media_%d", now.UnixNano()),
+		ID:         idgen.NextString(),
 		FileName:   originalName,
 		URL:        "/uploads/" + filepath.ToSlash(filepath.Join(relativeDir, storedName)),
 		Alt:        alt,

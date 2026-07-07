@@ -2,11 +2,12 @@ package auth
 
 import (
 	"crypto/rand"
-	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
+
+	"blog/api/internal/idgen"
 )
 
 var (
@@ -80,13 +81,7 @@ func randomTemporaryPassword() (string, error) {
 }
 
 func randomUserID() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-
-	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(bytes)
-	return "usr_" + strings.ToLower(encoded), nil
+	return idgen.NextString(), nil
 }
 
 func firstRune(value string) string {

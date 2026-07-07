@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
+	"blog/api/internal/idgen"
 	"blog/api/internal/modules/auth"
 )
 
@@ -54,7 +54,7 @@ func (repo *SQLRepository) Create(ctx context.Context, postSlug string, request 
 		return Comment{}, ErrEmptyBody
 	}
 
-	id := fmt.Sprintf("comment_%d", time.Now().UnixNano())
+	id := idgen.NextString()
 	row := repo.db.QueryRowContext(ctx, `
 		INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author)
 		VALUES ($1, $2, NULLIF($3, ''), $4, $5, 'pending', 0, $6)
@@ -87,7 +87,7 @@ func (repo *SQLRepository) CreateReply(ctx context.Context, parentID string, req
 		return Comment{}, fmt.Errorf("load parent comment: %w", err)
 	}
 
-	id := fmt.Sprintf("comment_%d", time.Now().UnixNano())
+	id := idgen.NextString()
 	row := repo.db.QueryRowContext(ctx, `
 		INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author)
 		VALUES ($1, $2, $3, $4, $5, 'pending', 0, $6)
@@ -344,7 +344,7 @@ func (repo *SQLRepository) Report(ctx context.Context, commentID string, user au
 		reason = "用户举报"
 	}
 
-	id := fmt.Sprintf("comment_report_%d", time.Now().UnixNano())
+	id := idgen.NextString()
 	if _, err := repo.db.ExecContext(ctx, `
 		INSERT INTO comment_reports (id, comment_id, reporter_id, reason, status)
 		VALUES ($1, $2, $3, $4, 'pending')

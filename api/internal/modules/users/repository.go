@@ -200,7 +200,7 @@ func seedUsers() map[string]ManagedUser {
 	now := time.Now()
 	users := []ManagedUser{
 		{
-			ID:            "user_linyi",
+			ID:            "5001",
 			Email:         "linyi@example.com",
 			DisplayName:   "林一",
 			Role:          "user",
@@ -213,7 +213,7 @@ func seedUsers() map[string]ManagedUser {
 			RegisteredAt:  now.AddDate(0, 0, -22),
 		},
 		{
-			ID:            "user_admin",
+			ID:            "5002",
 			Email:         "admin@example.com",
 			DisplayName:   "管理员",
 			Role:          "admin",
@@ -227,7 +227,7 @@ func seedUsers() map[string]ManagedUser {
 			RegisteredAt:  now.AddDate(0, -2, 0),
 		},
 		{
-			ID:            "user_chen",
+			ID:            "5003",
 			Email:         "chen@example.com",
 			DisplayName:   "陈默",
 			Role:          "user",
@@ -240,7 +240,7 @@ func seedUsers() map[string]ManagedUser {
 			RegisteredAt:  now.AddDate(0, 0, -15),
 		},
 		{
-			ID:             "user_market",
+			ID:             "5004",
 			Email:          "market@example.com",
 			DisplayName:    "market_user",
 			Role:           "user",
@@ -254,7 +254,7 @@ func seedUsers() map[string]ManagedUser {
 			ModerationNote: "推广链接举报 3 次",
 		},
 		{
-			ID:             "user_noise",
+			ID:             "5005",
 			Email:          "noise@example.com",
 			DisplayName:    "noise_2048",
 			Role:           "user",

@@ -672,7 +672,7 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 	}{
 		{
 			User: User{
-				ID:            "user_linyi",
+				ID:            "5001",
 				Email:         "linyi@example.com",
 				DisplayName:   "林一",
 				Role:          "user",
@@ -684,7 +684,7 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 		},
 		{
 			User: User{
-				ID:            "user_admin",
+				ID:            "5002",
 				Email:         "admin@example.com",
 				DisplayName:   "管理员",
 				Role:          "admin",
@@ -696,7 +696,7 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 		},
 		{
 			User: User{
-				ID:            "user_chen",
+				ID:            "5003",
 				Email:         "chen@example.com",
 				DisplayName:   "陈默",
 				Role:          "user",
@@ -708,7 +708,7 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 		},
 		{
 			User: User{
-				ID:            "user_market",
+				ID:            "5004",
 				Email:         "market@example.com",
 				DisplayName:   "market_user",
 				Role:          "user",
@@ -720,7 +720,7 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 		},
 		{
 			User: User{
-				ID:            "user_noise",
+				ID:            "5005",
 				Email:         "noise@example.com",
 				DisplayName:   "noise_2048",
 				Role:          "user",

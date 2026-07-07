@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"blog/api/internal/idgen"
 )
 
 type SQLRepository struct {
@@ -148,11 +150,12 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 		var newID string
 		err := repo.db.QueryRowContext(ctx, `
 			INSERT INTO topics (
-				slug, title, summary, cover_image, image_alt, tone, status, featured, sort_order, categories, tags
+				id, slug, title, summary, cover_image, image_alt, tone, status, featured, sort_order, categories, tags
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			RETURNING CAST(id AS TEXT)
 		`,
+			idgen.NextString(),
 			slug,
 			title,
 			strings.TrimSpace(request.Summary),

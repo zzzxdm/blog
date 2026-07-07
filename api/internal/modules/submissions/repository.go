@@ -267,8 +267,8 @@ func seedSubmissions() []Submission {
 
 	return []Submission{
 		normalizeSubmission(Submission{
-			ID:           "submission_001",
-			AuthorID:     "user_linyi",
+			ID:           "7001",
+			AuthorID:     "5001",
 			AuthorName:   "林一",
 			AuthorAvatar: "林",
 			Title:        "用户评论系统应该怎么设计",
@@ -284,8 +284,8 @@ func seedSubmissions() []Submission {
 			UpdatedAt:    now.Add(-20 * time.Minute),
 		}),
 		normalizeSubmission(Submission{
-			ID:           "submission_002",
-			AuthorID:     "user_linyi",
+			ID:           "7002",
+			AuthorID:     "5001",
 			AuthorName:   "林一",
 			AuthorAvatar: "林",
 			Title:        "开放投稿入口后如何做反垃圾",
@@ -302,8 +302,8 @@ func seedSubmissions() []Submission {
 			SubmittedAt:  &submittedToday,
 		}),
 		normalizeSubmission(Submission{
-			ID:           "submission_003",
-			AuthorID:     "user_linyi",
+			ID:           "7003",
+			AuthorID:     "5001",
 			AuthorName:   "林一",
 			AuthorAvatar: "林",
 			Title:        "如何写一篇可维护的技术文章",
@@ -315,7 +315,7 @@ func seedSubmissions() []Submission {
 			Slug:         "maintainable-technical-writing",
 			Status:       StatusReturned,
 			ReviewNote:   "摘要过短，建议明确文章解决的问题；正文中有一段代码没有解释上下文；封面图缺少 alt 文本。",
-			ReviewerID:   "user_admin",
+			ReviewerID:   "5002",
 			ReviewerName: "管理员",
 			Version:      2,
 			CreatedAt:    now.Add(-3 * 24 * time.Hour),
@@ -324,8 +324,8 @@ func seedSubmissions() []Submission {
 			ReviewedAt:   &reviewedYesterday,
 		}),
 		normalizeSubmission(Submission{
-			ID:                "submission_004",
-			AuthorID:          "user_linyi",
+			ID:                "7004",
+			AuthorID:          "5001",
 			AuthorName:        "林一",
 			AuthorAvatar:      "林",
 			Title:             "版本历史如何保护内容资产",
@@ -337,7 +337,7 @@ func seedSubmissions() []Submission {
 			Slug:              "post-version-history",
 			Status:            StatusPublished,
 			ReviewNote:        "审核通过",
-			ReviewerID:        "user_admin",
+			ReviewerID:        "5002",
 			ReviewerName:      "管理员",
 			PublishedPostSlug: "post-version-history",
 			Version:           1,
@@ -348,8 +348,8 @@ func seedSubmissions() []Submission {
 			PublishedAt:       &publishedAt,
 		}),
 		normalizeSubmission(Submission{
-			ID:           "submission_005",
-			AuthorID:     "user_chen",
+			ID:           "7005",
+			AuthorID:     "5003",
 			AuthorName:   "陈默",
 			AuthorAvatar: "陈",
 			Title:        "从读者路径看博客首页",

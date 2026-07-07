@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"blog/api/internal/database"
+	"blog/api/internal/idgen"
 	"blog/api/internal/modules/posts"
 )
 
@@ -98,7 +99,7 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 
 	now := repo.now()
 	item := AdminPost{
-		ID:         fmt.Sprintf("admin_post_%d", now.UnixNano()),
+		ID:         idgen.NextString(),
 		AuthorName: "管理员",
 		Status:     StatusDraft,
 		Visibility: VisibilityPublic,

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"blog/api/internal/idgen"
 )
 
 type SQLRepository struct {
@@ -73,10 +75,10 @@ func (repo *SQLRepository) SaveCategory(ctx context.Context, id string, request 
 	if strings.TrimSpace(id) == "" {
 		var newID string
 		err := repo.db.QueryRowContext(ctx, `
-			INSERT INTO categories (slug, name, description, sort_order)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO categories (id, slug, name, description, sort_order)
+			VALUES ($1, $2, $3, $4, $5)
 				RETURNING CAST(id AS TEXT)
-		`, slug, name, strings.TrimSpace(request.Description), request.SortOrder).Scan(&newID)
+		`, idgen.NextString(), slug, name, strings.TrimSpace(request.Description), request.SortOrder).Scan(&newID)
 		if err != nil {
 			return Category{}, fmt.Errorf("insert category: %w", err)
 		}
@@ -181,10 +183,10 @@ func (repo *SQLRepository) SaveTag(ctx context.Context, id string, request SaveT
 	if strings.TrimSpace(id) == "" {
 		var newID string
 		err := repo.db.QueryRowContext(ctx, `
-			INSERT INTO tags (slug, name)
-			VALUES ($1, $2)
+			INSERT INTO tags (id, slug, name)
+			VALUES ($1, $2, $3)
 				RETURNING CAST(id AS TEXT)
-		`, slug, name).Scan(&newID)
+		`, idgen.NextString(), slug, name).Scan(&newID)
 		if err != nil {
 			return Tag{}, fmt.Errorf("insert tag: %w", err)
 		}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"blog/api/internal/database"
+	"blog/api/internal/idgen"
 	"blog/api/internal/modules/auth"
 )
 
@@ -76,7 +77,7 @@ func (repo *SQLRepository) Create(ctx context.Context, request SaveRequest, user
 	}
 
 	submission := applySave(Submission{
-		ID:           fmt.Sprintf("submission_%d", now.UnixNano()),
+		ID:           idgen.NextString(),
 		AuthorID:     user.ID,
 		AuthorName:   user.DisplayName,
 		AuthorAvatar: user.AvatarText,

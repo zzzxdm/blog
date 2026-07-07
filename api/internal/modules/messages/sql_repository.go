@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"blog/api/internal/idgen"
 	"blog/api/internal/modules/auth"
 )
 
@@ -64,7 +65,7 @@ func (repo *SQLRepository) Create(ctx context.Context, request CreateRequest, se
 		return Message{}, ErrInvalidMessage
 	}
 
-	id := fmt.Sprintf("message_%d", time.Now().UnixNano())
+	id := idgen.NextString()
 	_, err = repo.db.ExecContext(ctx, `
 		INSERT INTO messages (
 			id, recipient_id, recipient_name, sender_id, sender_name, type, priority,

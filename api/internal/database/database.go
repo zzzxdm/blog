@@ -77,7 +77,7 @@ func OpenSQLite(ctx context.Context, path string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	dsn := "file:" + filepath.ToSlash(path) + "?_pragma=" + url.QueryEscape("foreign_keys(1)") + "&_pragma=" + url.QueryEscape("busy_timeout(5000)") + "&_time_format=sqlite"
+	dsn := "file:" + filepath.ToSlash(path) + "?_pragma=" + url.QueryEscape("busy_timeout(5000)") + "&_time_format=sqlite"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"blog/api/internal/database"
+	"blog/api/internal/idgen"
 )
 
 type SQLRepository struct {
@@ -277,12 +278,13 @@ func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Pos
 	publishedAt := time.Now()
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO posts (
-			slug, title, summary, content, status, source, category_id, author_name,
+			id, slug, title, summary, content, status, source, category_id, author_name,
 			cover_image, reading_time, view_count, like_count, dislike_count, comment_count, published_at
 		)
-		VALUES ($1, $2, $3, $4, 'published', 'submission', $5, $6, $7, $8, 0, 0, 0, 0, $9)
+		VALUES ($1, $2, $3, $4, $5, 'published', 'submission', $6, $7, $8, $9, 0, 0, 0, 0, $10)
 		RETURNING CAST(id AS TEXT)
 	`,
+		idgen.NextString(),
 		slug,
 		title,
 		strings.TrimSpace(input.Summary),
@@ -570,10 +572,10 @@ func ensureCategory(ctx context.Context, tx *sql.Tx, category string) (string, e
 	}
 
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO categories (slug, name)
-		VALUES ($1, $2)
+		INSERT INTO categories (id, slug, name)
+		VALUES ($1, $2, $3)
 		RETURNING CAST(id AS TEXT)
-	`, slug, category).Scan(&categoryID)
+	`, idgen.NextString(), slug, category).Scan(&categoryID)
 	if err != nil {
 		return "", fmt.Errorf("insert category: %w", err)
 	}
@@ -602,10 +604,10 @@ func ensureTag(ctx context.Context, tx *sql.Tx, tag string) (string, error) {
 	}
 
 	err = tx.QueryRowContext(ctx, `
-		INSERT INTO tags (slug, name)
-		VALUES ($1, $2)
+		INSERT INTO tags (id, slug, name)
+		VALUES ($1, $2, $3)
 		RETURNING CAST(id AS TEXT)
-	`, slug, tag).Scan(&tagID)
+	`, idgen.NextString(), slug, tag).Scan(&tagID)
 	if err != nil {
 		return "", fmt.Errorf("insert tag: %w", err)
 	}

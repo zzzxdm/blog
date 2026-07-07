@@ -163,7 +163,7 @@ func seedTopics(now func() time.Time) map[string]Topic {
 	createdAt := now()
 	items := []Topic{
 		{
-			ID:         "topic_blog_system",
+			ID:         "4001",
 			Slug:       "blog-system",
 			Title:      "现代化博客系统",
 			Summary:    "从产品功能、技术架构、用户系统、评论、搜索和后台管理完整设计一个博客系统。",
@@ -178,7 +178,7 @@ func seedTopics(now func() time.Time) map[string]Topic {
 			UpdatedAt:  createdAt,
 		},
 		{
-			ID:         "topic_vue3_content",
+			ID:         "4002",
 			Slug:       "vue3-content",
 			Title:      "Vue3 内容站",
 			Summary:    "路由、状态管理、接口缓存、SEO meta、图片优化和部署策略。",
@@ -194,7 +194,7 @@ func seedTopics(now func() time.Time) map[string]Topic {
 			UpdatedAt:  createdAt,
 		},
 		{
-			ID:         "topic_writing_workflow",
+			ID:         "4003",
 			Slug:       "writing-workflow",
 			Title:      "写作工作流",
 			Summary:    "草稿、版本历史、编辑器、发布审批和长期内容维护。",
@@ -210,7 +210,7 @@ func seedTopics(now func() time.Time) map[string]Topic {
 			UpdatedAt:  createdAt,
 		},
 		{
-			ID:         "topic_resource_list",
+			ID:         "4004",
 			Slug:       "resource-list",
 			Title:      "资源清单",
 			Summary:    "把工具、部署、数据库和内容运营资料整理成可持续更新的阅读路线。",

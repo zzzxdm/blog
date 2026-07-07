@@ -423,7 +423,7 @@ func (repo *SQLRepository) ensureSeedInteractions(ctx context.Context) error {
 		UserID   string
 		Reaction string
 	}{
-		{PostSlug: "blog-system-design", UserID: "user_linyi", Reaction: "like"},
+		{PostSlug: "blog-system-design", UserID: "5001", Reaction: "like"},
 	}
 
 	for _, seed := range seeds {
@@ -442,8 +442,8 @@ func (repo *SQLRepository) ensureSeedInteractions(ctx context.Context) error {
 		UserID    string
 		CreatedAt time.Time
 	}{
-		{PostSlug: "blog-system-design", UserID: "user_linyi", CreatedAt: now.Add(-2 * time.Hour)},
-		{PostSlug: "vue3-content-site-cache-seo", UserID: "user_linyi", CreatedAt: now.Add(-26 * time.Hour)},
+		{PostSlug: "blog-system-design", UserID: "5001", CreatedAt: now.Add(-2 * time.Hour)},
+		{PostSlug: "vue3-content-site-cache-seo", UserID: "5001", CreatedAt: now.Add(-26 * time.Hour)},
 	}
 
 	for _, seed := range bookmarkSeeds {

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"blog/api/internal/idgen"
 )
 
 var (
@@ -387,7 +389,7 @@ func normalizeAuditLogQuery(query AuditLogQuery) AuditLogQuery {
 
 func normalizeAuditLog(item AuditLog, now time.Time) AuditLog {
 	if item.ID == "" {
-		item.ID = fmt.Sprintf("audit_%d", now.UnixNano())
+		item.ID = idgen.NextString()
 	}
 	item.ActorID = strings.TrimSpace(item.ActorID)
 	item.ActorName = defaultString(item.ActorName, "匿名用户")
@@ -504,12 +506,12 @@ func seedNavigation() Navigation {
 func seedMedia() []MediaAsset {
 	now := time.Now()
 	return []MediaAsset{
-		{ID: "media_001", FileName: "cover-code-desk.jpg", URL: "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=700&q=80", Alt: "代码编辑器封面图", Type: "image", Category: "封面图", SizeLabel: "1.2 MB", Width: 1400, Height: 930, UsageCount: 8, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -1)},
-		{ID: "media_002", FileName: "server-room.jpg", URL: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=700&q=80", Alt: "服务器设备图片", Type: "image", Category: "架构", SizeLabel: "980 KB", Width: 1400, Height: 930, UsageCount: 3, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -2)},
-		{ID: "media_003", FileName: "writing-notes.jpg", URL: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=700&q=80", Alt: "写作桌面图片", Type: "image", Category: "写作", SizeLabel: "860 KB", Width: 1400, Height: 930, UsageCount: 5, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -3)},
-		{ID: "media_004", FileName: "product-dashboard.jpg", URL: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=700&q=80", Alt: "产品分析界面", Type: "image", Category: "产品设计", SizeLabel: "1.4 MB", Width: 1400, Height: 930, UsageCount: 2, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -4)},
-		{ID: "media_005", FileName: "javascript-editor.jpg", URL: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=700&q=80", Alt: "代码窗口", Type: "image", Category: "Vue3", SizeLabel: "740 KB", Width: 1400, Height: 930, UsageCount: 4, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -5)},
-		{ID: "media_006", FileName: "quiet-workspace.jpg", URL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=700&q=80", Alt: "自然光工作区", Type: "image", Category: "备用", SizeLabel: "690 KB", Width: 1400, Height: 930, UsageCount: 0, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -6)},
+		{ID: "9001", FileName: "cover-code-desk.jpg", URL: "https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=700&q=80", Alt: "代码编辑器封面图", Type: "image", Category: "封面图", SizeLabel: "1.2 MB", Width: 1400, Height: 930, UsageCount: 8, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -1)},
+		{ID: "9002", FileName: "server-room.jpg", URL: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=700&q=80", Alt: "服务器设备图片", Type: "image", Category: "架构", SizeLabel: "980 KB", Width: 1400, Height: 930, UsageCount: 3, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -2)},
+		{ID: "9003", FileName: "writing-notes.jpg", URL: "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=700&q=80", Alt: "写作桌面图片", Type: "image", Category: "写作", SizeLabel: "860 KB", Width: 1400, Height: 930, UsageCount: 5, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -3)},
+		{ID: "9004", FileName: "product-dashboard.jpg", URL: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=700&q=80", Alt: "产品分析界面", Type: "image", Category: "产品设计", SizeLabel: "1.4 MB", Width: 1400, Height: 930, UsageCount: 2, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -4)},
+		{ID: "9005", FileName: "javascript-editor.jpg", URL: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=700&q=80", Alt: "代码窗口", Type: "image", Category: "Vue3", SizeLabel: "740 KB", Width: 1400, Height: 930, UsageCount: 4, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -5)},
+		{ID: "9006", FileName: "quiet-workspace.jpg", URL: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=700&q=80", Alt: "自然光工作区", Type: "image", Category: "备用", SizeLabel: "690 KB", Width: 1400, Height: 930, UsageCount: 0, UploadedBy: "管理员", UploadedAt: now.AddDate(0, 0, -6)},
 	}
 }
 
@@ -636,12 +638,12 @@ func seedAuditLogs() []AuditLog {
 	now := time.Now()
 	return []AuditLog{
 		{
-			ID:            "audit_001",
-			ActorID:       "user_admin",
+			ID:            "10001",
+			ActorID:       "5002",
 			ActorName:     "管理员",
 			Action:        "post.publish",
 			ResourceType:  "post",
-			ResourceID:    "admin_post_001",
+			ResourceID:    "11001",
 			ResourceTitle: "如何设计一个内容长期增长的博客系统",
 			Status:        "success",
 			IP:            "127.0.0.1",
@@ -650,12 +652,12 @@ func seedAuditLogs() []AuditLog {
 			CreatedAt:     now.Add(-2 * time.Hour),
 		},
 		{
-			ID:            "audit_002",
-			ActorID:       "user_admin",
+			ID:            "10002",
+			ActorID:       "5002",
 			ActorName:     "管理员",
 			Action:        "comment.moderate",
 			ResourceType:  "comment",
-			ResourceID:    "comment_001",
+			ResourceID:    "6001",
 			ResourceTitle: "评论审核",
 			Status:        "success",
 			IP:            "127.0.0.1",
@@ -664,8 +666,8 @@ func seedAuditLogs() []AuditLog {
 			CreatedAt:     now.Add(-5 * time.Hour),
 		},
 		{
-			ID:            "audit_003",
-			ActorID:       "user_admin",
+			ID:            "10003",
+			ActorID:       "5002",
 			ActorName:     "管理员",
 			Action:        "settings.update",
 			ResourceType:  "settings",

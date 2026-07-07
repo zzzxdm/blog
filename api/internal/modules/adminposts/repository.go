@@ -403,7 +403,7 @@ func seedAdminPosts() map[string]AdminPost {
 	scheduledAt := now.Add(6 * time.Hour)
 	items := []AdminPost{
 		{
-			ID:                "admin_post_001",
+			ID:                "11001",
 			Slug:              "blog-system-design",
 			Title:             "如何设计一个内容长期增长的博客系统",
 			Summary:           "博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。",
@@ -425,7 +425,7 @@ func seedAdminPosts() map[string]AdminPost {
 			UpdatedAt:         now.Add(-2 * time.Hour),
 		},
 		{
-			ID:          "admin_post_002",
+			ID:          "11002",
 			Slug:        "vue3-content-site-cache-seo",
 			Title:       "Vue3 内容站的缓存与 SEO 边界",
 			Summary:     "客户端渲染、接口缓存和服务端 meta 需要明确边界。",
@@ -441,7 +441,7 @@ func seedAdminPosts() map[string]AdminPost {
 			UpdatedAt:   now.Add(-8 * time.Hour),
 		},
 		{
-			ID:           "admin_post_003",
+			ID:           "11003",
 			Slug:         "post-version-history",
 			Title:        "为什么博客后台需要文章版本历史",
 			Summary:      "版本记录不是复杂功能，而是内容资产的基本保险。",
@@ -458,7 +458,7 @@ func seedAdminPosts() map[string]AdminPost {
 			UpdatedAt:    now.AddDate(0, 0, -1),
 		},
 		{
-			ID:         "admin_post_004",
+			ID:         "11004",
 			Slug:       "markdown-writing-experience",
 			Title:      "把 Markdown 写作体验做到顺手",
 			Summary:    "编辑器、预览、封面和 SEO 字段要服务写作流程。",

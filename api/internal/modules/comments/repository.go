@@ -224,9 +224,9 @@ func seedComments() []Comment {
 	now := time.Now()
 	return []Comment{
 		{
-			ID:         "comment_001",
+			ID:         "6001",
 			PostSlug:   "blog-system-design",
-			AuthorID:   "user_chen",
+			AuthorID:   "5003",
 			AuthorName: "陈默",
 			AvatarText: "陈",
 			Body:       "文章里提到“内容模型先于页面”很关键。很多博客后期难维护，就是因为一开始把文章当页面模板来处理了。",
@@ -235,10 +235,10 @@ func seedComments() []Comment {
 			CreatedAt:  now.Add(-2 * time.Hour),
 		},
 		{
-			ID:         "comment_002",
+			ID:         "6002",
 			PostSlug:   "blog-system-design",
-			ParentID:   "comment_001",
-			AuthorID:   "user_admin",
+			ParentID:   "6001",
+			AuthorID:   "5002",
 			AuthorName: "管理员",
 			AvatarText: "管",
 			Body:       "是的，所以我会优先把 slug、SEO、状态、版本历史这些字段纳入第一版数据模型。",
@@ -248,9 +248,9 @@ func seedComments() []Comment {
 			CreatedAt:  now.Add(-1 * time.Hour),
 		},
 		{
-			ID:         "comment_003",
+			ID:         "6003",
 			PostSlug:   "postgres-redis-blog-boundary",
-			AuthorID:   "user_linyi",
+			AuthorID:   "5001",
 			AuthorName: "林一",
 			AvatarText: "林",
 			Body:       "PostgreSQL 全文搜索足够覆盖多数个人博客场景。",
