@@ -52,11 +52,11 @@ func (repo *SQLRepository) CountSubmittedSince(ctx context.Context, userID strin
 	var total int
 	if err := repo.db.QueryRowContext(ctx, `
 		SELECT count(*)
-		FROM submissions
-		WHERE author_id = $1
-			AND submitted_at >= $2
-			AND ($3 = '' OR id <> $3)
-			AND visibility = 'public'
+			FROM submissions
+			WHERE author_id = $1
+				AND submitted_at >= $2
+				AND ($3 = '' OR CAST(id AS TEXT) <> $3)
+				AND visibility = 'public'
 	`, userID, since, strings.TrimSpace(excludeID)).Scan(&total); err != nil {
 		return 0, fmt.Errorf("count submitted submissions: %w", err)
 	}
@@ -383,13 +383,13 @@ func (repo *SQLRepository) Review(ctx context.Context, submissionID string, revi
 	}
 
 	if _, err := repo.db.ExecContext(ctx, `
-		UPDATE submissions
-		SET status = $2,
-			review_note = $3,
-			reviewer_id = $4,
-			reviewed_at = $7,
-			published_post_slug = NULLIF($5, ''),
-			published_at = $6
+			UPDATE submissions
+			SET status = $2,
+				review_note = $3,
+				reviewer_id = CAST($4 AS bigint),
+				reviewed_at = $7,
+				published_post_slug = NULLIF($5, ''),
+				published_at = $6
 		WHERE id = $1
 	`, submissionID, status, strings.TrimSpace(request.Note), reviewer.ID, publishedSlug, publishedAt, time.Now()); err != nil {
 		return Submission{}, fmt.Errorf("review submission: %w", err)
@@ -408,12 +408,12 @@ func (repo *SQLRepository) ArchivePublished(ctx context.Context, submissionID st
 	}
 
 	if _, err := repo.db.ExecContext(ctx, `
-		UPDATE submissions
-		SET status = $2,
-			review_note = $3,
-			reviewer_id = $4,
-			reviewed_at = $5
-		WHERE id = $1
+			UPDATE submissions
+			SET status = $2,
+				review_note = $3,
+				reviewer_id = CAST($4 AS bigint),
+				reviewed_at = $5
+			WHERE id = $1
 	`, submissionID, StatusArchived, "管理员已下架该文章", reviewer.ID, time.Now()); err != nil {
 		return Submission{}, fmt.Errorf("archive published submission: %w", err)
 	}
@@ -432,12 +432,12 @@ func (repo *SQLRepository) RestorePublished(ctx context.Context, submissionID st
 
 	now := time.Now()
 	if _, err := repo.db.ExecContext(ctx, `
-		UPDATE submissions
-		SET status = $2,
-			review_note = $3,
-			reviewer_id = $4,
-			reviewed_at = $5,
-			published_at = COALESCE(published_at, $5)
+			UPDATE submissions
+			SET status = $2,
+				review_note = $3,
+				reviewer_id = CAST($4 AS bigint),
+				reviewed_at = $5,
+				published_at = COALESCE(published_at, $5)
 		WHERE id = $1
 	`, submissionID, StatusPublished, "管理员已重新上架该文章", reviewer.ID, now); err != nil {
 		return Submission{}, fmt.Errorf("restore published submission: %w", err)
@@ -468,7 +468,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 			s.visibility,
 			s.status,
 			s.review_note,
-			COALESCE(s.reviewer_id, ''),
+				COALESCE(CAST(s.reviewer_id AS TEXT), ''),
 			COALESCE(reviewer.display_name, ''),
 			COALESCE(s.published_post_slug, ''),
 			s.version,
@@ -570,13 +570,13 @@ func (repo *SQLRepository) stats(ctx context.Context, where string, arg any) (St
 func (repo *SQLRepository) ensureSeedSubmissions(ctx context.Context) error {
 	for _, submission := range seedSubmissions() {
 		if _, err := repo.db.ExecContext(ctx, `
-			INSERT INTO submissions (
-				id, author_id, title, summary, content, category, tags, cover_image, slug, visibility,
-				status, review_note, reviewer_id, published_post_slug, version,
-				created_at, updated_at, submitted_at, reviewed_at, published_at
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), NULLIF($14, ''), $15, $16, $17, $18, $19, $20)
-			ON CONFLICT (id) DO NOTHING
+				INSERT INTO submissions (
+					id, author_id, title, summary, content, category, tags, cover_image, slug, visibility,
+					status, review_note, reviewer_id, published_post_slug, version,
+					created_at, updated_at, submitted_at, reviewed_at, published_at
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CAST(NULLIF($13, '') AS bigint), NULLIF($14, ''), $15, $16, $17, $18, $19, $20)
+				ON CONFLICT (id) DO NOTHING
 		`,
 			submission.ID,
 			submission.AuthorID,

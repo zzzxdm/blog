@@ -57,7 +57,7 @@ func (repo *SQLRepository) Create(ctx context.Context, postSlug string, request 
 	id := idgen.NextString()
 	row := repo.db.QueryRowContext(ctx, `
 		INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author)
-		VALUES ($1, $2, NULLIF($3, ''), $4, $5, 'pending', 0, $6)
+		VALUES ($1, $2, CAST(NULLIF($3, '') AS bigint), $4, $5, 'pending', 0, $6)
 		RETURNING id
 	`, id, postSlug, trimString(request.ParentID), user.ID, body, user.Role == "admin" || user.Role == "author")
 	if err := row.Scan(&id); err != nil {
@@ -90,7 +90,7 @@ func (repo *SQLRepository) CreateReply(ctx context.Context, parentID string, req
 	id := idgen.NextString()
 	row := repo.db.QueryRowContext(ctx, `
 		INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author)
-		VALUES ($1, $2, $3, $4, $5, 'pending', 0, $6)
+		VALUES ($1, $2, CAST($3 AS bigint), $4, $5, 'pending', 0, $6)
 		RETURNING id
 	`, id, postSlug, parentID, user.ID, body, user.Role == "admin" || user.Role == "author")
 	if err := row.Scan(&id); err != nil {
@@ -447,7 +447,7 @@ func (repo *SQLRepository) queryComments(ctx context.Context, whereAndOrder stri
 			c.id,
 			c.post_slug,
 			p.title,
-			COALESCE(c.parent_id, ''),
+				COALESCE(CAST(c.parent_id AS TEXT), ''),
 			u.id,
 			u.display_name,
 			u.avatar_text,
@@ -547,8 +547,8 @@ func (repo *SQLRepository) ensureSeedComments(ctx context.Context) error {
 	seeds := seedComments()
 	for _, comment := range seeds {
 		if _, err := repo.db.ExecContext(ctx, `
-			INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author, created_at)
-			VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, $9)
+				INSERT INTO comments (id, post_slug, parent_id, author_id, body, status, like_count, is_author, created_at)
+				VALUES ($1, $2, CAST(NULLIF($3, '') AS bigint), $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (id) DO NOTHING
 		`, comment.ID, comment.PostSlug, comment.ParentID, comment.AuthorID, comment.Body, comment.Status, comment.LikeCount, comment.IsAuthor, comment.CreatedAt); err != nil {
 			return fmt.Errorf("seed comment %s: %w", comment.ID, err)

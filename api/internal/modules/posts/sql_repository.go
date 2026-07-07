@@ -458,7 +458,7 @@ func (repo *SQLRepository) publishManaged(ctx context.Context, input PublishInpu
 						id, slug, title, summary, content, visibility, status, source, category_id, author_id, author_name,
 						cover_image, reading_time, view_count, like_count, dislike_count, comment_count, published_at
 					)
-					VALUES ($1, $2, $3, $4, $5, $6, 'published', $7, $8, NULLIF($9, ''), $10, $11, $12, 0, 0, 0, 0, $13)
+							VALUES ($1, $2, $3, $4, $5, $6, 'published', $7, $8, CAST(NULLIF($9, '') AS bigint), $10, $11, $12, 0, 0, 0, 0, $13)
 					RETURNING CAST(id AS TEXT)
 				`,
 			idgen.NextString(),
@@ -490,7 +490,7 @@ func (repo *SQLRepository) publishManaged(ctx context.Context, input PublishInpu
 					status = 'published',
 					source = $7,
 					category_id = $8,
-					author_id = NULLIF($9, ''),
+						author_id = CAST(NULLIF($9, '') AS bigint),
 					author_name = $10,
 					cover_image = $11,
 					reading_time = $12,
