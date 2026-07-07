@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Close } from "@element-plus/icons-vue";
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
@@ -97,7 +98,9 @@ onUnmounted(() => {
           placeholder="搜索文章、专题或标签"
           aria-label="搜索关键词"
         >
-        <button class="search-close" type="button" aria-label="关闭搜索" @click="close">×</button>
+        <button class="search-close" type="button" aria-label="关闭搜索" @click="close">
+          <Close class="button-icon" aria-hidden="true" />
+        </button>
       </div>
       <div class="search-results">
         <div v-if="!query.trim()" class="search-result">

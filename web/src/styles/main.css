@@ -409,6 +409,7 @@ textarea {
 }
 
 .icon-button {
+  position: relative;
   width: 38px;
   padding: 0;
   border-color: var(--line);
@@ -416,10 +417,39 @@ textarea {
   color: var(--ink);
 }
 
+.button-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
 .icon-button.active {
   border-color: rgba(112, 173, 141, 0.52);
   background: var(--surface-2);
   color: var(--green-2);
+}
+
+.notification-button {
+  overflow: visible;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--rose);
+  color: #fffefa;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 5px;
 }
 
 .nav-toggle {
@@ -609,8 +639,11 @@ textarea {
 }
 
 .search-close {
+  display: inline-flex;
   width: 38px;
   height: 38px;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -954,6 +987,10 @@ textarea {
   top: 84px;
   display: grid;
   gap: 18px;
+}
+
+.topic-reading-layout .sidebar {
+  margin-top: 34px;
 }
 
 .tag-cloud {
@@ -1754,6 +1791,10 @@ textarea {
 }
 
 .account-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border-radius: 8px;
   padding: 10px 12px;
   color: var(--muted);
@@ -1763,6 +1804,26 @@ textarea {
 .account-nav a:hover {
   background: var(--surface-2);
   color: var(--ink);
+}
+
+.nav-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 24px;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rose) 14%, transparent);
+  color: var(--rose);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 4px 7px;
+}
+
+.nav-count-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .profile-card {
@@ -2379,6 +2440,11 @@ textarea {
   background: rgba(255, 255, 255, 0.1);
   font-size: 13px;
   font-weight: 900;
+}
+
+.admin-nav-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .admin-shell.sidebar-collapsed .admin-brand {

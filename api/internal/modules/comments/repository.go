@@ -121,6 +121,9 @@ func sortComments(items []Comment, mode string) {
 		if mode == "likes" {
 			return items[i].LikeCount > items[j].LikeCount
 		}
+		if mode == "replies" {
+			return items[i].ReplyCount > items[j].ReplyCount
+		}
 		if mode == "risk" {
 			return commentRiskRank(items[i].RiskLevel) > commentRiskRank(items[j].RiskLevel)
 		}

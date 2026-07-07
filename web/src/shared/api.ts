@@ -336,6 +336,8 @@ export type BookmarkItem = Post & {
 
 export interface BookmarkListResponse {
   items: BookmarkItem[];
+  page: number;
+  pageSize: number;
   total: number;
 }
 
@@ -804,6 +806,14 @@ export interface MessageListParams {
   all?: boolean;
 }
 
+export interface BookmarkListParams {
+  q?: string;
+  category?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface MediaListParams {
   q?: string;
   type?: string;
@@ -1086,8 +1096,8 @@ export async function setBookmark(postSlug: string, bookmarked: boolean): Promis
   });
 }
 
-export async function getMyBookmarks(): Promise<BookmarkListResponse> {
-  return request<BookmarkListResponse>("/bookmarks/mine");
+export async function getMyBookmarks(params: BookmarkListParams = {}): Promise<BookmarkListResponse> {
+  return request<BookmarkListResponse>(`/bookmarks/mine${toQuery(params)}`);
 }
 
 export async function getMySubmissions(params: ManageListParams | string = {}): Promise<SubmissionListResponse> {

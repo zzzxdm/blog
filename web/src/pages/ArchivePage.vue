@@ -90,6 +90,14 @@ function applyFilters() {
   });
 }
 
+function handleKeywordInput() {
+  if (keyword.value.trim() || !route.query.q) {
+    return;
+  }
+
+  applyFilters();
+}
+
 function goPage(page: number) {
   const nextPage = Math.min(Math.max(page, 1), totalPages.value);
   if (nextPage === currentPage.value) {
@@ -171,14 +179,14 @@ function tagTone(post: Post, index = 0) {
     </section>
 
     <form class="archive-toolbar" @submit.prevent="applyFilters">
-      <input v-model="keyword" class="input" type="search" placeholder="搜索标题、摘要或标签" aria-label="搜索文章">
-      <select v-model="category" class="input" aria-label="选择分类">
+      <input v-model="keyword" class="input" type="search" placeholder="搜索标题、摘要或标签" aria-label="搜索文章" @input="handleKeywordInput">
+      <select v-model="category" class="input" aria-label="选择分类" @change="applyFilters">
         <option value="">全部分类</option>
         <option v-for="item in categories" :key="item.id" :value="item.name">
           {{ item.name }}{{ item.postCount ? ` (${item.postCount})` : "" }}
         </option>
       </select>
-      <select v-model="sort" class="input" aria-label="排序方式">
+      <select v-model="sort" class="input" aria-label="排序方式" @change="applyFilters">
         <option value="latest">最新发布</option>
         <option value="views">阅读最多</option>
         <option value="comments">评论最多</option>

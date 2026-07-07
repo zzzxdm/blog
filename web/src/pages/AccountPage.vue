@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Message } from "@element-plus/icons-vue";
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
@@ -17,8 +18,10 @@ import {
   type SubmissionStats
 } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
+import { useMessageStore } from "../stores/messages";
 
 const route = useRoute();
+const messageStore = useMessageStore();
 
 const account = ref<AccountSettings | null>(null);
 const submissions = ref<Submission[]>([]);
@@ -27,11 +30,11 @@ const comments = ref<Comment[]>([]);
 const bookmarks = ref<BookmarkItem[]>([]);
 const messages = ref<StationMessage[]>([]);
 const messageStats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });
+const commentTotal = ref(0);
+const bookmarkTotal = ref(0);
 const loading = ref(false);
 const error = ref("");
 
-const commentTotal = computed(() => comments.value.length);
-const bookmarkTotal = computed(() => bookmarks.value.length);
 const commentEntry = computed(() => comments.value[0] ? `/posts/${comments.value[0].postSlug}` : "/archive");
 
 onMounted(load);
@@ -47,19 +50,22 @@ async function load() {
   try {
     const [accountResponse, submissionsResponse, commentsResponse, bookmarksResponse, messagesResponse] = await Promise.all([
       getAccountSettings(),
-      getMySubmissions(),
-      getMyComments(),
-      getMyBookmarks(),
-      getMessages()
+      getMySubmissions({ page: 1, pageSize: 2 }),
+      getMyComments({ page: 1, pageSize: 2 }),
+      getMyBookmarks({ page: 1, pageSize: 2 }),
+      getMessages({ page: 1, pageSize: 2 })
     ]);
 
     account.value = accountResponse;
-    submissions.value = submissionsResponse.items.slice(0, 2);
+    submissions.value = submissionsResponse.items;
     submissionStats.value = submissionsResponse.stats;
-    comments.value = commentsResponse.items.slice(0, 2);
-    bookmarks.value = bookmarksResponse.items.slice(0, 2);
-    messages.value = messagesResponse.items.slice(0, 2);
+    comments.value = commentsResponse.items;
+    commentTotal.value = commentsResponse.total;
+    bookmarks.value = bookmarksResponse.items;
+    bookmarkTotal.value = bookmarksResponse.total;
+    messages.value = messagesResponse.items;
     messageStats.value = messagesResponse.stats;
+    messageStore.setUnread(messagesResponse.stats.unread);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "个人中心加载失败";
   } finally {
@@ -118,7 +124,13 @@ function formatTime(value?: string) {
             <RouterLink :class="{ active: active('/account/comments') }" to="/account/comments">我的评论</RouterLink>
             <RouterLink :class="{ active: active('/account/bookmarks') }" to="/account/bookmarks">我的收藏</RouterLink>
             <RouterLink :class="{ active: active('/account/submissions') }" to="/account/submissions">我的投稿</RouterLink>
-            <RouterLink :class="{ active: active('/account/messages') }" to="/account/messages">站内信</RouterLink>
+            <RouterLink :class="{ active: active('/account/messages') }" to="/account/messages">
+              <span>站内信</span>
+              <span v-if="messageStore.unread" class="nav-count">
+                <Message class="nav-count-icon" aria-hidden="true" />
+                {{ messageStore.unread > 99 ? "99+" : messageStore.unread }}
+              </span>
+            </RouterLink>
             <RouterLink :class="{ active: active('/account/settings') }" to="/account/settings">账号设置</RouterLink>
           </nav>
         </div>

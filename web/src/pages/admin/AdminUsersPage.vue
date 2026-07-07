@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from "@element-plus/icons-vue";
 import { computed, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
@@ -442,7 +443,10 @@ function formatDate(value: string) {
           <option value="editor">编辑</option>
           <option value="admin">管理员</option>
         </select>
-        <button class="button" type="submit" :disabled="loading">搜索</button>
+        <button class="button" type="submit" :disabled="loading">
+          <Search class="button-icon" aria-hidden="true" />
+          搜索
+        </button>
       </form>
 
       <p v-if="loading" class="muted">正在加载用户...</p>

@@ -1,4 +1,23 @@
 <script setup lang="ts">
+import {
+  ChatDotSquare,
+  CollectionTag,
+  Document,
+  EditPen,
+  Files,
+  Histogram,
+  HomeFilled,
+  Link,
+  Management,
+  Menu as MenuIcon,
+  Message,
+  Picture,
+  Setting,
+  Tickets,
+  Upload,
+  User,
+  View
+} from "@element-plus/icons-vue";
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
@@ -19,23 +38,23 @@ const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间�
 const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
 
 const navItems = [
-  { label: "查看站点", to: "/" },
-  { label: "概览", to: "/admin" },
-  { label: "文章", to: "/admin/posts" },
-  { label: "投稿", to: "/admin/submissions" },
-  { label: "写作", to: "/admin/editor" },
-  { label: "分类标签", to: "/admin/taxonomies" },
-  { label: "专题", to: "/admin/topics" },
-  { label: "评论", to: "/admin/comments" },
-  { label: "用户", to: "/admin/users" },
-  { label: "站内信", to: "/admin/messages" },
-  { label: "媒体库", to: "/admin/media" },
-  { label: "导航", to: "/admin/navigation" },
-  { label: "重定向", to: "/admin/redirects" },
-  { label: "统计", to: "/admin/stats" },
-  { label: "导入导出", to: "/admin/import-export" },
-  { label: "日志", to: "/admin/audit" },
-  { label: "设置", to: "/admin/settings" }
+  { label: "查看站点", to: "/", icon: View },
+  { label: "概览", to: "/admin", icon: HomeFilled },
+  { label: "文章", to: "/admin/posts", icon: Document },
+  { label: "投稿", to: "/admin/submissions", icon: Upload },
+  { label: "写作", to: "/admin/editor", icon: EditPen },
+  { label: "分类标签", to: "/admin/taxonomies", icon: CollectionTag },
+  { label: "专题", to: "/admin/topics", icon: Management },
+  { label: "评论", to: "/admin/comments", icon: ChatDotSquare },
+  { label: "用户", to: "/admin/users", icon: User },
+  { label: "站内信", to: "/admin/messages", icon: Message },
+  { label: "媒体库", to: "/admin/media", icon: Picture },
+  { label: "导航", to: "/admin/navigation", icon: MenuIcon },
+  { label: "重定向", to: "/admin/redirects", icon: Link },
+  { label: "统计", to: "/admin/stats", icon: Histogram },
+  { label: "导入导出", to: "/admin/import-export", icon: Files },
+  { label: "日志", to: "/admin/audit", icon: Tickets },
+  { label: "设置", to: "/admin/settings", icon: Setting }
 ];
 
 onMounted(() => {
@@ -101,7 +120,7 @@ function toggleSidebar() {
           :to="item.to"
           :title="item.label"
         >
-          <span class="admin-nav-icon" aria-hidden="true">{{ item.label.slice(0, 1) }}</span>
+          <span class="admin-nav-icon" aria-hidden="true"><component :is="item.icon" /></span>
           <span class="admin-nav-label">{{ item.label }}</span>
         </RouterLink>
       </nav>

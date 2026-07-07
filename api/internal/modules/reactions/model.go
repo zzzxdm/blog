@@ -23,3 +23,18 @@ type Bookmark struct {
 	PostSlug     string    `json:"postSlug"`
 	BookmarkedAt time.Time `json:"bookmarkedAt"`
 }
+
+type BookmarkQuery struct {
+	Keyword  string
+	Category string
+	Sort     string
+	Page     int
+	PageSize int
+}
+
+type BookmarkPage struct {
+	Items    []Bookmark
+	Page     int
+	PageSize int
+	Total    int
+}

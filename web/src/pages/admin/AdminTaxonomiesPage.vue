@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from "@element-plus/icons-vue";
 import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
@@ -293,7 +294,10 @@ function nextCategorySortOrder() {
         </div>
         <form class="table-toolbar taxonomy-table-toolbar" @submit.prevent="searchCategories">
           <input v-model="categorySearch" class="input" type="search" placeholder="搜索分类名称、Slug、描述" aria-label="搜索分类">
-          <button class="button" type="submit" :disabled="loading">搜索</button>
+          <button class="button" type="submit" :disabled="loading">
+            <Search class="button-icon" aria-hidden="true" />
+            搜索
+          </button>
         </form>
         <table>
           <thead>
@@ -362,7 +366,10 @@ function nextCategorySortOrder() {
         </div>
         <form class="table-toolbar taxonomy-table-toolbar" @submit.prevent="searchTags">
           <input v-model="tagSearch" class="input" type="search" placeholder="搜索标签名称或 Slug" aria-label="搜索标签">
-          <button class="button" type="submit" :disabled="loading">搜索</button>
+          <button class="button" type="submit" :disabled="loading">
+            <Search class="button-icon" aria-hidden="true" />
+            搜索
+          </button>
         </form>
         <table>
           <thead>

@@ -15,7 +15,9 @@ import {
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
 import { downloadJson, exportFileName } from "../../shared/download";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const messages = ref<StationMessage[]>([]);
 const users = ref<ManagedUser[]>([]);
 const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });
@@ -100,11 +102,13 @@ async function setPageSize(value: number) {
 async function send() {
   if (!title.value.trim() || !body.value.trim()) {
     error.value = "请输入标题和正文";
+    toast.warning("无法发送站内信", error.value);
     return;
   }
 
   if (scheduleOpen.value && !scheduledAt.value) {
     error.value = "请选择定时发送时间";
+    toast.warning("无法定时发送", error.value);
     return;
   }
 
@@ -132,12 +136,16 @@ async function send() {
         scheduledAt: scheduleValue || undefined
       });
     }
-    message.value = scheduleValue && new Date(scheduleValue) > new Date()
+    const scheduled = Boolean(scheduleValue && new Date(scheduleValue) > new Date());
+    const resultMessage = scheduled
       ? `已定时 ${recipients.length} 条站内信到 ${formatTime(scheduleValue)}。`
       : `已发送 ${recipients.length} 条站内信。`;
+    message.value = resultMessage;
+    toast.success(scheduled ? "站内信已定时" : "站内信已发送", resultMessage);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信发送失败";
+    toast.error("站内信发送失败", error.value);
   } finally {
     sending.value = false;
   }
@@ -151,8 +159,10 @@ async function exportMessages() {
   try {
     downloadJson(exportFileName("messages"), await exportAdminMessages());
     message.value = "站内信记录导出已生成。";
+    toast.success("站内信记录已导出", "下载文件已生成。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信导出失败";
+    toast.error("站内信导出失败", error.value);
   } finally {
     exporting.value = false;
   }
@@ -171,6 +181,7 @@ async function loadUsers() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户列表加载失败";
+    toast.error("用户列表加载失败", error.value);
   } finally {
     usersLoading.value = false;
   }
@@ -222,6 +233,7 @@ function toggleSchedule() {
   }
   message.value = "";
   error.value = "";
+  toast.info(scheduleOpen.value ? "已开启定时发送" : "已取消定时发送", scheduleOpen.value ? `默认预约到 ${formatTime(new Date(scheduledAt.value).toISOString())}` : "");
 }
 
 function viewMessage(item: StationMessage) {

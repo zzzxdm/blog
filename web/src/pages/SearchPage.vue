@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from "@element-plus/icons-vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 
@@ -145,7 +146,10 @@ function formatNumber(value: number) {
         <option value="comments">评论最多</option>
         <option value="likes">点赞最多</option>
       </select>
-      <button class="button" type="submit">搜索</button>
+      <button class="button" type="submit">
+        <Search class="button-icon" aria-hidden="true" />
+        搜索
+      </button>
     </form>
 
     <p v-if="loading" class="muted">正在搜索...</p>

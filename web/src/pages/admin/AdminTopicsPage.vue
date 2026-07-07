@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search } from "@element-plus/icons-vue";
 import { computed, onMounted, ref, watch } from "vue";
 import { ElOption, ElSelect } from "element-plus";
 import "element-plus/es/components/select/style/css";
@@ -354,7 +355,10 @@ function formatDate(value?: string) {
         </div>
         <form class="table-toolbar topic-table-toolbar" @submit.prevent="applyFilters">
           <input v-model="searchQuery" class="input" type="search" placeholder="搜索标题、Slug、摘要、分类、标签" aria-label="搜索专题">
-          <button class="button" type="submit" :disabled="loading">搜索</button>
+          <button class="button" type="submit" :disabled="loading">
+            <Search class="button-icon" aria-hidden="true" />
+            搜索
+          </button>
         </form>
         <table>
           <thead>

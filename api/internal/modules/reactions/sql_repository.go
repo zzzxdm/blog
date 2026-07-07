@@ -191,31 +191,112 @@ func (repo *SQLRepository) SetBookmark(ctx context.Context, postSlug string, use
 	return repo.Get(ctx, postSlug, userID)
 }
 
-func (repo *SQLRepository) ListBookmarks(ctx context.Context, userID string) ([]Bookmark, error) {
+func (repo *SQLRepository) ListBookmarks(ctx context.Context, userID string, query BookmarkQuery) (BookmarkPage, error) {
+	page := normalizePage(query.Page)
+	pageSize := normalizePageSize(query.PageSize)
+	offset := (page - 1) * pageSize
+	keyword := strings.TrimSpace(query.Keyword)
+	category := strings.TrimSpace(query.Category)
+	sortMode := strings.ToLower(strings.TrimSpace(query.Sort))
+	if sortMode != "published" && sortMode != "views" {
+		sortMode = "bookmarked"
+	}
+
+	var total int
+	if err := repo.db.QueryRowContext(ctx, `
+		SELECT count(*)
+		FROM post_bookmarks bookmark
+		JOIN posts post ON post.slug = bookmark.post_slug
+		JOIN categories category ON category.id = post.category_id
+		WHERE bookmark.user_id = $1
+			AND post.status = 'published'
+			AND ($2 = '' OR lower(category.slug) = lower($2) OR lower(category.name) = lower($2))
+			AND (
+				$3 = ''
+				OR lower(post.title) LIKE '%' || lower($3) || '%'
+				OR lower(post.summary) LIKE '%' || lower($3) || '%'
+				OR lower(post.content) LIKE '%' || lower($3) || '%'
+				OR lower(category.name) LIKE '%' || lower($3) || '%'
+				OR EXISTS (
+					SELECT 1
+					FROM post_tags post_tag
+					JOIN tags tag ON tag.id = post_tag.tag_id
+					WHERE post_tag.post_id = post.id
+						AND lower(tag.name) LIKE '%' || lower($3) || '%'
+				)
+			)
+	`, userID, category, keyword).Scan(&total); err != nil {
+		return BookmarkPage{}, fmt.Errorf("count bookmarks: %w", err)
+	}
+
 	rows, err := repo.db.QueryContext(ctx, `
-		SELECT post_slug, created_at
-		FROM post_bookmarks
-		WHERE user_id = $1
-		ORDER BY created_at DESC
-	`, userID)
+		SELECT bookmark.post_slug, bookmark.created_at
+		FROM post_bookmarks bookmark
+		JOIN posts post ON post.slug = bookmark.post_slug
+		JOIN categories category ON category.id = post.category_id
+		WHERE bookmark.user_id = $1
+			AND post.status = 'published'
+			AND ($2 = '' OR lower(category.slug) = lower($2) OR lower(category.name) = lower($2))
+			AND (
+				$3 = ''
+				OR lower(post.title) LIKE '%' || lower($3) || '%'
+				OR lower(post.summary) LIKE '%' || lower($3) || '%'
+				OR lower(post.content) LIKE '%' || lower($3) || '%'
+				OR lower(category.name) LIKE '%' || lower($3) || '%'
+				OR EXISTS (
+					SELECT 1
+					FROM post_tags post_tag
+					JOIN tags tag ON tag.id = post_tag.tag_id
+					WHERE post_tag.post_id = post.id
+						AND lower(tag.name) LIKE '%' || lower($3) || '%'
+				)
+			)
+		ORDER BY
+			CASE WHEN $4 = 'published' THEN post.published_at END DESC,
+			CASE WHEN $4 = 'views' THEN post.view_count END DESC,
+			bookmark.created_at DESC
+		LIMIT $5 OFFSET $6
+	`, userID, category, keyword, sortMode, pageSize, offset)
 	if err != nil {
-		return nil, fmt.Errorf("query bookmarks: %w", err)
+		return BookmarkPage{}, fmt.Errorf("query bookmarks: %w", err)
 	}
 	defer rows.Close()
 
-	items := make([]Bookmark, 0)
+	items := make([]Bookmark, 0, pageSize)
 	for rows.Next() {
 		var bookmark Bookmark
 		if err := rows.Scan(&bookmark.PostSlug, &bookmark.BookmarkedAt); err != nil {
-			return nil, fmt.Errorf("scan bookmark: %w", err)
+			return BookmarkPage{}, fmt.Errorf("scan bookmark: %w", err)
 		}
 		items = append(items, bookmark)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate bookmarks: %w", err)
+		return BookmarkPage{}, fmt.Errorf("iterate bookmarks: %w", err)
 	}
 
-	return items, nil
+	return BookmarkPage{
+		Items:    items,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
+}
+
+func normalizePage(page int) int {
+	if page < 1 {
+		return 1
+	}
+	return page
+}
+
+func normalizePageSize(pageSize int) int {
+	if pageSize <= 0 {
+		return 10
+	}
+	if pageSize > 100 {
+		return 100
+	}
+	return pageSize
 }
 
 func (repo *SQLRepository) ensureStats(ctx context.Context, postSlug string) error {

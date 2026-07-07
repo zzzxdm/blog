@@ -2,19 +2,26 @@
 import { computed, onMounted, ref } from "vue";
 
 import AccountLayout from "../../components/AccountLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
+  getCategories,
   getMyBookmarks,
   setBookmark,
-  type BookmarkItem
+  type BookmarkItem,
+  type Category
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
 
 const bookmarks = ref<BookmarkItem[]>([]);
+const categories = ref<Category[]>([]);
 const loading = ref(false);
 const error = ref("");
 const searchQuery = ref("");
 const categoryFilter = ref("");
 const sortMode = ref("bookmarked");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
 
 const engineeringCount = computed(() => bookmarks.value.filter((item) => item.category === "工程实践").length);
 const thisMonthCount = computed(() => {
@@ -24,46 +31,58 @@ const thisMonthCount = computed(() => {
     return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
   }).length;
 });
-const categoryOptions = computed(() => Array.from(new Set(bookmarks.value.map((item) => item.category))).filter(Boolean));
-const visibleBookmarks = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  const filtered = bookmarks.value.filter((item) => {
-    const matchesKeyword = !keyword || [
-      item.title,
-      item.summary,
-      item.category,
-      item.tags.join(" ")
-    ].join(" ").toLowerCase().includes(keyword);
-    const matchesCategory = !categoryFilter.value || item.category === categoryFilter.value;
+const categoryOptions = computed(() => categories.value.map((item) => item.name));
 
-    return matchesKeyword && matchesCategory;
-  });
-
-  return [...filtered].sort((left, right) => {
-    if (sortMode.value === "published") {
-      return new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime();
-    }
-    if (sortMode.value === "views") {
-      return right.viewCount - left.viewCount;
-    }
-    return new Date(right.bookmarkedAt).getTime() - new Date(left.bookmarkedAt).getTime();
-  });
+onMounted(() => {
+  void load();
+  void loadCategories();
 });
-
-onMounted(load);
 
 async function load() {
   loading.value = true;
   error.value = "";
 
   try {
-    const response = await getMyBookmarks();
+    const response = await getMyBookmarks({
+      q: searchQuery.value,
+      category: categoryFilter.value,
+      sort: sortMode.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
     bookmarks.value = response.items;
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "收藏列表加载失败";
   } finally {
     loading.value = false;
   }
+}
+
+async function loadCategories() {
+  try {
+    categories.value = (await getCategories({ page: 1, pageSize: 100 })).items;
+  } catch {
+    categories.value = [];
+  }
+}
+
+async function applyFilters() {
+  page.value = 1;
+  await load();
+}
+
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
 }
 
 async function removeBookmark(slug: string) {
@@ -87,20 +106,20 @@ function formatDate(value: string) {
     </template>
 
     <section class="stats-grid" aria-label="收藏统计">
-      <div class="stat-card"><span>收藏文章</span><strong>{{ bookmarks.length }}</strong></div>
+      <div class="stat-card"><span>收藏文章</span><strong>{{ total }}</strong></div>
       <div class="stat-card"><span>本月新增</span><strong>{{ thisMonthCount }}</strong></div>
       <div class="stat-card"><span>工程实践</span><strong>{{ engineeringCount }}</strong></div>
-      <div class="stat-card"><span>当前显示</span><strong>{{ visibleBookmarks.length }}</strong></div>
+      <div class="stat-card"><span>当前显示</span><strong>{{ bookmarks.length }}</strong></div>
     </section>
 
     <section class="panel">
-      <form class="archive-toolbar" @submit.prevent="load">
+      <form class="archive-toolbar" @submit.prevent="applyFilters">
         <input v-model="searchQuery" class="input" type="search" placeholder="搜索收藏文章" aria-label="搜索收藏">
-        <select v-model="categoryFilter" class="input" aria-label="收藏分类">
+        <select v-model="categoryFilter" class="input" aria-label="收藏分类" @change="applyFilters">
           <option value="">全部分类</option>
           <option v-for="item in categoryOptions" :key="item" :value="item">{{ item }}</option>
         </select>
-        <select v-model="sortMode" class="input" aria-label="排序">
+        <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
           <option value="bookmarked">最近收藏</option>
           <option value="published">最近发布</option>
           <option value="views">阅读最多</option>
@@ -111,7 +130,7 @@ function formatDate(value: string) {
       <p v-else-if="error" class="error">{{ error }}</p>
 
       <div v-else class="article-list">
-        <article v-for="item in visibleBookmarks" :key="item.slug" class="article-card">
+        <article v-for="item in bookmarks" :key="item.slug" class="article-card">
           <img :src="item.coverImage" :alt="item.title">
           <div class="article-card-body">
             <div class="meta-row"><span class="tag">{{ item.category }}</span><span>收藏于 {{ formatDate(item.bookmarkedAt) }}</span></div>
@@ -124,8 +143,20 @@ function formatDate(value: string) {
             </div>
           </div>
         </article>
-        <p v-if="visibleBookmarks.length === 0" class="muted">没有匹配的收藏文章。</p>
+        <p v-if="bookmarks.length === 0" class="muted">没有匹配的收藏文章。</p>
       </div>
+      <PaginationControls
+        v-if="!loading && !error"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :loading="loading"
+        item-label="篇收藏"
+        show-page-size
+        :page-size-options="[5, 10, 20, 50, 100]"
+        @update:page="setPage"
+        @update:page-size="setPageSize"
+      />
     </section>
   </AccountLayout>
 </template>

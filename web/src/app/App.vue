@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Close, Menu as MenuIcon, Message, Moon, Search, Sunny } from "@element-plus/icons-vue";
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 
@@ -10,9 +11,11 @@ import ToastViewport from "../components/ToastViewport.vue";
 import { getCategories, getSiteNavigation, getSiteSettings, type Category, type NavItem, type OperationsNavigation, type SiteSettings } from "../shared/api";
 import { applyPrimaryColor, applyThemeMode, getInitialThemeMode, type ThemeMode } from "../shared/theme";
 import { useAuthStore } from "../stores/auth";
+import { useMessageStore } from "../stores/messages";
 
 const route = useRoute();
 const auth = useAuthStore();
+const messages = useMessageStore();
 const navOpen = ref(false);
 const searchOpen = ref(false);
 const themeMode = ref<ThemeMode>("light");
@@ -47,7 +50,21 @@ onMounted(() => {
 
 watch(() => route.fullPath, () => {
   navOpen.value = false;
+  if (auth.user) {
+    void messages.refreshUnread();
+  }
 });
+
+watch(
+  () => auth.user?.id,
+  (userID) => {
+    if (userID) {
+      void messages.refreshUnread();
+    } else {
+      messages.clear();
+    }
+  }
+);
 
 function logout() {
   void auth.logout();
@@ -139,7 +156,8 @@ function isActiveNav(url: string) {
           :aria-label="navOpen ? '收起导航' : '展开导航'"
           @click="navOpen = !navOpen"
         >
-          {{ navOpen ? "×" : "☰" }}
+          <Close v-if="navOpen" class="button-icon" aria-hidden="true" />
+          <MenuIcon v-else class="button-icon" aria-hidden="true" />
         </button>
       </div>
       <nav id="site-nav" class="nav-links" :class="{ 'is-collapsible': mobileCollapse, 'is-open': navOpen }" aria-label="主导航">
@@ -182,7 +200,9 @@ function isActiveNav(url: string) {
         <RouterLink v-if="auth.user?.role === 'admin'" :class="{ active: route.path.startsWith('/admin') }" to="/admin">后台</RouterLink>
       </nav>
       <div class="header-actions">
-        <button class="icon-button" type="button" aria-label="搜索" @click="searchOpen = true">⌕</button>
+        <button class="icon-button" type="button" aria-label="搜索" title="搜索" @click="searchOpen = true">
+          <Search class="button-icon" aria-hidden="true" />
+        </button>
         <button
           v-if="darkModeEnabled"
           class="icon-button"
@@ -191,11 +211,17 @@ function isActiveNav(url: string) {
           :aria-label="themeMode === 'dark' ? '切换浅色模式' : '切换深色模式'"
           @click="toggleTheme"
         >
-          {{ themeMode === "dark" ? "☀" : "◐" }}
+          <Sunny v-if="themeMode === 'dark'" class="button-icon" aria-hidden="true" />
+          <Moon v-else class="button-icon" aria-hidden="true" />
         </button>
         <template v-if="showLoginEntry">
           <template v-if="auth.user">
-            <RouterLink class="icon-button" to="/account/messages" aria-label="站内信">信</RouterLink>
+            <RouterLink class="icon-button notification-button" to="/account/messages" aria-label="站内信" title="站内信">
+              <Message class="button-icon" aria-hidden="true" />
+              <span v-if="messages.unread" class="notification-badge" aria-label="未读站内信">
+                {{ messages.unread > 99 ? "99+" : messages.unread }}
+              </span>
+            </RouterLink>
             <RouterLink class="button-secondary" to="/account">{{ auth.user.displayName }}</RouterLink>
             <button class="button-secondary" type="button" @click="logout">退出</button>
           </template>

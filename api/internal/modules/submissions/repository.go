@@ -178,18 +178,37 @@ func sortSubmissions(items []Submission, mode string) {
 		if mode == "quality" {
 			return items[i].WordCount > items[j].WordCount
 		}
+		if mode == "published" {
+			leftPublished := items[i].PublishedAt != nil
+			rightPublished := items[j].PublishedAt != nil
+			if leftPublished != rightPublished {
+				return leftPublished
+			}
 
-		left := items[i].UpdatedAt
-		right := items[j].UpdatedAt
-		if items[i].SubmittedAt != nil {
-			left = *items[i].SubmittedAt
+			return submissionPublishedTime(items[i]).After(submissionPublishedTime(items[j]))
 		}
-		if items[j].SubmittedAt != nil {
-			right = *items[j].SubmittedAt
+		if mode == "submitted" {
+			return submissionSubmittedTime(items[i]).After(submissionSubmittedTime(items[j]))
 		}
 
-		return left.After(right)
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
 	})
+}
+
+func submissionSubmittedTime(item Submission) time.Time {
+	if item.SubmittedAt != nil {
+		return *item.SubmittedAt
+	}
+
+	return item.UpdatedAt
+}
+
+func submissionPublishedTime(item Submission) time.Time {
+	if item.PublishedAt != nil {
+		return *item.PublishedAt
+	}
+
+	return item.UpdatedAt
 }
 
 func riskRank(value string) int {

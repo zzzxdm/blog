@@ -3,6 +3,7 @@ package reactions
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"blog/api/internal/modules/auth"
 	"blog/api/internal/modules/posts"
@@ -154,8 +155,10 @@ type BookmarkItem struct {
 }
 
 type BookmarkListResult struct {
-	Items []BookmarkItem `json:"items"`
-	Total int            `json:"total"`
+	Items    []BookmarkItem `json:"items"`
+	Page     int            `json:"page"`
+	PageSize int            `json:"pageSize"`
+	Total    int            `json:"total"`
 }
 
 func (handler *Handler) ListBookmarks(ctx *gin.Context) {
@@ -164,14 +167,20 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 		return
 	}
 
-	bookmarks, err := handler.repo.ListBookmarks(ctx.Request.Context(), user.ID)
+	bookmarks, err := handler.repo.ListBookmarks(ctx.Request.Context(), user.ID, BookmarkQuery{
+		Keyword:  ctx.Query("q"),
+		Category: ctx.Query("category"),
+		Sort:     ctx.Query("sort"),
+		Page:     parsePositiveInt(ctx.Query("page")),
+		PageSize: parsePositiveInt(ctx.Query("pageSize")),
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load bookmarks"})
 		return
 	}
 
-	items := make([]BookmarkItem, 0, len(bookmarks))
-	for _, bookmark := range bookmarks {
+	items := make([]BookmarkItem, 0, len(bookmarks.Items))
+	for _, bookmark := range bookmarks.Items {
 		post, err := handler.postRepo.GetBySlug(ctx.Request.Context(), bookmark.PostSlug)
 		if err != nil {
 			continue
@@ -184,11 +193,21 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, BookmarkListResult{
-		Items: items,
-		Total: len(items),
+		Items:    items,
+		Page:     bookmarks.Page,
+		PageSize: bookmarks.PageSize,
+		Total:    bookmarks.Total,
 	})
 }
 
 func canInteract(user auth.User) bool {
 	return (user.Status == "" || user.Status == "active") && user.EmailVerified
+}
+
+func parsePositiveInt(value string) int {
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
 }

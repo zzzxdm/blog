@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { Message } from "@element-plus/icons-vue";
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import { useAuthStore } from "../stores/auth";
+import { useMessageStore } from "../stores/messages";
 
 defineProps<{
   title: string;
@@ -11,6 +13,7 @@ defineProps<{
 
 const route = useRoute();
 const auth = useAuthStore();
+const messages = useMessageStore();
 const displayName = computed(() => auth.user?.displayName || "用户");
 const avatarText = computed(() => auth.user?.avatarText || Array.from(displayName.value)[0] || "用");
 const emailStatus = computed(() => auth.user?.emailVerified ? "已验证邮箱" : "邮箱未验证");
@@ -61,7 +64,11 @@ const navItems = [
               :class="{ active: route.path === item.to }"
               :to="item.to"
             >
-              {{ item.label }}
+              <span>{{ item.label }}</span>
+              <span v-if="item.to === '/account/messages' && messages.unread" class="nav-count">
+                <Message class="nav-count-icon" aria-hidden="true" />
+                {{ messages.unread > 99 ? "99+" : messages.unread }}
+              </span>
             </RouterLink>
           </nav>
         </div>

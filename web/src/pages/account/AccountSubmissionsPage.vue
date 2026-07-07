@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 
 import AccountLayout from "../../components/AccountLayout.vue";
+import PaginationControls from "../../components/PaginationControls.vue";
 import {
   getMySubmissions,
   type Submission,
@@ -16,40 +17,11 @@ const error = ref("");
 const status = ref("");
 const searchQuery = ref("");
 const sortMode = ref("updated");
+const page = ref(1);
+const pageSize = ref(10);
+const total = ref(0);
 
 const returnedSubmission = computed(() => submissions.value.find((item) => item.status === "returned" && item.reviewNote));
-const visibleSubmissions = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase();
-  const filtered = submissions.value.filter((item) => {
-    if (!keyword) {
-      return true;
-    }
-
-    return [
-      item.title,
-      item.summary,
-      item.category,
-      item.slug,
-      item.reviewNote,
-      item.tags.join(" ")
-    ].join(" ").toLowerCase().includes(keyword);
-  });
-
-  return [...filtered].sort((left, right) => {
-    if (sortMode.value === "submitted") {
-      return dateValue(right.submittedAt || right.updatedAt) - dateValue(left.submittedAt || left.updatedAt);
-    }
-    if (sortMode.value === "published") {
-      const leftPublished = left.status === "published" ? 1 : 0;
-      const rightPublished = right.status === "published" ? 1 : 0;
-      if (leftPublished !== rightPublished) {
-        return rightPublished - leftPublished;
-      }
-      return dateValue(right.publishedAt || right.updatedAt) - dateValue(left.publishedAt || left.updatedAt);
-    }
-    return dateValue(right.updatedAt) - dateValue(left.updatedAt);
-  });
-});
 
 onMounted(load);
 
@@ -58,9 +30,18 @@ async function load() {
   error.value = "";
 
   try {
-    const response = await getMySubmissions(status.value);
+    const response = await getMySubmissions({
+      status: status.value,
+      q: searchQuery.value,
+      sort: sortMode.value,
+      page: page.value,
+      pageSize: pageSize.value
+    });
     submissions.value = response.items;
     stats.value = response.stats;
+    total.value = response.total;
+    page.value = response.page;
+    pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "投稿列表加载失败";
   } finally {
@@ -68,12 +49,24 @@ async function load() {
   }
 }
 
-function formatDate(value?: string) {
-  return formatDateTime(value, "未提交");
+async function applyFilters() {
+  page.value = 1;
+  await load();
 }
 
-function dateValue(value?: string) {
-  return value ? new Date(value).getTime() : 0;
+async function setPage(value: number) {
+  page.value = value;
+  await load();
+}
+
+async function setPageSize(value: number) {
+  pageSize.value = value;
+  page.value = 1;
+  await load();
+}
+
+function formatDate(value?: string) {
+  return formatDateTime(value, "未提交");
 }
 
 function statusText(value: Submission["status"]) {
@@ -120,16 +113,16 @@ function statusClass(value: Submission["status"]) {
     </section>
 
     <section class="table-panel">
-      <form class="table-toolbar" @submit.prevent="load">
+      <form class="table-toolbar" @submit.prevent="applyFilters">
         <input v-model="searchQuery" class="input" type="search" placeholder="搜索投稿标题" aria-label="搜索投稿">
-        <select v-model="status" class="input" aria-label="投稿状态" @change="load">
+        <select v-model="status" class="input" aria-label="投稿状态" @change="applyFilters">
           <option value="">全部状态</option>
           <option value="draft">草稿</option>
           <option value="submitted">待审核</option>
           <option value="returned">退回修改</option>
           <option value="published">已发布</option>
         </select>
-        <select v-model="sortMode" class="input" aria-label="排序">
+        <select v-model="sortMode" class="input" aria-label="排序" @change="applyFilters">
           <option value="updated">最近更新</option>
           <option value="submitted">最近提交</option>
           <option value="published">已发布优先</option>
@@ -144,7 +137,7 @@ function statusClass(value: Submission["status"]) {
           <tr><th>投稿</th><th>状态</th><th>分类</th><th>提交时间</th><th>审核意见</th><th>操作</th></tr>
         </thead>
         <tbody>
-          <tr v-for="item in visibleSubmissions" :key="item.id">
+          <tr v-for="item in submissions" :key="item.id">
             <td><strong>{{ item.title }}</strong><div class="meta-row"><span>版本 {{ item.version }}</span><span>{{ item.wordCount }} 字</span></div></td>
             <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
             <td>{{ item.category }}</td>
@@ -155,11 +148,23 @@ function statusClass(value: Submission["status"]) {
               <RouterLink v-else class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}`">{{ item.status === "draft" || item.status === "returned" ? "继续编辑" : "查看" }}</RouterLink>
             </td>
           </tr>
-          <tr v-if="visibleSubmissions.length === 0">
+          <tr v-if="submissions.length === 0">
             <td colspan="6" class="muted">没有匹配的投稿。</td>
           </tr>
         </tbody>
       </table>
+      <PaginationControls
+        v-if="!loading && !error"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        :loading="loading"
+        item-label="篇投稿"
+        show-page-size
+        :page-size-options="[5, 10, 20, 50, 100]"
+        @update:page="setPage"
+        @update:page-size="setPageSize"
+      />
     </section>
 
     <section v-if="returnedSubmission" class="panel">
