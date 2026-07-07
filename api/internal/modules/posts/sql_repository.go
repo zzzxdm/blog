@@ -7,14 +7,17 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"blog/api/internal/database"
 )
 
 type SQLRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	sqlite bool
 }
 
 func NewSQLRepository(db *sql.DB) *SQLRepository {
-	return &SQLRepository{db: db}
+	return &SQLRepository{db: db, sqlite: database.IsSQLite(db)}
 }
 
 func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResult, error) {
@@ -28,6 +31,10 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 	sortMode := strings.ToLower(strings.TrimSpace(query.Sort))
 	if sortMode != "views" && sortMode != "comments" && sortMode != "likes" {
 		sortMode = ""
+	}
+
+	if repo.sqlite {
+		return repo.listSQLite(ctx, page, pageSize, offset, keyword, category, tag, author, sortMode)
 	}
 
 	total, err := repo.count(ctx, keyword, category, tag, author)
@@ -136,6 +143,10 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 }
 
 func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Post, error) {
+	if repo.sqlite {
+		return repo.getBySlugSQLite(ctx, slug)
+	}
+
 	row := repo.db.QueryRowContext(ctx, `
 		SELECT
 			p.id::text,
@@ -175,6 +186,22 @@ func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Post, er
 
 func (repo *SQLRepository) Stats(ctx context.Context) (SiteStats, error) {
 	var stats SiteStats
+	if repo.sqlite {
+		err := repo.db.QueryRowContext(ctx, `
+			SELECT
+				count(*),
+				COALESCE(sum(view_count), 0),
+				COALESCE(sum(length(replace(replace(content, ' ', ''), char(10), ''))), 0)
+			FROM posts
+			WHERE status = 'published'
+		`).Scan(&stats.PostCount, &stats.ViewCount, &stats.WordCount)
+		if err != nil {
+			return SiteStats{}, fmt.Errorf("query site stats: %w", err)
+		}
+
+		return stats, nil
+	}
+
 	err := repo.db.QueryRowContext(ctx, `
 		SELECT
 			count(*)::int,
@@ -254,7 +281,7 @@ func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Pos
 			cover_image, reading_time, view_count, like_count, dislike_count, comment_count, published_at
 		)
 		VALUES ($1, $2, $3, $4, 'published', 'submission', $5, $6, $7, $8, 0, 0, 0, 0, $9)
-		RETURNING id::text
+		RETURNING CAST(id AS TEXT)
 	`,
 		slug,
 		title,
@@ -278,7 +305,7 @@ func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Pos
 
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO post_tags (post_id, tag_id)
-			VALUES ($1::uuid, $2::uuid)
+			VALUES ($1, $2)
 			ON CONFLICT DO NOTHING
 		`, postID, tagID); err != nil {
 			return Post{}, fmt.Errorf("insert post tag: %w", err)
@@ -294,6 +321,10 @@ func (repo *SQLRepository) Publish(ctx context.Context, input PublishInput) (Pos
 }
 
 func (repo *SQLRepository) count(ctx context.Context, keyword string, category string, tag string, author string) (int, error) {
+	if repo.sqlite {
+		return repo.countSQLite(ctx, keyword, category, tag, author)
+	}
+
 	var total int
 	err := repo.db.QueryRowContext(ctx, `
 		WITH input AS (
@@ -348,10 +379,180 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 	return total, nil
 }
 
+func (repo *SQLRepository) listSQLite(ctx context.Context, page int, pageSize int, offset int, keyword string, category string, tag string, author string, sortMode string) (ListResult, error) {
+	total, err := repo.countSQLite(ctx, keyword, category, tag, author)
+	if err != nil {
+		return ListResult{}, err
+	}
+
+	rows, err := repo.db.QueryContext(ctx, `
+		SELECT
+			p.id,
+			p.slug,
+			p.title,
+			p.summary,
+			p.content,
+			c.name AS category,
+			COALESCE(group_concat(t.name, ','), '') AS tags,
+			p.cover_image,
+			p.author_name,
+			p.reading_time,
+			p.view_count,
+			p.like_count,
+			p.dislike_count,
+			p.comment_count,
+			COALESCE(p.published_at, p.created_at) AS published_at
+		FROM posts p
+		JOIN categories c ON c.id = p.category_id
+		LEFT JOIN post_tags pt ON pt.post_id = p.id
+		LEFT JOIN tags t ON t.id = pt.tag_id
+		WHERE p.status = 'published'
+			AND ($2 = '' OR lower(c.slug) = lower($2) OR lower(c.name) = lower($2))
+			AND (
+				$3 = ''
+				OR EXISTS (
+					SELECT 1
+					FROM post_tags filter_pt
+					JOIN tags filter_t ON filter_t.id = filter_pt.tag_id
+					WHERE filter_pt.post_id = p.id
+						AND (lower(filter_t.slug) = lower($3) OR lower(filter_t.name) = lower($3))
+				)
+			)
+			AND (
+				$4 = ''
+				OR lower(p.author_name) = lower($4)
+				OR lower(replace(p.author_name, ' ', '-')) = lower($4)
+			)
+			AND (
+				$1 = ''
+				OR lower(p.title) LIKE '%' || lower($1) || '%'
+				OR lower(p.summary) LIKE '%' || lower($1) || '%'
+				OR lower(p.content) LIKE '%' || lower($1) || '%'
+				OR lower(c.name) LIKE '%' || lower($1) || '%'
+				OR EXISTS (
+					SELECT 1
+					FROM post_tags search_pt
+					JOIN tags search_t ON search_t.id = search_pt.tag_id
+					WHERE search_pt.post_id = p.id
+						AND lower(search_t.name) LIKE '%' || lower($1) || '%'
+				)
+			)
+		GROUP BY p.id, c.name
+		ORDER BY
+			CASE WHEN $7 = 'views' THEN p.view_count END DESC,
+			CASE WHEN $7 = 'comments' THEN p.comment_count END DESC,
+			CASE WHEN $7 = 'likes' THEN p.like_count END DESC,
+			COALESCE(p.published_at, p.created_at) DESC,
+			p.created_at DESC
+		LIMIT $5 OFFSET $6
+	`, keyword, category, tag, author, pageSize, offset, sortMode)
+	if err != nil {
+		return ListResult{}, fmt.Errorf("list posts: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]Post, 0, pageSize)
+	for rows.Next() {
+		post, err := scanPost(rows)
+		if err != nil {
+			return ListResult{}, err
+		}
+		items = append(items, post)
+	}
+	if err := rows.Err(); err != nil {
+		return ListResult{}, fmt.Errorf("iterate posts: %w", err)
+	}
+
+	return ListResult{Items: items, Page: page, PageSize: pageSize, Total: total}, nil
+}
+
+func (repo *SQLRepository) getBySlugSQLite(ctx context.Context, slug string) (Post, error) {
+	row := repo.db.QueryRowContext(ctx, `
+		SELECT
+			p.id,
+			p.slug,
+			p.title,
+			p.summary,
+			p.content,
+			c.name AS category,
+			COALESCE(group_concat(t.name, ','), '') AS tags,
+			p.cover_image,
+			p.author_name,
+			p.reading_time,
+			p.view_count,
+			p.like_count,
+			p.dislike_count,
+			p.comment_count,
+			COALESCE(p.published_at, p.created_at) AS published_at
+		FROM posts p
+		JOIN categories c ON c.id = p.category_id
+		LEFT JOIN post_tags pt ON pt.post_id = p.id
+		LEFT JOIN tags t ON t.id = pt.tag_id
+		WHERE p.slug = $1
+			AND p.status = 'published'
+		GROUP BY p.id, c.name
+	`, slug)
+
+	post, err := scanPost(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Post{}, ErrNotFound
+		}
+		return Post{}, err
+	}
+
+	return post, nil
+}
+
+func (repo *SQLRepository) countSQLite(ctx context.Context, keyword string, category string, tag string, author string) (int, error) {
+	var total int
+	err := repo.db.QueryRowContext(ctx, `
+		SELECT count(*)
+		FROM posts p
+		JOIN categories c ON c.id = p.category_id
+		WHERE p.status = 'published'
+			AND ($2 = '' OR lower(c.slug) = lower($2) OR lower(c.name) = lower($2))
+			AND (
+				$3 = ''
+				OR EXISTS (
+					SELECT 1
+					FROM post_tags filter_pt
+					JOIN tags filter_t ON filter_t.id = filter_pt.tag_id
+					WHERE filter_pt.post_id = p.id
+						AND (lower(filter_t.slug) = lower($3) OR lower(filter_t.name) = lower($3))
+				)
+			)
+			AND (
+				$4 = ''
+				OR lower(p.author_name) = lower($4)
+				OR lower(replace(p.author_name, ' ', '-')) = lower($4)
+			)
+			AND (
+				$1 = ''
+				OR lower(p.title) LIKE '%' || lower($1) || '%'
+				OR lower(p.summary) LIKE '%' || lower($1) || '%'
+				OR lower(p.content) LIKE '%' || lower($1) || '%'
+				OR lower(c.name) LIKE '%' || lower($1) || '%'
+				OR EXISTS (
+					SELECT 1
+					FROM post_tags search_pt
+					JOIN tags search_t ON search_t.id = search_pt.tag_id
+					WHERE search_pt.post_id = p.id
+						AND lower(search_t.name) LIKE '%' || lower($1) || '%'
+				)
+			)
+	`, keyword, category, tag, author).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("count posts: %w", err)
+	}
+
+	return total, nil
+}
+
 func ensureCategory(ctx context.Context, tx *sql.Tx, category string) (string, error) {
 	var categoryID string
 	err := tx.QueryRowContext(ctx, `
-		SELECT id::text
+		SELECT CAST(id AS TEXT)
 		FROM categories
 		WHERE lower(name) = lower($1) OR lower(slug) = lower($1)
 		LIMIT 1
@@ -371,7 +572,7 @@ func ensureCategory(ctx context.Context, tx *sql.Tx, category string) (string, e
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO categories (slug, name)
 		VALUES ($1, $2)
-		RETURNING id::text
+		RETURNING CAST(id AS TEXT)
 	`, slug, category).Scan(&categoryID)
 	if err != nil {
 		return "", fmt.Errorf("insert category: %w", err)
@@ -383,7 +584,7 @@ func ensureCategory(ctx context.Context, tx *sql.Tx, category string) (string, e
 func ensureTag(ctx context.Context, tx *sql.Tx, tag string) (string, error) {
 	var tagID string
 	err := tx.QueryRowContext(ctx, `
-		SELECT id::text
+		SELECT CAST(id AS TEXT)
 		FROM tags
 		WHERE lower(name) = lower($1) OR lower(slug) = lower($1)
 		LIMIT 1
@@ -403,7 +604,7 @@ func ensureTag(ctx context.Context, tx *sql.Tx, tag string) (string, error) {
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO tags (slug, name)
 		VALUES ($1, $2)
-		RETURNING id::text
+		RETURNING CAST(id AS TEXT)
 	`, slug, tag).Scan(&tagID)
 	if err != nil {
 		return "", fmt.Errorf("insert tag: %w", err)
@@ -434,6 +635,7 @@ type postScanner interface {
 func scanPost(scanner postScanner) (Post, error) {
 	var post Post
 	var tagsCSV string
+	var publishedAt database.FlexibleTime
 
 	if err := scanner.Scan(
 		&post.ID,
@@ -450,11 +652,12 @@ func scanPost(scanner postScanner) (Post, error) {
 		&post.LikeCount,
 		&post.DislikeCount,
 		&post.CommentCount,
-		&post.PublishedAt,
+		&publishedAt,
 	); err != nil {
 		return Post{}, fmt.Errorf("scan post: %w", err)
 	}
 
+	post.PublishedAt = publishedAt.Time
 	post.Tags = splitTags(tagsCSV)
 	return post, nil
 }

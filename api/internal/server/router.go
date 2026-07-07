@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"blog/api/internal/config"
@@ -22,14 +23,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-func NewRouter(cfg config.Config) *gin.Engine {
-	return NewRouterWithRepositories(cfg, Repositories{})
-}
-
-func NewRouterWithPostsRepository(cfg config.Config, postRepo posts.Repository) *gin.Engine {
-	return NewRouterWithRepositories(cfg, Repositories{PostRepo: postRepo})
-}
 
 type Repositories struct {
 	AuthStore         auth.Store
@@ -74,39 +67,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	if repos.AuthStore == nil {
-		repos.AuthStore = auth.NewMemoryStore()
-	}
-	if repos.PostRepo == nil {
-		repos.PostRepo = posts.NewMemoryRepository()
-	}
-	if repos.CommentRepo == nil {
-		repos.CommentRepo = comments.NewMemoryRepository()
-	}
-	if repos.ReactionRepo == nil {
-		repos.ReactionRepo = reactions.NewMemoryRepository()
-	}
-	if repos.MessageRepo == nil {
-		repos.MessageRepo = messages.NewMemoryRepository()
-	}
-	if repos.SubmissionRepo == nil {
-		repos.SubmissionRepo = submissions.NewMemoryRepository()
-	}
-	if repos.OperationsRepo == nil {
-		repos.OperationsRepo = operations.NewMemoryRepository()
-	}
-	if repos.UserRepo == nil {
-		repos.UserRepo = users.NewMemoryRepository()
-	}
-	if repos.AdminPostRepo == nil {
-		repos.AdminPostRepo = adminposts.NewMemoryRepository()
-	}
-	if repos.TaxonomyRepo == nil {
-		repos.TaxonomyRepo = taxonomies.NewMemoryRepository()
-	}
-	if repos.TopicRepo == nil {
-		repos.TopicRepo = topics.NewMemoryRepository()
-	}
+	requireRepositories(repos)
 	if repos.AuthEmailSender == nil {
 		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)
 		if err == nil && emailSender != nil {
@@ -157,6 +118,46 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	submissions.RegisterRoutesWithTurnstile(api, repos.SubmissionRepo, repos.MessageRepo, publisher, repos.OperationsRepo, repos.TurnstileVerifier)
 
 	return router
+}
+
+func requireRepositories(repos Repositories) {
+	missing := make([]string, 0)
+	if repos.AuthStore == nil {
+		missing = append(missing, "AuthStore")
+	}
+	if repos.PostRepo == nil {
+		missing = append(missing, "PostRepo")
+	}
+	if repos.CommentRepo == nil {
+		missing = append(missing, "CommentRepo")
+	}
+	if repos.ReactionRepo == nil {
+		missing = append(missing, "ReactionRepo")
+	}
+	if repos.MessageRepo == nil {
+		missing = append(missing, "MessageRepo")
+	}
+	if repos.SubmissionRepo == nil {
+		missing = append(missing, "SubmissionRepo")
+	}
+	if repos.OperationsRepo == nil {
+		missing = append(missing, "OperationsRepo")
+	}
+	if repos.UserRepo == nil {
+		missing = append(missing, "UserRepo")
+	}
+	if repos.AdminPostRepo == nil {
+		missing = append(missing, "AdminPostRepo")
+	}
+	if repos.TaxonomyRepo == nil {
+		missing = append(missing, "TaxonomyRepo")
+	}
+	if repos.TopicRepo == nil {
+		missing = append(missing, "TopicRepo")
+	}
+	if len(missing) > 0 {
+		panic("server repositories are required: " + strings.Join(missing, ", "))
+	}
 }
 
 func uploadDir(value string) string {

@@ -13,6 +13,9 @@ import (
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
+//go:embed migrations_sqlite/*.sql
+var sqliteMigrationsFS embed.FS
+
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -24,7 +27,25 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 
-	entries, err := migrationsFS.ReadDir("migrations")
+	return migrateFromFS(ctx, db, migrationsFS, "migrations")
+}
+
+func MigrateSQLite(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version text PRIMARY KEY,
+			name text NOT NULL,
+			applied_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	return migrateFromFS(ctx, db, sqliteMigrationsFS, "migrations_sqlite")
+}
+
+func migrateFromFS(ctx context.Context, db *sql.DB, fs embed.FS, dir string) error {
+	entries, err := fs.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("read migrations: %w", err)
 	}
@@ -47,7 +68,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 
-		sqlText, err := migrationsFS.ReadFile(path.Join("migrations", entry.Name()))
+		sqlText, err := fs.ReadFile(path.Join(dir, entry.Name()))
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
 		}

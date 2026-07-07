@@ -16,11 +16,14 @@ import {
   type AccountSettings,
   type SessionInfo
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 import { useAuthStore } from "../../stores/auth";
+import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
 
 const router = useRouter();
 const auth = useAuthStore();
+const confirmDialog = useConfirmStore();
 const toast = useToastStore();
 const settings = ref<AccountSettings | null>(null);
 const sessions = ref<SessionInfo[]>([]);
@@ -182,7 +185,17 @@ async function confirmVerification() {
 }
 
 async function removeSession(session: SessionInfo) {
-  if (session.current || !window.confirm("移除这个登录设备？")) {
+  if (session.current) {
+    return;
+  }
+
+  const confirmed = await confirmDialog.open({
+    title: "移除登录设备",
+    message: `确定移除 ${session.device || "这个登录设备"} 吗？该设备需要重新登录。`,
+    confirmText: "移除设备",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -226,7 +239,13 @@ async function exportData() {
 }
 
 async function deleteAccount() {
-  if (!window.confirm("确认申请注销账号？该操作会退出当前账号。")) {
+  const confirmed = await confirmDialog.open({
+    title: "注销账号",
+    message: "确认申请注销账号吗？该操作会退出当前账号。",
+    confirmText: "注销账号",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -247,12 +266,7 @@ async function deleteAccount() {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 </script>
 

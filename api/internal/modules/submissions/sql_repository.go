@@ -3,19 +3,22 @@ package submissions
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"blog/api/internal/database"
 	"blog/api/internal/modules/auth"
 )
 
 type SQLRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	sqlite bool
 }
 
 func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
-	repo := &SQLRepository{db: db}
+	repo := &SQLRepository{db: db, sqlite: database.IsSQLite(db)}
 	if err := repo.ensureSeedSubmissions(ctx); err != nil {
 		return nil, err
 	}
@@ -47,7 +50,7 @@ func (repo *SQLRepository) ListByAuthor(ctx context.Context, userID string, quer
 func (repo *SQLRepository) CountSubmittedSince(ctx context.Context, userID string, since time.Time, excludeID string) (int, error) {
 	var total int
 	if err := repo.db.QueryRowContext(ctx, `
-		SELECT count(*)::int
+		SELECT count(*)
 		FROM submissions
 		WHERE author_id = $1
 			AND submitted_at >= $2
@@ -96,7 +99,7 @@ func (repo *SQLRepository) Create(ctx context.Context, request SaveRequest, user
 		submission.Summary,
 		submission.Content,
 		submission.Category,
-		submission.Tags,
+		repo.tagsValue(submission.Tags),
 		submission.CoverImage,
 		submission.Slug,
 		submission.Status,
@@ -159,7 +162,7 @@ func (repo *SQLRepository) Update(ctx context.Context, submissionID string, user
 		updated.Summary,
 		updated.Content,
 		updated.Category,
-		updated.Tags,
+		repo.tagsValue(updated.Tags),
 		updated.CoverImage,
 		updated.Slug,
 		status,
@@ -192,11 +195,11 @@ func (repo *SQLRepository) Submit(ctx context.Context, submissionID string, user
 		UPDATE submissions
 		SET status = 'submitted',
 			review_note = '',
-			submitted_at = now(),
+			submitted_at = $2,
 			reviewed_at = NULL,
 			version = version + 1
 		WHERE id = $1
-	`, submissionID); err != nil {
+	`, submissionID, time.Now()); err != nil {
 		return Submission{}, fmt.Errorf("submit submission: %w", err)
 	}
 
@@ -282,7 +285,7 @@ func (repo *SQLRepository) AdminUpdate(ctx context.Context, submissionID string,
 			tags = $6,
 			cover_image = $7,
 			slug = $8,
-			updated_at = now(),
+			updated_at = $9,
 			version = version + 1
 		WHERE id = $1
 	`, submissionID,
@@ -290,9 +293,10 @@ func (repo *SQLRepository) AdminUpdate(ctx context.Context, submissionID string,
 		updated.Summary,
 		updated.Content,
 		updated.Category,
-		updated.Tags,
+		repo.tagsValue(updated.Tags),
 		updated.CoverImage,
 		updated.Slug,
+		time.Now(),
 	); err != nil {
 		return Submission{}, fmt.Errorf("admin update submission: %w", err)
 	}
@@ -336,11 +340,11 @@ func (repo *SQLRepository) Review(ctx context.Context, submissionID string, revi
 		SET status = $2,
 			review_note = $3,
 			reviewer_id = $4,
-			reviewed_at = now(),
+			reviewed_at = $7,
 			published_post_slug = NULLIF($5, ''),
 			published_at = $6
 		WHERE id = $1
-	`, submissionID, status, strings.TrimSpace(request.Note), reviewer.ID, publishedSlug, publishedAt); err != nil {
+	`, submissionID, status, strings.TrimSpace(request.Note), reviewer.ID, publishedSlug, publishedAt, time.Now()); err != nil {
 		return Submission{}, fmt.Errorf("review submission: %w", err)
 	}
 
@@ -348,6 +352,11 @@ func (repo *SQLRepository) Review(ctx context.Context, submissionID string, revi
 }
 
 func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder string, args ...any) ([]Submission, error) {
+	tagsExpression := "array_to_string(s.tags, ',')"
+	if repo.sqlite {
+		tagsExpression = "s.tags"
+	}
+
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
 			s.id,
@@ -358,7 +367,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 			s.summary,
 			s.content,
 			s.category,
-			s.tags,
+			`+tagsExpression+`,
 			s.cover_image,
 			s.slug,
 			s.status,
@@ -384,6 +393,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 	items := make([]Submission, 0)
 	for rows.Next() {
 		var submission Submission
+		var tagsValue string
 		var submittedAt sql.NullTime
 		var reviewedAt sql.NullTime
 		var publishedAt sql.NullTime
@@ -396,7 +406,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 			&submission.Summary,
 			&submission.Content,
 			&submission.Category,
-			&submission.Tags,
+			&tagsValue,
 			&submission.CoverImage,
 			&submission.Slug,
 			&submission.Status,
@@ -422,6 +432,7 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 		if publishedAt.Valid {
 			submission.PublishedAt = &publishedAt.Time
 		}
+		submission.Tags = repo.decodeTags(tagsValue)
 		items = append(items, normalizeSubmission(submission))
 	}
 	if err := rows.Err(); err != nil {
@@ -434,12 +445,12 @@ func (repo *SQLRepository) querySubmissions(ctx context.Context, whereAndOrder s
 func (repo *SQLRepository) stats(ctx context.Context, where string, arg any) (Stats, error) {
 	query := `
 		SELECT
-			count(*)::int,
-			count(*) FILTER (WHERE status = 'draft')::int,
-			count(*) FILTER (WHERE status = 'submitted')::int,
-			count(*) FILTER (WHERE status = 'returned')::int,
-			count(*) FILTER (WHERE status = 'rejected')::int,
-			count(*) FILTER (WHERE status = 'published')::int
+			count(*),
+			COALESCE(sum(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN status = 'returned' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN status = 'published' THEN 1 ELSE 0 END), 0)
 		FROM submissions
 		` + where
 
@@ -475,7 +486,7 @@ func (repo *SQLRepository) ensureSeedSubmissions(ctx context.Context) error {
 			submission.Summary,
 			submission.Content,
 			submission.Category,
-			submission.Tags,
+			repo.tagsValue(submission.Tags),
 			submission.CoverImage,
 			submission.Slug,
 			submission.Status,
@@ -494,6 +505,32 @@ func (repo *SQLRepository) ensureSeedSubmissions(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (repo *SQLRepository) tagsValue(tags []string) any {
+	if !repo.sqlite {
+		return tags
+	}
+
+	data, err := json.Marshal(normalizeTags(tags))
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
+}
+
+func (repo *SQLRepository) decodeTags(value string) []string {
+	if repo.sqlite {
+		var tags []string
+		if err := json.Unmarshal([]byte(value), &tags); err == nil {
+			return normalizeTags(tags)
+		}
+	}
+
+	if strings.TrimSpace(value) == "" {
+		return []string{}
+	}
+	return normalizeTags(strings.Split(value, ","))
 }
 
 func normalizeStatus(status string) string {

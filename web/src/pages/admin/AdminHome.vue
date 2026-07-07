@@ -19,6 +19,7 @@ import {
   type Submission,
   type SubmissionStats
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 
 interface TodoItem {
   title: string;
@@ -120,16 +121,7 @@ async function load() {
 }
 
 function formatTime(value?: string) {
-  if (!value) {
-    return "未记录";
-  }
-
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 
 function healthSummary() {

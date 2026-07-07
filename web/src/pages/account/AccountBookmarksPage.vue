@@ -7,6 +7,7 @@ import {
   setBookmark,
   type BookmarkItem
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 
 const bookmarks = ref<BookmarkItem[]>([]);
 const loading = ref(false);
@@ -75,10 +76,7 @@ async function removeBookmark(slug: string) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit"
-  });
+  return formatDateTime(value);
 }
 </script>
 

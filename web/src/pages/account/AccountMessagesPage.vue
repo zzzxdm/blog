@@ -11,6 +11,7 @@ import {
   type MessageType,
   type StationMessage
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 
 const messages = ref<StationMessage[]>([]);
 const stats = ref<MessageStats>({ unread: 0, review: 0, admin: 0, archived: 0, scheduled: 0, total: 0 });
@@ -97,12 +98,7 @@ function chooseType(value: string) {
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 
 function typeText(value: MessageType) {

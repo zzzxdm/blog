@@ -21,10 +21,13 @@ import {
   type Category,
   type Tag
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 import { renderMarkdown } from "../../shared/markdown";
+import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
 
 const route = useRoute();
+const confirmDialog = useConfirmStore();
 const toast = useToastStore();
 
 const current = ref<AdminPost | null>(null);
@@ -56,7 +59,7 @@ const visibility = ref<AdminPostVisibility>("public");
 const scheduledAt = ref(nextScheduleValue());
 
 const renderedPreviewContent = computed(() => renderMarkdown(content.value));
-const description = computed(() => current.value ? `自动保存于 ${new Date(current.value.updatedAt).toLocaleTimeString("zh-CN")}，当前版本 ${current.value.version}。` : "新文章草稿。");
+const description = computed(() => current.value ? `自动保存于 ${formatDateTime(current.value.updatedAt)}，当前版本 ${current.value.version}。` : "新文章草稿。");
 
 onMounted(() => {
   void load();
@@ -265,7 +268,17 @@ async function openPreview() {
 }
 
 async function restoreRevision(revision: AdminPostRevision) {
-  if (!current.value || !window.confirm(`恢复到版本 ${revision.version}？`)) {
+  if (!current.value) {
+    return;
+  }
+
+  const confirmed = await confirmDialog.open({
+    title: `恢复到版本 ${revision.version}`,
+    message: "当前编辑内容会被该历史版本覆盖，恢复后会生成新的版本记录。",
+    confirmText: "恢复版本",
+    tone: "success"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -365,12 +378,7 @@ function visibilityText(value: AdminPostVisibility) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 
 function nextScheduleValue() {

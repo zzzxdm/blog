@@ -7,6 +7,7 @@ import {
   type Comment,
   type CommentStats
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 
 const comments = ref<Comment[]>([]);
 const stats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
@@ -89,12 +90,7 @@ function statusClass(value: Comment["status"]) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 </script>
 

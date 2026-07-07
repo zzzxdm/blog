@@ -14,6 +14,7 @@ import {
   type SubmissionPayload,
   type SubmissionStats
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 
 const submissions = ref<Submission[]>([]);
 const allSubmissions = ref<Submission[]>([]);
@@ -230,16 +231,7 @@ async function upgradeAuthor() {
 }
 
 function formatDate(value?: string) {
-  if (!value) {
-    return "未提交";
-  }
-
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value, "未提交");
 }
 
 function statusText(value: Submission["status"]) {

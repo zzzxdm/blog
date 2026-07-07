@@ -3,10 +3,8 @@ package topics
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -21,136 +19,6 @@ type Repository interface {
 	GetBySlug(ctx context.Context, slug string) (Topic, error)
 	Save(ctx context.Context, id string, request SaveRequest) (Topic, error)
 	Delete(ctx context.Context, id string) error
-}
-
-type MemoryRepository struct {
-	mu     sync.RWMutex
-	topics map[string]Topic
-	nextID int
-	now    func() time.Time
-}
-
-func NewMemoryRepository() *MemoryRepository {
-	now := time.Now
-	return &MemoryRepository{
-		topics: seedTopics(now),
-		nextID: 100,
-		now:    now,
-	}
-}
-
-func (repo *MemoryRepository) List(_ context.Context, query ListQuery) (ListResult, error) {
-	page := normalizePage(query.Page)
-	pageSize := normalizePageSize(query.PageSize)
-	filtered := make([]Topic, 0, len(repo.topics))
-
-	repo.mu.RLock()
-	for _, item := range repo.topics {
-		if !matchesListQuery(item, query) {
-			continue
-		}
-		filtered = append(filtered, cloneTopic(item))
-	}
-	repo.mu.RUnlock()
-
-	sortTopics(filtered)
-	total := len(filtered)
-	return ListResult{
-		Items:    pageItems(filtered, page, pageSize),
-		Page:     page,
-		PageSize: pageSize,
-		Total:    total,
-	}, nil
-}
-
-func (repo *MemoryRepository) GetBySlug(_ context.Context, slug string) (Topic, error) {
-	repo.mu.RLock()
-	defer repo.mu.RUnlock()
-
-	for _, item := range repo.topics {
-		if strings.EqualFold(item.Slug, strings.TrimSpace(slug)) {
-			return cloneTopic(item), nil
-		}
-	}
-
-	return Topic{}, ErrNotFound
-}
-
-func (repo *MemoryRepository) Save(_ context.Context, id string, request SaveRequest) (Topic, error) {
-	title := strings.TrimSpace(request.Title)
-	if title == "" {
-		return Topic{}, ErrInvalid
-	}
-
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
-
-	slug := repo.topicSlug(request.Slug, title)
-	if repo.duplicateLocked(id, slug, title) {
-		return Topic{}, ErrDuplicate
-	}
-
-	item, ok := repo.topics[id]
-	if id != "" && !ok {
-		return Topic{}, ErrNotFound
-	}
-
-	now := repo.now()
-	if id == "" {
-		id = fmt.Sprintf("topic_%03d", repo.nextID)
-		repo.nextID++
-		item = Topic{ID: id, CreatedAt: now}
-	}
-
-	item.Slug = slug
-	item.Title = title
-	item.Summary = strings.TrimSpace(request.Summary)
-	item.CoverImage = strings.TrimSpace(request.CoverImage)
-	item.ImageAlt = strings.TrimSpace(request.ImageAlt)
-	item.Tone = normalizeTone(request.Tone)
-	item.Status = normalizeStatus(request.Status)
-	item.Featured = request.Featured
-	item.SortOrder = request.SortOrder
-	item.Categories = normalizeStrings(request.Categories)
-	item.Tags = normalizeStrings(request.Tags)
-	item.UpdatedAt = now
-	repo.topics[item.ID] = item
-
-	return cloneTopic(item), nil
-}
-
-func (repo *MemoryRepository) Delete(_ context.Context, id string) error {
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
-
-	if _, ok := repo.topics[id]; !ok {
-		return ErrNotFound
-	}
-
-	delete(repo.topics, id)
-	return nil
-}
-
-func (repo *MemoryRepository) topicSlug(value string, title string) string {
-	slug := defaultString(slugify(value), slugify(title))
-	if slug == "" {
-		slug = fmt.Sprintf("topic-%03d", repo.nextID)
-	}
-
-	return slug
-}
-
-func (repo *MemoryRepository) duplicateLocked(id string, slug string, title string) bool {
-	for _, item := range repo.topics {
-		if item.ID == id {
-			continue
-		}
-		if strings.EqualFold(item.Slug, slug) || strings.EqualFold(item.Title, title) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func matchesListQuery(item Topic, query ListQuery) bool {

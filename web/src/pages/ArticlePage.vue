@@ -18,6 +18,7 @@ import {
   type ReactionSummary,
   type SiteSettings
 } from "../shared/api";
+import { formatDateTime } from "../shared/datetime";
 import { extractMarkdownHeadings, renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
@@ -110,12 +111,7 @@ function authorPath(authorName: string) {
 }
 
 function formatCommentTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 
 function statusText(status: Comment["status"]) {

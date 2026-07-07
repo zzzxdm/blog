@@ -9,6 +9,7 @@ import {
   updateAdminSettings,
   type OperationsSettings
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 import { applyPrimaryColor, applyThemeMode, themeOptions, type ThemeMode } from "../../shared/theme";
 import { useToastStore } from "../../stores/toast";
 
@@ -246,7 +247,7 @@ async function runBackup() {
         <div class="panel-title"><h2>备份</h2><span class="status published">正常</span></div>
         <div class="settings-stack">
           <div class="field"><label for="backup-cycle">备份计划频率</label><select v-model="settings.backupCycle" class="input" id="backup-cycle"><option>每日全量备份</option><option>每周全量备份</option><option>手动备份</option></select></div>
-          <div class="meta-row"><span>上次备份：{{ new Date(settings.lastBackupAt).toLocaleString("zh-CN") }}</span><span>保留 {{ settings.backupRetentionDays }} 天</span></div>
+          <div class="meta-row"><span>上次备份：{{ formatDateTime(settings.lastBackupAt) }}</span><span>保留 {{ settings.backupRetentionDays }} 天</span></div>
           <button class="button-secondary" type="button" :disabled="runningBackup" @click="runBackup">{{ runningBackup ? "生成中..." : "生成备份记录" }}</button>
         </div>
       </section>

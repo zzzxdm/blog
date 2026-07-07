@@ -111,8 +111,8 @@ func (repo *SQLRepository) SetReaction(ctx context.Context, postSlug string, use
 			VALUES ($1, $2, $3)
 			ON CONFLICT (post_slug, user_id) DO UPDATE SET
 				reaction = EXCLUDED.reaction,
-				updated_at = now()
-		`, postSlug, userID, reaction); err != nil {
+				updated_at = $4
+		`, postSlug, userID, reaction, time.Now()); err != nil {
 			return Summary{}, fmt.Errorf("upsert reaction: %w", err)
 		}
 	}
@@ -176,7 +176,7 @@ func (repo *SQLRepository) SetBookmark(ctx context.Context, postSlug string, use
 	if delta != 0 {
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE post_interaction_stats
-			SET bookmark_count = GREATEST(0, bookmark_count + $2)
+			SET bookmark_count = CASE WHEN bookmark_count + $2 < 0 THEN 0 ELSE bookmark_count + $2 END
 			WHERE post_slug = $1
 		`, postSlug, delta); err != nil {
 			return Summary{}, fmt.Errorf("update bookmark count: %w", err)
@@ -226,7 +226,7 @@ func (repo *SQLRepository) ensureStats(ctx context.Context, postSlug string) err
 			like_count,
 			dislike_count,
 			(
-				SELECT count(*)::int
+					SELECT count(*)
 				FROM post_bookmarks bookmark
 				WHERE bookmark.post_slug = posts.slug
 			)
@@ -252,7 +252,7 @@ func ensureStatsTx(ctx context.Context, tx *sql.Tx, postSlug string) error {
 			like_count,
 			dislike_count,
 			(
-				SELECT count(*)::int
+					SELECT count(*)
 				FROM post_bookmarks bookmark
 				WHERE bookmark.post_slug = posts.slug
 			)
@@ -314,21 +314,21 @@ func updateReactionCounts(ctx context.Context, tx *sql.Tx, postSlug string, like
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE post_interaction_stats
-		SET
-			like_count = GREATEST(0, like_count + $2),
-			dislike_count = GREATEST(0, dislike_count + $3)
-		WHERE post_slug = $1
+			UPDATE post_interaction_stats
+			SET
+				like_count = CASE WHEN like_count + $2 < 0 THEN 0 ELSE like_count + $2 END,
+				dislike_count = CASE WHEN dislike_count + $3 < 0 THEN 0 ELSE dislike_count + $3 END
+			WHERE post_slug = $1
 	`, postSlug, likeDelta, dislikeDelta); err != nil {
 		return fmt.Errorf("update interaction counts: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE posts
-		SET
-			like_count = GREATEST(0, like_count + $2),
-			dislike_count = GREATEST(0, dislike_count + $3)
-		WHERE slug = $1
+			UPDATE posts
+			SET
+				like_count = CASE WHEN like_count + $2 < 0 THEN 0 ELSE like_count + $2 END,
+				dislike_count = CASE WHEN dislike_count + $3 < 0 THEN 0 ELSE dislike_count + $3 END
+			WHERE slug = $1
 	`, postSlug, likeDelta, dislikeDelta); err != nil {
 		return fmt.Errorf("update post counts: %w", err)
 	}

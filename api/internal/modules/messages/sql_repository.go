@@ -27,9 +27,9 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 func (repo *SQLRepository) List(ctx context.Context, userID string, query ListQuery) (ListResult, error) {
 	items, err := repo.queryMessages(ctx, `
 		WHERE recipient_id = $1
-			AND (scheduled_at IS NULL OR scheduled_at <= now())
+			AND (scheduled_at IS NULL OR scheduled_at <= $2)
 		ORDER BY created_at DESC
-	`, userID)
+	`, userID, time.Now())
 	if err != nil {
 		return ListResult{}, err
 	}
@@ -96,12 +96,12 @@ func (repo *SQLRepository) MarkRead(ctx context.Context, userID string, messageI
 	var id string
 	err := repo.db.QueryRowContext(ctx, `
 		UPDATE messages
-		SET read_at = COALESCE(read_at, now())
+		SET read_at = COALESCE(read_at, $3)
 		WHERE id = $1
 			AND recipient_id = $2
-			AND (scheduled_at IS NULL OR scheduled_at <= now())
+			AND (scheduled_at IS NULL OR scheduled_at <= $3)
 		RETURNING id
-	`, messageID, userID).Scan(&id)
+	`, messageID, userID, time.Now()).Scan(&id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Message{}, ErrMessageNotFound
@@ -115,11 +115,11 @@ func (repo *SQLRepository) MarkRead(ctx context.Context, userID string, messageI
 func (repo *SQLRepository) MarkAllRead(ctx context.Context, userID string) (Stats, error) {
 	if _, err := repo.db.ExecContext(ctx, `
 		UPDATE messages
-		SET read_at = COALESCE(read_at, now())
+		SET read_at = COALESCE(read_at, $2)
 		WHERE recipient_id = $1
 			AND archived_at IS NULL
-			AND (scheduled_at IS NULL OR scheduled_at <= now())
-	`, userID); err != nil {
+			AND (scheduled_at IS NULL OR scheduled_at <= $2)
+	`, userID, time.Now()); err != nil {
 		return Stats{}, fmt.Errorf("mark all messages read: %w", err)
 	}
 
@@ -135,13 +135,13 @@ func (repo *SQLRepository) Archive(ctx context.Context, userID string, messageID
 	var id string
 	err := repo.db.QueryRowContext(ctx, `
 		UPDATE messages
-		SET read_at = COALESCE(read_at, now()),
-			archived_at = now()
+		SET read_at = COALESCE(read_at, $3),
+			archived_at = $3
 		WHERE id = $1
 			AND recipient_id = $2
-			AND (scheduled_at IS NULL OR scheduled_at <= now())
+			AND (scheduled_at IS NULL OR scheduled_at <= $3)
 		RETURNING id
-	`, messageID, userID).Scan(&id)
+	`, messageID, userID, time.Now()).Scan(&id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Message{}, ErrMessageNotFound

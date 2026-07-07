@@ -24,12 +24,12 @@ func NewSQLRepository(db *sql.DB) *SQLRepository {
 func (repo *SQLRepository) ListCategories(ctx context.Context) ([]Category, error) {
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
-			c.id::text,
+				CAST(c.id AS TEXT),
 			c.slug,
 			c.name,
 			c.description,
 			c.sort_order,
-			COUNT(p.id)::int AS post_count
+			COUNT(p.id) AS post_count
 		FROM categories c
 		LEFT JOIN posts p ON p.category_id = c.id AND p.status = 'published'
 		GROUP BY c.id
@@ -75,7 +75,7 @@ func (repo *SQLRepository) SaveCategory(ctx context.Context, id string, request 
 		err := repo.db.QueryRowContext(ctx, `
 			INSERT INTO categories (slug, name, description, sort_order)
 			VALUES ($1, $2, $3, $4)
-			RETURNING id::text
+				RETURNING CAST(id AS TEXT)
 		`, slug, name, strings.TrimSpace(request.Description), request.SortOrder).Scan(&newID)
 		if err != nil {
 			return Category{}, fmt.Errorf("insert category: %w", err)
@@ -91,8 +91,8 @@ func (repo *SQLRepository) SaveCategory(ctx context.Context, id string, request 
 		    name = $3,
 		    description = $4,
 		    sort_order = $5
-		WHERE id::text = $1
-		RETURNING id::text
+			WHERE CAST(id AS TEXT) = $1
+			RETURNING CAST(id AS TEXT)
 	`, id, slug, name, strings.TrimSpace(request.Description), request.SortOrder).Scan(&updatedID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -107,14 +107,14 @@ func (repo *SQLRepository) SaveCategory(ctx context.Context, id string, request 
 
 func (repo *SQLRepository) DeleteCategory(ctx context.Context, id string) error {
 	var postCount int
-	if err := repo.db.QueryRowContext(ctx, "SELECT COUNT(*)::int FROM posts WHERE category_id::text = $1", id).Scan(&postCount); err != nil {
+	if err := repo.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM posts WHERE CAST(category_id AS TEXT) = $1", id).Scan(&postCount); err != nil {
 		return fmt.Errorf("count category posts: %w", err)
 	}
 	if postCount > 0 {
 		return ErrTaxonomyInUse
 	}
 
-	result, err := repo.db.ExecContext(ctx, "DELETE FROM categories WHERE id::text = $1", id)
+	result, err := repo.db.ExecContext(ctx, "DELETE FROM categories WHERE CAST(id AS TEXT) = $1", id)
 	if err != nil {
 		return fmt.Errorf("delete category: %w", err)
 	}
@@ -133,10 +133,10 @@ func (repo *SQLRepository) DeleteCategory(ctx context.Context, id string) error 
 func (repo *SQLRepository) ListTags(ctx context.Context) ([]Tag, error) {
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
-			t.id::text,
+				CAST(t.id AS TEXT),
 			t.slug,
 			t.name,
-			COUNT(p.id)::int AS post_count
+			COUNT(p.id) AS post_count
 		FROM tags t
 		LEFT JOIN post_tags pt ON pt.tag_id = t.id
 		LEFT JOIN posts p ON p.id = pt.post_id AND p.status = 'published'
@@ -183,7 +183,7 @@ func (repo *SQLRepository) SaveTag(ctx context.Context, id string, request SaveT
 		err := repo.db.QueryRowContext(ctx, `
 			INSERT INTO tags (slug, name)
 			VALUES ($1, $2)
-			RETURNING id::text
+				RETURNING CAST(id AS TEXT)
 		`, slug, name).Scan(&newID)
 		if err != nil {
 			return Tag{}, fmt.Errorf("insert tag: %w", err)
@@ -197,8 +197,8 @@ func (repo *SQLRepository) SaveTag(ctx context.Context, id string, request SaveT
 		UPDATE tags
 		SET slug = $2,
 		    name = $3
-		WHERE id::text = $1
-		RETURNING id::text
+			WHERE CAST(id AS TEXT) = $1
+			RETURNING CAST(id AS TEXT)
 	`, id, slug, name).Scan(&updatedID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -213,14 +213,14 @@ func (repo *SQLRepository) SaveTag(ctx context.Context, id string, request SaveT
 
 func (repo *SQLRepository) DeleteTag(ctx context.Context, id string) error {
 	var postCount int
-	if err := repo.db.QueryRowContext(ctx, "SELECT COUNT(*)::int FROM post_tags WHERE tag_id::text = $1", id).Scan(&postCount); err != nil {
+	if err := repo.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM post_tags WHERE CAST(tag_id AS TEXT) = $1", id).Scan(&postCount); err != nil {
 		return fmt.Errorf("count tag posts: %w", err)
 	}
 	if postCount > 0 {
 		return ErrTaxonomyInUse
 	}
 
-	result, err := repo.db.ExecContext(ctx, "DELETE FROM tags WHERE id::text = $1", id)
+	result, err := repo.db.ExecContext(ctx, "DELETE FROM tags WHERE CAST(id AS TEXT) = $1", id)
 	if err != nil {
 		return fmt.Errorf("delete tag: %w", err)
 	}
@@ -239,15 +239,15 @@ func (repo *SQLRepository) DeleteTag(ctx context.Context, id string) error {
 func (repo *SQLRepository) getCategory(ctx context.Context, id string) (Category, error) {
 	row := repo.db.QueryRowContext(ctx, `
 		SELECT
-			c.id::text,
+				CAST(c.id AS TEXT),
 			c.slug,
 			c.name,
 			c.description,
 			c.sort_order,
-			COUNT(p.id)::int AS post_count
+			COUNT(p.id) AS post_count
 		FROM categories c
 		LEFT JOIN posts p ON p.category_id = c.id AND p.status = 'published'
-		WHERE c.id::text = $1
+		WHERE CAST(c.id AS TEXT) = $1
 		GROUP BY c.id
 	`, id)
 
@@ -266,14 +266,14 @@ func (repo *SQLRepository) getCategory(ctx context.Context, id string) (Category
 func (repo *SQLRepository) getTag(ctx context.Context, id string) (Tag, error) {
 	row := repo.db.QueryRowContext(ctx, `
 		SELECT
-			t.id::text,
+				CAST(t.id AS TEXT),
 			t.slug,
 			t.name,
-			COUNT(p.id)::int AS post_count
+			COUNT(p.id) AS post_count
 		FROM tags t
 		LEFT JOIN post_tags pt ON pt.tag_id = t.id
 		LEFT JOIN posts p ON p.id = pt.post_id AND p.status = 'published'
-		WHERE t.id::text = $1
+		WHERE CAST(t.id AS TEXT) = $1
 		GROUP BY t.id
 	`, id)
 
@@ -296,7 +296,7 @@ func (repo *SQLRepository) categoryDuplicate(ctx context.Context, id string, slu
 			SELECT 1
 			FROM categories
 			WHERE (lower(slug) = lower($1) OR lower(name) = lower($2))
-			  AND ($3 = '' OR id::text <> $3)
+				  AND ($3 = '' OR CAST(id AS TEXT) <> $3)
 		)
 	`, slug, name, strings.TrimSpace(id)).Scan(&duplicate); err != nil {
 		return false, fmt.Errorf("check category duplicate: %w", err)
@@ -312,7 +312,7 @@ func (repo *SQLRepository) tagDuplicate(ctx context.Context, id string, slug str
 			SELECT 1
 			FROM tags
 			WHERE (lower(slug) = lower($1) OR lower(name) = lower($2))
-			  AND ($3 = '' OR id::text <> $3)
+				  AND ($3 = '' OR CAST(id AS TEXT) <> $3)
 		)
 	`, slug, name, strings.TrimSpace(id)).Scan(&duplicate); err != nil {
 		return false, fmt.Errorf("check tag duplicate: %w", err)

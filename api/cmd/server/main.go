@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -30,93 +32,19 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	var authStore auth.Store = auth.NewMemoryStore()
-	var postRepo posts.Repository = posts.NewMemoryRepository()
-	var commentRepo comments.Repository = comments.NewMemoryRepository()
-	var reactionRepo reactions.Repository = reactions.NewMemoryRepository()
-	var messageRepo messages.Repository = messages.NewMemoryRepository()
-	var submissionRepo submissions.Repository = submissions.NewMemoryRepository()
-	var operationsRepo operations.Repository = operations.NewMemoryRepository()
-	var userRepo users.Repository = users.NewMemoryRepository()
-	var adminPostRepo adminposts.Repository = adminposts.NewMemoryRepository()
-	var taxonomyRepo taxonomies.Repository = taxonomies.NewMemoryRepository()
-	var topicRepo topics.Repository = topics.NewMemoryRepository()
-
-	db, err := database.Open(ctx, cfg)
+	db, repositories, err := setupRepositories(ctx, cfg)
 	if err != nil {
-		if cfg.AppEnv == "production" {
-			slog.Error("database connection failed", "error", err)
-			os.Exit(1)
-		}
-
-		slog.Warn("database unavailable, using in-memory repositories", "error", err)
-	} else {
-		defer db.Close()
-
-		migrateCtx, cancelMigrate := context.WithTimeout(ctx, 20*time.Second)
-		if err := database.Migrate(migrateCtx, db); err != nil {
-			cancelMigrate()
-			if cfg.AppEnv == "production" {
-				slog.Error("database migration failed", "error", err)
-				os.Exit(1)
-			}
-
-			slog.Warn("database migration failed, using in-memory repositories", "error", err)
-		} else {
-			cancelMigrate()
-			setupCtx, cancelSetup := context.WithTimeout(ctx, 10*time.Second)
-			sqlAuthStore, authErr := auth.NewSQLStore(setupCtx, db)
-			sqlCommentRepo, commentErr := comments.NewSQLRepository(setupCtx, db)
-			sqlReactionRepo, reactionErr := reactions.NewSQLRepository(setupCtx, db)
-			sqlMessageRepo, messageErr := messages.NewSQLRepository(setupCtx, db)
-			sqlSubmissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
-			sqlOperationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
-			sqlUserRepo, userErr := users.NewSQLRepository(setupCtx, db)
-			sqlAdminPostRepo, adminPostErr := adminposts.NewSQLRepository(setupCtx, db)
-			sqlTopicRepo := topics.NewSQLRepository(db)
-			cancelSetup()
-
-			if authErr != nil || commentErr != nil || reactionErr != nil || messageErr != nil || submissionErr != nil || operationsErr != nil || userErr != nil || adminPostErr != nil {
-				if cfg.AppEnv == "production" {
-					slog.Error("database repository initialization failed", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr, "admin_posts", adminPostErr)
-					os.Exit(1)
-				}
-
-				slog.Warn("database repository initialization failed, using in-memory repositories", "auth", authErr, "comments", commentErr, "reactions", reactionErr, "messages", messageErr, "submissions", submissionErr, "operations", operationsErr, "users", userErr, "admin_posts", adminPostErr)
-			} else {
-				authStore = sqlAuthStore
-				postRepo = posts.NewSQLRepository(db)
-				commentRepo = sqlCommentRepo
-				reactionRepo = sqlReactionRepo
-				messageRepo = sqlMessageRepo
-				submissionRepo = sqlSubmissionRepo
-				operationsRepo = sqlOperationsRepo
-				userRepo = sqlUserRepo
-				adminPostRepo = sqlAdminPostRepo
-				taxonomyRepo = taxonomies.NewSQLRepository(db)
-				topicRepo = sqlTopicRepo
-			}
-		}
+		slog.Error("database initialization failed", "error", err)
+		os.Exit(1)
 	}
+	defer db.Close()
 
-	router := appserver.NewRouterWithRepositories(cfg, appserver.Repositories{
-		AuthStore:      authStore,
-		PostRepo:       postRepo,
-		CommentRepo:    commentRepo,
-		ReactionRepo:   reactionRepo,
-		MessageRepo:    messageRepo,
-		SubmissionRepo: submissionRepo,
-		OperationsRepo: operationsRepo,
-		UserRepo:       userRepo,
-		AdminPostRepo:  adminPostRepo,
-		TaxonomyRepo:   taxonomyRepo,
-		TopicRepo:      topicRepo,
-	})
+	router := appserver.NewRouterWithRepositories(cfg, repositories)
 
 	schedulerCtx, stopScheduler := context.WithCancel(context.Background())
 	defer stopScheduler()
-	if publisher, ok := postRepo.(posts.Publisher); ok {
-		adminposts.StartScheduledPublisher(schedulerCtx, adminPostRepo, publisher, time.Minute)
+	if publisher, ok := repositories.PostRepo.(posts.Publisher); ok {
+		adminposts.StartScheduledPublisher(schedulerCtx, repositories.AdminPostRepo, publisher, time.Minute)
 	}
 
 	server := &http.Server{
@@ -147,4 +75,73 @@ func main() {
 	}
 
 	slog.Info("api server stopped")
+}
+
+func setupRepositories(ctx context.Context, cfg config.Config) (*sql.DB, appserver.Repositories, error) {
+	dbType, err := database.NormalizeDBType(cfg.DBType)
+	if err != nil {
+		return nil, appserver.Repositories{}, err
+	}
+
+	db, err := database.Open(ctx, cfg)
+	if err != nil {
+		return nil, appserver.Repositories{}, fmt.Errorf("open %s database: %w", dbType, err)
+	}
+
+	repositories, initErr := initializeSQLRepositories(ctx, db, dbType == database.DBTypeSQLite)
+	if initErr != nil {
+		_ = db.Close()
+		return nil, appserver.Repositories{}, fmt.Errorf("initialize %s database: %w", dbType, initErr)
+	}
+
+	if dbType == database.DBTypeSQLite {
+		slog.Info("using sqlite database", "path", cfg.SQLitePath)
+	} else {
+		slog.Info("using postgres database")
+	}
+	return db, repositories, nil
+}
+
+func initializeSQLRepositories(ctx context.Context, db *sql.DB, sqlite bool) (appserver.Repositories, error) {
+	migrateCtx, cancelMigrate := context.WithTimeout(ctx, 20*time.Second)
+	var migrateErr error
+	if sqlite {
+		migrateErr = database.MigrateSQLite(migrateCtx, db)
+	} else {
+		migrateErr = database.Migrate(migrateCtx, db)
+	}
+	cancelMigrate()
+	if migrateErr != nil {
+		return appserver.Repositories{}, migrateErr
+	}
+
+	setupCtx, cancelSetup := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelSetup()
+
+	authStore, authErr := auth.NewSQLStore(setupCtx, db)
+	commentRepo, commentErr := comments.NewSQLRepository(setupCtx, db)
+	reactionRepo, reactionErr := reactions.NewSQLRepository(setupCtx, db)
+	messageRepo, messageErr := messages.NewSQLRepository(setupCtx, db)
+	submissionRepo, submissionErr := submissions.NewSQLRepository(setupCtx, db)
+	operationsRepo, operationsErr := operations.NewSQLRepository(setupCtx, db)
+	userRepo, userErr := users.NewSQLRepository(setupCtx, db)
+	adminPostRepo, adminPostErr := adminposts.NewSQLRepository(setupCtx, db)
+	initErr := errors.Join(authErr, commentErr, reactionErr, messageErr, submissionErr, operationsErr, userErr, adminPostErr)
+	if initErr != nil {
+		return appserver.Repositories{}, initErr
+	}
+
+	return appserver.Repositories{
+		AuthStore:      authStore,
+		PostRepo:       posts.NewSQLRepository(db),
+		CommentRepo:    commentRepo,
+		ReactionRepo:   reactionRepo,
+		MessageRepo:    messageRepo,
+		SubmissionRepo: submissionRepo,
+		OperationsRepo: operationsRepo,
+		UserRepo:       userRepo,
+		AdminPostRepo:  adminPostRepo,
+		TaxonomyRepo:   taxonomies.NewSQLRepository(db),
+		TopicRepo:      topics.NewSQLRepository(db),
+	}, nil
 }

@@ -11,7 +11,10 @@ import {
   uploadAdminMedia,
   type MediaAsset
 } from "../../shared/api";
+import { useConfirmStore } from "../../stores/confirm";
+import { formatDateTime } from "../../shared/datetime";
 
+const confirmDialog = useConfirmStore();
 const assets = ref<MediaAsset[]>([]);
 const selectedId = ref("");
 const loading = ref(false);
@@ -173,7 +176,14 @@ async function deleteSelected() {
   if (!selected.value || selected.value.usageCount > 0) {
     return;
   }
-  if (!window.confirm(`确定删除 ${selected.value.fileName}？`)) {
+
+  const confirmed = await confirmDialog.open({
+    title: `删除 ${selected.value.fileName}`,
+    message: "该资源会从媒体库移除，未保存的引用不会自动修复。",
+    confirmText: "删除资源",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -222,7 +232,16 @@ async function deleteBatchSelected() {
   if (!deletableBatchAssets.value.length) {
     return;
   }
-  if (!window.confirm(`确定删除 ${deletableBatchAssets.value.length} 个未使用资源？`)) {
+
+  const confirmed = await confirmDialog.open({
+    title: `删除 ${deletableBatchAssets.value.length} 个未使用资源`,
+    message: blockedBatchCount.value > 0
+      ? `${blockedBatchCount.value} 个已被引用的资源会保留，只删除未使用资源。`
+      : "这些资源会从媒体库移除。",
+    confirmText: "批量删除",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -268,7 +287,7 @@ function typeLabel(type: string) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("zh-CN");
+  return formatDateTime(value);
 }
 
 </script>

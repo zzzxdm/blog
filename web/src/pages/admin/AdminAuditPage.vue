@@ -7,6 +7,7 @@ import {
   getAdminAuditLogs,
   type AuditLog
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 
 const logs = ref<AuditLog[]>([]);
 const loading = ref(false);
@@ -122,12 +123,7 @@ function statusClass(value: AuditLog["status"]) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 </script>
 

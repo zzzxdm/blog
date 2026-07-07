@@ -8,18 +8,21 @@ import (
 	"strings"
 	"time"
 
+	"blog/api/internal/database"
 	"blog/api/internal/modules/posts"
 )
 
 type SQLRepository struct {
-	db  *sql.DB
-	now func() time.Time
+	db     *sql.DB
+	now    func() time.Time
+	sqlite bool
 }
 
 func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 	repo := &SQLRepository{
-		db:  db,
-		now: time.Now,
+		db:     db,
+		now:    time.Now,
+		sqlite: database.IsSQLite(db),
 	}
 	if err := repo.ensureSeedPosts(ctx); err != nil {
 		return nil, err
@@ -29,6 +32,11 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 }
 
 func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResult, error) {
+	publishedSlugExpr := "admin_posts.data->>'publishedPostSlug'"
+	if repo.sqlite {
+		publishedSlugExpr = "json_extract(admin_posts.data, '$.publishedPostSlug')"
+	}
+
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
 			admin_posts.data,
@@ -36,7 +44,7 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 			posts.comment_count
 		FROM admin_posts
 		LEFT JOIN posts
-			ON posts.slug = COALESCE(NULLIF(admin_posts.data->>'publishedPostSlug', ''), admin_posts.slug)
+			ON posts.slug = COALESCE(NULLIF(`+publishedSlugExpr+`, ''), admin_posts.slug)
 			AND posts.status = 'published'
 		ORDER BY admin_posts.updated_at DESC, admin_posts.id DESC
 	`)

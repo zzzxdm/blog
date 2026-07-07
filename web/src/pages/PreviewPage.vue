@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import { getPreviewPost, type AdminPost } from "../shared/api";
+import { formatDateTime } from "../shared/datetime";
 import { renderMarkdown } from "../shared/markdown";
 
 const route = useRoute();
@@ -31,7 +32,7 @@ async function load() {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN");
+  return formatDateTime(value);
 }
 </script>
 

@@ -15,7 +15,9 @@ import {
   type Category,
   type Tag
 } from "../../shared/api";
+import { useConfirmStore } from "../../stores/confirm";
 
+const confirmDialog = useConfirmStore();
 const categories = ref<Category[]>([]);
 const tags = ref<Tag[]>([]);
 const loading = ref(false);
@@ -152,7 +154,17 @@ async function saveCategory() {
 }
 
 async function removeCategory(item: Category) {
-  if (item.postCount > 0 || !window.confirm(`删除分类「${item.name}」？`)) {
+  if (item.postCount > 0) {
+    return;
+  }
+
+  const confirmed = await confirmDialog.open({
+    title: `删除分类「${item.name}」`,
+    message: "删除后不可在文章筛选和归档中继续使用该分类。",
+    confirmText: "删除分类",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -215,7 +227,17 @@ async function saveTag() {
 }
 
 async function removeTag(item: Tag) {
-  if (item.postCount > 0 || !window.confirm(`删除标签「${item.name}」？`)) {
+  if (item.postCount > 0) {
+    return;
+  }
+
+  const confirmed = await confirmDialog.open({
+    title: `删除标签「${item.name}」`,
+    message: "删除后不可在文章筛选和标签页中继续使用该标签。",
+    confirmText: "删除标签",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 

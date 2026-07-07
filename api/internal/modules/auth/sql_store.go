@@ -307,8 +307,8 @@ func (store *SQLStore) UserBySession(token string) (User, error) {
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token = $1
-			AND s.expires_at > now()
-	`, token).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified)
+			AND s.expires_at > $2
+	`, token, store.now()).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.Status, &user.AvatarText, &user.EmailVerified)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return User{}, ErrInvalidSession
@@ -406,8 +406,8 @@ func (store *SQLStore) VerifyEmail(token string) (User, error) {
 		SELECT user_id
 		FROM email_verification_tokens
 		WHERE token = $1
-			AND expires_at > now()
-	`, strings.TrimSpace(token)).Scan(&userID)
+			AND expires_at > $2
+	`, strings.TrimSpace(token), store.now()).Scan(&userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return User{}, ErrInvalidToken
@@ -487,9 +487,9 @@ func (store *SQLStore) ResetPassword(token string, newPassword string) error {
 		SELECT user_id
 		FROM password_reset_tokens
 		WHERE token = $1
-			AND expires_at > now()
+			AND expires_at > $2
 			AND used_at IS NULL
-	`, strings.TrimSpace(token)).Scan(&userID)
+	`, strings.TrimSpace(token), store.now()).Scan(&userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrInvalidToken
@@ -500,7 +500,7 @@ func (store *SQLStore) ResetPassword(token string, newPassword string) error {
 	if _, err := tx.ExecContext(context.Background(), "UPDATE users SET password_hash = $2, email_verified = true WHERE id = $1", userID, string(newHash)); err != nil {
 		return fmt.Errorf("reset password: %w", err)
 	}
-	if _, err := tx.ExecContext(context.Background(), "UPDATE password_reset_tokens SET used_at = now() WHERE token = $1", strings.TrimSpace(token)); err != nil {
+	if _, err := tx.ExecContext(context.Background(), "UPDATE password_reset_tokens SET used_at = $2 WHERE token = $1", strings.TrimSpace(token), store.now()); err != nil {
 		return fmt.Errorf("mark password reset token used: %w", err)
 	}
 	if _, err := tx.ExecContext(context.Background(), "DELETE FROM sessions WHERE user_id = $1", userID); err != nil {
@@ -551,10 +551,10 @@ func (store *SQLStore) ExportUserData(userID string, currentToken string) (Expor
 	}
 
 	var commentCount int
-	_ = store.db.QueryRowContext(context.Background(), "SELECT COUNT(*)::int FROM comments WHERE author_id = $1", userID).Scan(&commentCount)
+	_ = store.db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM comments WHERE author_id = $1", userID).Scan(&commentCount)
 
 	var bookmarkCount int
-	_ = store.db.QueryRowContext(context.Background(), "SELECT COUNT(*)::int FROM post_bookmarks WHERE user_id = $1", userID).Scan(&bookmarkCount)
+	_ = store.db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM post_bookmarks WHERE user_id = $1", userID).Scan(&bookmarkCount)
 
 	return ExportData{
 		User:          user,
@@ -610,9 +610,9 @@ func (store *SQLStore) listSessions(ctx context.Context, userID string, currentT
 		SELECT token, created_at, expires_at
 		FROM sessions
 		WHERE user_id = $1
-			AND expires_at > now()
+			AND expires_at > $2
 		ORDER BY created_at DESC
-	`, userID)
+	`, userID, store.now())
 	if err != nil {
 		return nil, fmt.Errorf("query sessions: %w", err)
 	}

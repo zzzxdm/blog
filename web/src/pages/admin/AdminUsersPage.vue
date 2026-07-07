@@ -16,11 +16,14 @@ import {
   type ManagedUser,
   type UserStats
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 import { downloadJson, exportFileName } from "../../shared/download";
+import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
 
 const users = ref<ManagedUser[]>([]);
 const toast = useToastStore();
+const confirmDialog = useConfirmStore();
 const stats = ref<UserStats>({ total: 0, emailVerified: 0, authors: 0, muted: 0, banned: 0 });
 const loading = ref(false);
 const exporting = ref(false);
@@ -105,6 +108,11 @@ function viewUser(user: ManagedUser) {
 }
 
 async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
+  const confirmed = await confirmDialog.open(statusConfirmOptions(user, status));
+  if (!confirmed) {
+    return;
+  }
+
   actingId.value = user.id;
   error.value = "";
   message.value = "";
@@ -119,6 +127,32 @@ async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
   } finally {
     actingId.value = "";
   }
+}
+
+function statusConfirmOptions(user: ManagedUser, status: ManagedUser["status"]) {
+  if (status === "muted") {
+    return {
+      title: `禁言 ${user.displayName}`,
+      message: "禁言后该用户不能继续发表评论，已有内容不会被删除。",
+      confirmText: "禁言用户",
+      tone: "danger" as const
+    };
+  }
+  if (status === "banned") {
+    return {
+      title: `封禁 ${user.displayName}`,
+      message: "封禁后该用户将无法正常使用账号功能，请确认这是预期操作。",
+      confirmText: "封禁用户",
+      tone: "danger" as const
+    };
+  }
+
+  return {
+    title: `解除限制 ${user.displayName}`,
+    message: "解除后该用户会恢复正常账号状态。",
+    confirmText: "解除限制",
+    tone: "success" as const
+  };
 }
 
 async function setRole(user: ManagedUser, role: string) {
@@ -235,7 +269,13 @@ async function resetPassword(user: ManagedUser) {
 }
 
 async function restoreUser(user: ManagedUser) {
-  if (!window.confirm(`确定恢复 ${user.displayName} 吗？恢复后该账号可以重新登录，已失效的旧会话不会恢复。`)) {
+  const confirmed = await confirmDialog.open({
+    title: `恢复 ${user.displayName}`,
+    message: "恢复后该账号可以重新登录，已失效的旧会话不会恢复。",
+    confirmText: "恢复用户",
+    tone: "success"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -256,7 +296,13 @@ async function restoreUser(user: ManagedUser) {
 }
 
 async function deleteUser(user: ManagedUser) {
-  if (!window.confirm(`确定删除 ${user.displayName} 吗？该用户会被标记为已删除并退出所有会话。`)) {
+  const confirmed = await confirmDialog.open({
+    title: `删除 ${user.displayName}`,
+    message: "该用户会被标记为已删除并退出所有会话。",
+    confirmText: "删除用户",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -300,13 +346,7 @@ function statusClass(status: ManagedUser["status"]) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 </script>
 

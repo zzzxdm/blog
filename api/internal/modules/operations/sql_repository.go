@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"blog/api/internal/database"
 )
 
 const (
@@ -247,13 +249,13 @@ func (repo *SQLRepository) queryStatsTotals(ctx context.Context, spec statsRange
 	var totals sqlStatsTotals
 	err := repo.db.QueryRowContext(ctx, `
 		SELECT
-			count(*)::int,
-			COALESCE(sum(p.view_count), 0)::int,
-			COALESCE(avg(p.reading_time), 0)::float8,
-			COALESCE(sum(p.comment_count), 0)::int,
-			COALESCE(sum(p.like_count), 0)::int,
-			COALESCE(sum(p.dislike_count), 0)::int,
-			COALESCE(sum(COALESCE(interactions.bookmark_count, 0)), 0)::int
+			count(*),
+			COALESCE(sum(p.view_count), 0),
+			COALESCE(avg(p.reading_time), 0),
+			COALESCE(sum(p.comment_count), 0),
+			COALESCE(sum(p.like_count), 0),
+			COALESCE(sum(p.dislike_count), 0),
+			COALESCE(sum(COALESCE(interactions.bookmark_count, 0)), 0)
 		FROM posts p
 		LEFT JOIN post_interaction_stats interactions ON interactions.post_slug = p.slug
 		WHERE p.status = 'published'
@@ -277,38 +279,38 @@ func (repo *SQLRepository) queryStatsTotals(ctx context.Context, spec statsRange
 
 func (repo *SQLRepository) queryStatsTrend(ctx context.Context, spec statsRangeSpec) ([]BarPoint, error) {
 	bucket := spec.trendBucket()
-	rows, err := repo.db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
-			date_trunc('%s', COALESCE(p.published_at, p.created_at)) AS bucket,
-			COALESCE(sum(p.view_count), 0)::int AS views
+			COALESCE(p.published_at, p.created_at) AS published_at,
+			p.view_count
 		FROM posts p
 		WHERE p.status = 'published'
 			AND COALESCE(p.published_at, p.created_at) >= $1
 			AND COALESCE(p.published_at, p.created_at) < $2
-		GROUP BY bucket
-		ORDER BY bucket ASC
-	`, bucket), spec.Start, spec.End)
+		ORDER BY COALESCE(p.published_at, p.created_at) ASC
+	`, spec.Start, spec.End)
 	if err != nil {
 		return nil, fmt.Errorf("query stats trend: %w", err)
 	}
 	defer rows.Close()
 
-	type trendPoint struct {
-		Bucket time.Time
-		Views  int
-	}
-
-	points := make([]trendPoint, 0)
+	points := make(map[time.Time]int)
+	order := make([]time.Time, 0)
 	maxViews := 0
 	for rows.Next() {
-		var point trendPoint
-		if err := rows.Scan(&point.Bucket, &point.Views); err != nil {
+		var publishedAt database.FlexibleTime
+		var views int
+		if err := rows.Scan(&publishedAt, &views); err != nil {
 			return nil, fmt.Errorf("scan stats trend: %w", err)
 		}
-		if point.Views > maxViews {
-			maxViews = point.Views
+		bucketAt := trendBucketStart(publishedAt.Time, bucket)
+		if _, ok := points[bucketAt]; !ok {
+			order = append(order, bucketAt)
 		}
-		points = append(points, point)
+		points[bucketAt] += views
+		if points[bucketAt] > maxViews {
+			maxViews = points[bucketAt]
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate stats trend: %w", err)
@@ -317,31 +319,49 @@ func (repo *SQLRepository) queryStatsTrend(ctx context.Context, spec statsRangeS
 		return []BarPoint{{Label: "暂无", Value: "0", Percent: 0}}, nil
 	}
 
-	result := make([]BarPoint, 0, len(points))
-	for _, point := range points {
+	result := make([]BarPoint, 0, len(order))
+	for _, bucketAt := range order {
+		views := points[bucketAt]
 		result = append(result, BarPoint{
-			Label:   formatTrendLabel(point.Bucket, spec.Key),
-			Value:   formatStatNumber(point.Views),
-			Percent: barPercent(point.Views, maxViews),
+			Label:   formatTrendLabel(bucketAt, spec.Key),
+			Value:   formatStatNumber(views),
+			Percent: barPercent(views, maxViews),
 		})
 	}
 
 	return result, nil
 }
 
+func trendBucketStart(value time.Time, bucket string) time.Time {
+	value = value.In(time.Local)
+	switch bucket {
+	case "month":
+		return time.Date(value.Year(), value.Month(), 1, 0, 0, 0, 0, value.Location())
+	case "week":
+		weekday := int(value.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		start := value.AddDate(0, 0, -(weekday - 1))
+		return time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, start.Location())
+	default:
+		return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, value.Location())
+	}
+}
+
 func (repo *SQLRepository) queryTopPosts(ctx context.Context, spec statsRangeSpec) ([]TopPost, error) {
 	rows, err := repo.db.QueryContext(ctx, `
-		SELECT
-			p.title,
-			p.view_count,
-			COALESCE(interactions.bookmark_count, 0)::int AS bookmark_count,
-			p.comment_count,
-			(
-				p.comment_count +
-				p.like_count +
-				p.dislike_count +
-				COALESCE(interactions.bookmark_count, 0)
-			)::int AS interaction_count
+			SELECT
+				p.title,
+				p.view_count,
+				COALESCE(interactions.bookmark_count, 0) AS bookmark_count,
+				p.comment_count,
+				(
+					p.comment_count +
+					p.like_count +
+					p.dislike_count +
+					COALESCE(interactions.bookmark_count, 0)
+				) AS interaction_count
 		FROM posts p
 		LEFT JOIN post_interaction_stats interactions ON interactions.post_slug = p.slug
 		WHERE p.status = 'published'
@@ -385,8 +405,8 @@ func (repo *SQLRepository) queryStatsSources(ctx context.Context, spec statsRang
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
 			p.source,
-			count(*)::int AS post_count,
-			COALESCE(sum(p.view_count), 0)::int AS views
+			count(*) AS post_count,
+			COALESCE(sum(p.view_count), 0) AS views
 		FROM posts p
 		WHERE p.status = 'published'
 			AND COALESCE(p.published_at, p.created_at) >= $1
@@ -448,7 +468,7 @@ func (repo *SQLRepository) queryStatsSources(ctx context.Context, spec statsRang
 
 func (repo *SQLRepository) queryTopTags(ctx context.Context, spec statsRangeSpec) ([]SearchTerm, error) {
 	rows, err := repo.db.QueryContext(ctx, `
-		SELECT t.name, count(*)::int AS post_count
+		SELECT t.name, count(*) AS post_count
 		FROM posts p
 		JOIN post_tags pt ON pt.post_id = p.id
 		JOIN tags t ON t.id = pt.tag_id
@@ -480,11 +500,11 @@ func (repo *SQLRepository) queryTopTags(ctx context.Context, spec statsRangeSpec
 }
 
 func (repo *SQLRepository) queryStatsSuggestions(ctx context.Context, totals sqlStatsTotals) ([]ContentSuggestion, error) {
-	pendingComments, err := repo.countRows(ctx, "SELECT count(*)::int FROM comments WHERE status = 'pending'")
+	pendingComments, err := repo.countRows(ctx, "SELECT count(*) FROM comments WHERE status = 'pending'")
 	if err != nil {
 		return nil, fmt.Errorf("count pending comments: %w", err)
 	}
-	pendingSubmissions, err := repo.countRows(ctx, "SELECT count(*)::int FROM submissions WHERE status = 'submitted'")
+	pendingSubmissions, err := repo.countRows(ctx, "SELECT count(*) FROM submissions WHERE status = 'submitted'")
 	if err != nil {
 		return nil, fmt.Errorf("count pending submissions: %w", err)
 	}

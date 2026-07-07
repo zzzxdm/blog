@@ -19,6 +19,8 @@ import {
   type TopicStatus,
   type TopicTone
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
+import { useConfirmStore } from "../../stores/confirm";
 
 type SelectOption = {
   value: string;
@@ -26,6 +28,7 @@ type SelectOption = {
   meta: string;
 };
 
+const confirmDialog = useConfirmStore();
 const topics = ref<Topic[]>([]);
 const loading = ref(false);
 const saving = ref(false);
@@ -198,7 +201,13 @@ async function saveTopic() {
 }
 
 async function removeTopic(topic: Topic) {
-  if (!window.confirm(`删除专题「${topic.title}」？公开页面将不再展示这个专题。`)) {
+  const confirmed = await confirmDialog.open({
+    title: `删除专题「${topic.title}」`,
+    message: "公开页面将不再展示这个专题，关联文章不会被删除。",
+    confirmText: "删除专题",
+    tone: "danger"
+  });
+  if (!confirmed) {
     return;
   }
 
@@ -304,15 +313,7 @@ function toneText(value: TopicTone) {
 }
 
 function formatDate(value?: string) {
-  if (!value) {
-    return "暂无更新";
-  }
-
-  return new Date(value).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
+  return formatDateTime(value, "暂无更新");
 }
 </script>
 

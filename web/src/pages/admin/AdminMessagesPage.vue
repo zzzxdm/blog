@@ -13,6 +13,7 @@ import {
   type MessageType,
   type StationMessage
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 import { downloadJson, exportFileName } from "../../shared/download";
 
 const messages = ref<StationMessage[]>([]);
@@ -230,12 +231,7 @@ function viewMessage(item: StationMessage) {
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return formatDateTime(value);
 }
 
 function typeText(value: MessageType) {

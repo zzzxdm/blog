@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"blog/api/internal/database"
 	"blog/api/internal/modules/auth"
 )
 
@@ -147,8 +148,8 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 			u.email_verified,
 			COALESCE((SELECT max(s.created_at) FROM sessions s WHERE s.user_id = u.id), u.created_at) AS last_login_at,
 			u.created_at,
-			(SELECT count(*)::int FROM comments c WHERE c.author_id = u.id) AS comment_count,
-			(SELECT count(*)::int FROM post_bookmarks b WHERE b.user_id = u.id) AS bookmark_count
+				(SELECT count(*) FROM comments c WHERE c.author_id = u.id) AS comment_count,
+				(SELECT count(*) FROM post_bookmarks b WHERE b.user_id = u.id) AS bookmark_count
 			FROM users u
 			` + where + `
 			ORDER BY u.created_at DESC
@@ -159,11 +160,12 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 	if err != nil {
 		return nil, fmt.Errorf("query users: %w", err)
 	}
-	defer rows.Close()
 
 	items := make([]ManagedUser, 0)
 	for rows.Next() {
 		var user ManagedUser
+		var lastLoginAt database.FlexibleTime
+		var registeredAt database.FlexibleTime
 		if err := rows.Scan(
 			&user.ID,
 			&user.Email,
@@ -172,14 +174,28 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 			&user.Status,
 			&user.AvatarText,
 			&user.EmailVerified,
-			&user.LastLoginAt,
-			&user.RegisteredAt,
+			&lastLoginAt,
+			&registeredAt,
 			&user.CommentCount,
 			&user.BookmarkCount,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
+		user.LastLoginAt = lastLoginAt.Time
+		user.RegisteredAt = registeredAt.Time
 		user.ModerationNote = moderationNote(user.Status)
+		items = append(items, user)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close user rows: %w", err)
+	}
+
+	for index := range items {
+		user := items[index]
 		if settings, err := repo.getAccountSettings(ctx, auth.User{
 			ID:            user.ID,
 			Email:         user.Email,
@@ -189,12 +205,8 @@ func (repo *SQLRepository) queryManagedUsers(ctx context.Context, where string, 
 			AvatarText:    user.AvatarText,
 			EmailVerified: user.EmailVerified,
 		}); err == nil {
-			user.TwoFactor = settings.TwoFactor
+			items[index].TwoFactor = settings.TwoFactor
 		}
-		items = append(items, user)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate users: %w", err)
 	}
 
 	return items, nil
@@ -219,7 +231,7 @@ func userListWhere(query ListQuery) (string, []any) {
 	if keyword := strings.TrimSpace(query.Keyword); keyword != "" {
 		args = append(args, "%"+keyword+"%")
 		placeholder := fmt.Sprintf("$%d", len(args))
-		conditions = append(conditions, "(u.id ILIKE "+placeholder+" OR u.email ILIKE "+placeholder+" OR u.display_name ILIKE "+placeholder+" OR u.role ILIKE "+placeholder+" OR u.status ILIKE "+placeholder+")")
+		conditions = append(conditions, "(lower(u.id) LIKE '%' || lower("+placeholder+") || '%' OR lower(u.email) LIKE '%' || lower("+placeholder+") || '%' OR lower(u.display_name) LIKE '%' || lower("+placeholder+") || '%' OR lower(u.role) LIKE '%' || lower("+placeholder+") || '%' OR lower(u.status) LIKE '%' || lower("+placeholder+") || '%')")
 	}
 
 	if status := strings.ToLower(strings.TrimSpace(query.Status)); status != "" {
@@ -245,7 +257,7 @@ func userListWhere(query ListQuery) (string, []any) {
 
 func (repo *SQLRepository) countManagedUsers(ctx context.Context, where string, args []any) (int, error) {
 	var total int
-	if err := repo.db.QueryRowContext(ctx, "SELECT count(*)::int FROM users u "+where, args...).Scan(&total); err != nil {
+	if err := repo.db.QueryRowContext(ctx, "SELECT count(*) FROM users u "+where, args...).Scan(&total); err != nil {
 		return 0, fmt.Errorf("count users: %w", err)
 	}
 
@@ -256,11 +268,11 @@ func (repo *SQLRepository) userStats(ctx context.Context) (UserStats, error) {
 	var stats UserStats
 	if err := repo.db.QueryRowContext(ctx, `
 		SELECT
-			count(*)::int,
-			count(*) FILTER (WHERE email_verified)::int,
-			count(*) FILTER (WHERE role IN ('author', 'admin', 'editor'))::int,
-			count(*) FILTER (WHERE status = 'muted')::int,
-			count(*) FILTER (WHERE status = 'banned')::int
+			count(*),
+			COALESCE(sum(CASE WHEN email_verified THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN role IN ('author', 'admin', 'editor') THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN status = 'muted' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN status = 'banned' THEN 1 ELSE 0 END), 0)
 		FROM users
 	`).Scan(&stats.Total, &stats.EmailVerified, &stats.Authors, &stats.Muted, &stats.Banned); err != nil {
 		return UserStats{}, fmt.Errorf("count user stats: %w", err)

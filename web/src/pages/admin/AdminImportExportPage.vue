@@ -13,6 +13,7 @@ import {
   type AdminJob,
   type BackupResult
 } from "../../shared/api";
+import { formatDateTime } from "../../shared/datetime";
 import { downloadJson, exportFileName } from "../../shared/download";
 
 const runningKey = ref("");
@@ -128,7 +129,7 @@ async function createImport() {
           <button class="button" type="button" :disabled="!!runningKey" @click="runBackup">{{ runningKey === "backup" ? "生成中..." : "生成备份记录" }}</button>
           <div v-if="backup" class="review-note">
             <strong>{{ backup.fileName }}</strong>
-            <p>{{ backup.sizeLabel }} · {{ backup.status }} · {{ new Date(backup.createdAt).toLocaleString("zh-CN") }}</p>
+            <p>{{ backup.sizeLabel }} · {{ backup.status }} · {{ formatDateTime(backup.createdAt) }}</p>
           </div>
         </section>
 
@@ -164,7 +165,7 @@ async function createImport() {
               <div class="meta-row">
                 <span>{{ job.progress }}%</span>
                 <span>{{ job.fileName }}</span>
-                <span>{{ new Date(job.updatedAt).toLocaleString("zh-CN") }}</span>
+                <span>{{ formatDateTime(job.updatedAt) }}</span>
               </div>
             </article>
           </div>

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 
+import ConfirmDialogViewport from "../components/ConfirmDialogViewport.vue";
 import SiteBacktop from "../components/SiteBacktop.vue";
 import SiteFootbar from "../components/SiteFootbar.vue";
 import SiteSearch from "../components/SiteSearch.vue";
@@ -208,5 +209,6 @@ function isActiveNav(url: string) {
   <SiteFootbar v-if="showChrome" :navigation="navigation" :site-name="siteName" :beian="siteBeian" />
   <SiteSearch v-if="showChrome" v-model:open="searchOpen" />
   <SiteBacktop v-if="showChrome" />
+  <ConfirmDialogViewport />
   <ToastViewport />
 </template>

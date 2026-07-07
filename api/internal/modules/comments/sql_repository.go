@@ -172,33 +172,33 @@ func (repo *SQLRepository) UpdateStatus(ctx context.Context, commentID string, s
 	var postSlug string
 	var previousStatus string
 	err = tx.QueryRowContext(ctx, `
-		WITH current_comment AS (
-			SELECT id, post_slug, status AS previous_status
-			FROM comments
-			WHERE id = $1
-			FOR UPDATE
-		),
-		updated_comment AS (
-			UPDATE comments c
-			SET status = $2
-			FROM current_comment
-			WHERE c.id = current_comment.id
-			RETURNING c.id, current_comment.post_slug, current_comment.previous_status
-		)
-		SELECT id, post_slug, previous_status
-		FROM updated_comment
-	`, commentID, status).Scan(&id, &postSlug, &previousStatus)
+		SELECT id, post_slug, status
+		FROM comments
+		WHERE id = $1
+	`, commentID).Scan(&id, &postSlug, &previousStatus)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Comment{}, ErrCommentNotFound
 		}
+		return Comment{}, fmt.Errorf("load comment status: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx, "UPDATE comments SET status = $2 WHERE id = $1", commentID, status)
+	if err != nil {
 		return Comment{}, fmt.Errorf("update comment status: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Comment{}, fmt.Errorf("read comment status rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Comment{}, ErrCommentNotFound
 	}
 
 	if delta := approvedCommentDelta(previousStatus, status); delta != 0 {
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE posts
-			SET comment_count = GREATEST(comment_count + $2, 0)
+			SET comment_count = CASE WHEN comment_count + $2 < 0 THEN 0 ELSE comment_count + $2 END
 			WHERE slug = $1
 		`, postSlug, delta); err != nil {
 			return Comment{}, fmt.Errorf("update post comment count: %w", err)
@@ -230,44 +230,37 @@ func (repo *SQLRepository) DeleteByAuthor(ctx context.Context, commentID string,
 	var previousStatus string
 	var authorID string
 	err = tx.QueryRowContext(ctx, `
-		WITH current_comment AS (
-			SELECT id, post_slug, status AS previous_status, author_id
-			FROM comments
-			WHERE id = $1
-			FOR UPDATE
-		),
-		updated_comment AS (
-			UPDATE comments c
-			SET status = 'deleted'
-			FROM current_comment
-			WHERE c.id = current_comment.id
-				AND current_comment.author_id = $2
-			RETURNING c.id, current_comment.post_slug, current_comment.previous_status, current_comment.author_id
-		)
-		SELECT id, post_slug, previous_status, author_id
-		FROM updated_comment
-	`, commentID, userID).Scan(&id, &postSlug, &previousStatus, &authorID)
+		SELECT id, post_slug, status, author_id
+		FROM comments
+		WHERE id = $1
+	`, commentID).Scan(&id, &postSlug, &previousStatus, &authorID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			var exists bool
-			if checkErr := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM comments WHERE id = $1)", commentID).Scan(&exists); checkErr != nil {
-				return Comment{}, fmt.Errorf("check comment exists: %w", checkErr)
-			}
-			if exists {
-				return Comment{}, ErrForbidden
-			}
 			return Comment{}, ErrCommentNotFound
 		}
-		return Comment{}, fmt.Errorf("delete comment: %w", err)
+		return Comment{}, fmt.Errorf("load comment for delete: %w", err)
 	}
 
 	if authorID != userID {
 		return Comment{}, ErrForbidden
 	}
+
+	result, err := tx.ExecContext(ctx, "UPDATE comments SET status = 'deleted' WHERE id = $1 AND author_id = $2", commentID, userID)
+	if err != nil {
+		return Comment{}, fmt.Errorf("delete comment: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Comment{}, fmt.Errorf("read delete comment rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Comment{}, ErrCommentNotFound
+	}
+
 	if delta := approvedCommentDelta(previousStatus, "deleted"); delta != 0 {
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE posts
-			SET comment_count = GREATEST(comment_count + $2, 0)
+			SET comment_count = CASE WHEN comment_count + $2 < 0 THEN 0 ELSE comment_count + $2 END
 			WHERE slug = $1
 		`, postSlug, delta); err != nil {
 			return Comment{}, fmt.Errorf("update post comment count: %w", err)
@@ -310,7 +303,7 @@ func (repo *SQLRepository) ToggleLike(ctx context.Context, commentID string, use
 		if _, err := tx.ExecContext(ctx, "DELETE FROM comment_likes WHERE comment_id = $1 AND user_id = $2", commentID, userID); err != nil {
 			return Comment{}, fmt.Errorf("delete comment like: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, "UPDATE comments SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1", commentID); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE comments SET like_count = CASE WHEN like_count - 1 < 0 THEN 0 ELSE like_count - 1 END WHERE id = $1", commentID); err != nil {
 			return Comment{}, fmt.Errorf("decrement comment like count: %w", err)
 		}
 	} else {
@@ -512,13 +505,13 @@ func (repo *SQLRepository) queryComments(ctx context.Context, whereAndOrder stri
 func (repo *SQLRepository) stats(ctx context.Context, where string, arg any) (ManageStats, error) {
 	query := `
 		SELECT
-			count(*)::int,
-			count(*) FILTER (WHERE c.status = 'pending')::int,
-			count(*) FILTER (WHERE c.status = 'approved')::int,
-			count(*) FILTER (WHERE c.status = 'rejected')::int,
-			count(*) FILTER (WHERE c.status = 'spam')::int,
-			count(*) FILTER (WHERE c.status = 'deleted')::int,
-			COALESCE(sum(c.like_count), 0)::int
+			count(*),
+			COALESCE(sum(CASE WHEN c.status = 'pending' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN c.status = 'approved' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN c.status = 'rejected' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN c.status = 'spam' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(CASE WHEN c.status = 'deleted' THEN 1 ELSE 0 END), 0),
+			COALESCE(sum(c.like_count), 0)
 		FROM comments c
 		` + where
 
@@ -535,7 +528,7 @@ func (repo *SQLRepository) stats(ctx context.Context, where string, arg any) (Ma
 	}
 
 	repliesQuery := `
-		SELECT count(*)::int
+		SELECT count(*)
 		FROM comments replies
 		JOIN comments c ON c.id = replies.parent_id
 		` + where

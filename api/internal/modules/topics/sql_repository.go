@@ -33,7 +33,7 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 
 	rows, err := repo.db.QueryContext(ctx, `
 		SELECT
-			id::text,
+				CAST(id AS TEXT),
 			slug,
 			title,
 			summary,
@@ -43,23 +43,23 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 			status,
 			featured,
 			sort_order,
-			categories::text,
-			tags::text,
+				CAST(categories AS TEXT),
+				CAST(tags AS TEXT),
 			created_at,
 			updated_at
 			FROM topics
-			WHERE ($1::boolean OR status = 'active')
-			  AND ($2 = '' OR status = $2)
-			  AND (NOT $3::boolean OR featured)
-			  AND (
-				$4 = ''
-				OR slug ILIKE '%' || $4 || '%'
-				OR title ILIKE '%' || $4 || '%'
-				OR summary ILIKE '%' || $4 || '%'
-				OR image_alt ILIKE '%' || $4 || '%'
-				OR categories::text ILIKE '%' || $4 || '%'
-				OR tags::text ILIKE '%' || $4 || '%'
-			  )
+				WHERE ($1 OR status = 'active')
+				  AND ($2 = '' OR status = $2)
+				  AND (NOT $3 OR featured)
+				  AND (
+					$4 = ''
+					OR lower(slug) LIKE '%' || lower($4) || '%'
+					OR lower(title) LIKE '%' || lower($4) || '%'
+					OR lower(summary) LIKE '%' || lower($4) || '%'
+					OR lower(image_alt) LIKE '%' || lower($4) || '%'
+					OR lower(CAST(categories AS TEXT)) LIKE '%' || lower($4) || '%'
+					OR lower(CAST(tags AS TEXT)) LIKE '%' || lower($4) || '%'
+				  )
 			ORDER BY sort_order ASC, title ASC
 			LIMIT $5 OFFSET $6
 		`, query.All, status, query.Featured, keyword, pageSize, offset)
@@ -91,7 +91,7 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Topic, error) {
 	row := repo.db.QueryRowContext(ctx, `
 		SELECT
-			id::text,
+				CAST(id AS TEXT),
 			slug,
 			title,
 			summary,
@@ -101,8 +101,8 @@ func (repo *SQLRepository) GetBySlug(ctx context.Context, slug string) (Topic, e
 			status,
 			featured,
 			sort_order,
-			categories::text,
-			tags::text,
+			CAST(categories AS TEXT),
+			CAST(tags AS TEXT),
 			created_at,
 			updated_at
 		FROM topics
@@ -150,8 +150,8 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 			INSERT INTO topics (
 				slug, title, summary, cover_image, image_alt, tone, status, featured, sort_order, categories, tags
 			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb)
-			RETURNING id::text
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			RETURNING CAST(id AS TEXT)
 		`,
 			slug,
 			title,
@@ -184,10 +184,10 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 		    status = $8,
 		    featured = $9,
 		    sort_order = $10,
-		    categories = $11::jsonb,
-		    tags = $12::jsonb
-		WHERE id::text = $1
-		RETURNING id::text
+		    categories = $11,
+		    tags = $12
+		WHERE CAST(id AS TEXT) = $1
+		RETURNING CAST(id AS TEXT)
 	`,
 		id,
 		slug,
@@ -213,7 +213,7 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 }
 
 func (repo *SQLRepository) Delete(ctx context.Context, id string) error {
-	result, err := repo.db.ExecContext(ctx, "DELETE FROM topics WHERE id::text = $1", id)
+	result, err := repo.db.ExecContext(ctx, "DELETE FROM topics WHERE CAST(id AS TEXT) = $1", id)
 	if err != nil {
 		return fmt.Errorf("delete topic: %w", err)
 	}
@@ -232,19 +232,19 @@ func (repo *SQLRepository) Delete(ctx context.Context, id string) error {
 func (repo *SQLRepository) count(ctx context.Context, all bool, status string, featured bool, keyword string) (int, error) {
 	var total int
 	if err := repo.db.QueryRowContext(ctx, `
-		SELECT count(*)::int
+		SELECT count(*)
 		FROM topics
-		WHERE ($1::boolean OR status = 'active')
+		WHERE ($1 OR status = 'active')
 		  AND ($2 = '' OR status = $2)
-		  AND (NOT $3::boolean OR featured)
+		  AND (NOT $3 OR featured)
 		  AND (
 			$4 = ''
-			OR slug ILIKE '%' || $4 || '%'
-			OR title ILIKE '%' || $4 || '%'
-			OR summary ILIKE '%' || $4 || '%'
-			OR image_alt ILIKE '%' || $4 || '%'
-			OR categories::text ILIKE '%' || $4 || '%'
-			OR tags::text ILIKE '%' || $4 || '%'
+			OR lower(slug) LIKE '%' || lower($4) || '%'
+			OR lower(title) LIKE '%' || lower($4) || '%'
+			OR lower(summary) LIKE '%' || lower($4) || '%'
+			OR lower(image_alt) LIKE '%' || lower($4) || '%'
+			OR lower(CAST(categories AS TEXT)) LIKE '%' || lower($4) || '%'
+			OR lower(CAST(tags AS TEXT)) LIKE '%' || lower($4) || '%'
 		  )
 	`, all, status, featured, strings.TrimSpace(keyword)).Scan(&total); err != nil {
 		return 0, fmt.Errorf("count topics: %w", err)
@@ -256,7 +256,7 @@ func (repo *SQLRepository) count(ctx context.Context, all bool, status string, f
 func (repo *SQLRepository) getByID(ctx context.Context, id string) (Topic, error) {
 	row := repo.db.QueryRowContext(ctx, `
 		SELECT
-			id::text,
+				CAST(id AS TEXT),
 			slug,
 			title,
 			summary,
@@ -266,12 +266,12 @@ func (repo *SQLRepository) getByID(ctx context.Context, id string) (Topic, error
 			status,
 			featured,
 			sort_order,
-			categories::text,
-			tags::text,
+			CAST(categories AS TEXT),
+			CAST(tags AS TEXT),
 			created_at,
 			updated_at
 		FROM topics
-		WHERE id::text = $1
+		WHERE CAST(id AS TEXT) = $1
 	`, id)
 
 	item, err := scanTopic(row)
@@ -292,7 +292,7 @@ func (repo *SQLRepository) duplicate(ctx context.Context, id string, slug string
 			SELECT 1
 			FROM topics
 			WHERE (lower(slug) = lower($1) OR lower(title) = lower($2))
-			  AND ($3 = '' OR id::text <> $3)
+			  AND ($3 = '' OR CAST(id AS TEXT) <> $3)
 		)
 	`, slug, title, strings.TrimSpace(id)).Scan(&duplicate); err != nil {
 		return false, fmt.Errorf("check topic duplicate: %w", err)

@@ -11,7 +11,9 @@ type Config struct {
 	HTTPAddr     string
 	WebOrigin    string
 	PublicURL    string
+	DBType       string
 	DatabaseURL  string
+	SQLitePath   string
 	RedisAddr    string
 	UploadDir    string
 	SMTPHost     string
@@ -29,7 +31,9 @@ func Load() Config {
 		HTTPAddr:     getenv("API_HTTP_ADDR", ":8080"),
 		WebOrigin:    getenv("WEB_ORIGIN", "http://localhost:5173"),
 		PublicURL:    getenv("PUBLIC_URL", getenv("WEB_ORIGIN", "http://localhost:5173")),
+		DBType:       getenv("DB_TYPE", "sqlite"),
 		DatabaseURL:  getenv("DATABASE_URL", "postgres://blog:blog@localhost:5432/blog?sslmode=disable"),
+		SQLitePath:   getenv("SQLITE_PATH", "data/blog.sqlite"),
 		RedisAddr:    getenv("REDIS_ADDR", "localhost:6379"),
 		UploadDir:    getenv("UPLOAD_DIR", "uploads"),
 		SMTPHost:     getenv("SMTP_HOST", ""),
