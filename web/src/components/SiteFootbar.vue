@@ -20,13 +20,14 @@ const runtimeText = ref("");
 const siteStats = ref<SiteStats | null>(null);
 const footerItems = computed(() => orderedNavItems(props.navigation?.footerItems ?? []));
 const socialLinks = computed(() => {
-  const githubUrl = props.navigation ? props.navigation.githubUrl.trim() : "https://github.com/";
-  const contactEmail = props.navigation ? props.navigation.contactEmail.trim() : "hello@example.com";
-  const links: Array<{ id: string; label: string; href: string; title: string }> = [];
+  const githubUrl = props.navigation ? props.navigation.githubUrl.trim() : "https://github.com/zzzxdm/blog";
+  const contactEmail = props.navigation ? props.navigation.contactEmail.trim() : "admin@jecyai.com";
+  const links: Array<{ id: string; label: string; href: string; title: string; icon?: "linuxdo" }> = [];
 
   if (githubUrl) {
     links.push({ id: "github", label: "GH", href: githubUrl, title: "GitHub" });
   }
+  links.push({ id: "linuxdo", label: "LINUX DO", href: "https://linux.do/u/zzzxdm/summary", title: "Linux.do", icon: "linuxdo" });
   if (contactEmail) {
     links.push({ id: "email", label: "@", href: `mailto:${contactEmail}`, title: "邮箱" });
   }
@@ -151,7 +152,25 @@ onUnmounted(() => {
             :target="opensNewWindow(link.href) ? '_blank' : undefined"
             :rel="opensNewWindow(link.href) ? 'noreferrer' : undefined"
           >
-            {{ link.label }}
+            <svg
+              v-if="link.icon === 'linuxdo'"
+              class="linuxdo-icon"
+              viewBox="0 0 32 32"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <rect class="linuxdo-icon-back" x="4" y="4" width="24" height="24" rx="7" />
+              <clipPath id="linuxdoIconClip">
+                <circle cx="16" cy="16" r="12" />
+              </clipPath>
+              <g clip-path="url(#linuxdoIconClip)">
+                <rect class="linuxdo-icon-top" x="4" y="4" width="24" height="8" />
+                <rect class="linuxdo-icon-middle" x="4" y="12" width="24" height="10" />
+                <rect class="linuxdo-icon-bottom" x="4" y="22" width="24" height="6" />
+              </g>
+              <circle class="linuxdo-icon-ring" cx="16" cy="16" r="12" />
+            </svg>
+            <span v-else>{{ link.label }}</span>
           </a>
         </nav>
       </div>

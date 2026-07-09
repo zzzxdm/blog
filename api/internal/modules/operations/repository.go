@@ -493,8 +493,8 @@ func seedNavigation() Navigation {
 		MobileCollapse:         true,
 		ExternalLinksNewWindow: true,
 		ShowLoginEntry:         true,
-		GitHubURL:              "https://github.com/example",
-		ContactEmail:           "hello@example.com",
+		GitHubURL:              "https://github.com/zzzxdm/blog",
+		ContactEmail:           "admin@jecyai.com",
 		RSSURL:                 "",
 		Redirects: []RedirectRule{
 			{From: "/old-blog-design", To: "/posts/blog-system-design", Code: 301},
