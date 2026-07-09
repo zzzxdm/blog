@@ -2,6 +2,7 @@ package taxonomies
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,6 +36,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository) {
 func (handler *Handler) ListCategories(ctx *gin.Context) {
 	categories, err := handler.repo.ListCategories(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load categories", "error", err, "keyword", ctx.Query("q"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load categories"})
 		return
 	}
@@ -51,6 +53,7 @@ func (handler *Handler) ListCategories(ctx *gin.Context) {
 func (handler *Handler) ListTags(ctx *gin.Context) {
 	tags, err := handler.repo.ListTags(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load tags", "error", err, "keyword", ctx.Query("q"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load tags"})
 		return
 	}
@@ -172,6 +175,7 @@ func (handler *Handler) writeError(ctx *gin.Context, err error, resource string)
 		return
 	}
 
+	slog.Error("failed to update taxonomy", "error", err, "resource", resource, "id", ctx.Param("id"), "path", ctx.FullPath())
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update " + resource})
 }
 

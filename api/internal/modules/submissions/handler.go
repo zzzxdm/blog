@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -90,6 +91,7 @@ func (handler *Handler) ListMine(ctx *gin.Context) {
 		All:      boolQuery(ctx.Query("all")),
 	})
 	if err != nil {
+		slog.Error("failed to load user submissions", "error", err, "userID", user.ID, "status", ctx.Query("status"), "keyword", ctx.Query("q"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submissions"})
 		return
 	}
@@ -261,6 +263,7 @@ func (handler *Handler) requireSubmissionSettings(ctx *gin.Context) (operations.
 
 	settings, err := handler.settings.GetSettings(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load submission settings", "error", err, "path", ctx.FullPath())
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submission settings"})
 		return operations.Settings{}, false
 	}
@@ -287,6 +290,7 @@ func (handler *Handler) verifyTurnstile(ctx *gin.Context, settings operations.Se
 
 	ok, err := handler.turnstileVerifier.Verify(ctx.Request.Context(), settings.TurnstileSecretKey, token, ctx.ClientIP())
 	if err != nil {
+		slog.Error("turnstile verification failed", "error", err, "ip", ctx.ClientIP())
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": "turnstile verification failed"})
 		return false
 	}
@@ -306,6 +310,7 @@ func (handler *Handler) requireSubmissionSlot(ctx *gin.Context, userID string, s
 
 	total, err := handler.repo.CountSubmittedSince(ctx.Request.Context(), userID, since, excludeID)
 	if err != nil {
+		slog.Error("failed to load submission limit", "error", err, "userID", userID, "since", since, "excludeID", excludeID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submission limit"})
 		return false
 	}
@@ -331,6 +336,7 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 		All:      boolQuery(ctx.Query("all")),
 	})
 	if err != nil {
+		slog.Error("failed to load admin submissions", "error", err, "status", ctx.Query("status"), "keyword", ctx.Query("q"), "sort", ctx.Query("sort"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load submissions"})
 		return
 	}
@@ -419,6 +425,7 @@ func (handler *Handler) ArchivePublished(ctx *gin.Context) {
 		return
 	}
 	if handler.archiver == nil {
+		slog.Error("post archiver is unavailable", "submissionID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post archiver is unavailable"})
 		return
 	}
@@ -437,6 +444,7 @@ func (handler *Handler) ArchivePublished(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "published post not found"})
 			return
 		}
+		slog.Error("failed to archive published post", "error", err, "submissionID", current.ID, "postSlug", current.PublishedPostSlug, "reviewerID", reviewer.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive published post"})
 		return
 	}
@@ -469,6 +477,7 @@ func (handler *Handler) RestorePublished(ctx *gin.Context) {
 		return
 	}
 	if handler.restorer == nil {
+		slog.Error("post restorer is unavailable", "submissionID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post restorer is unavailable"})
 		return
 	}
@@ -487,6 +496,7 @@ func (handler *Handler) RestorePublished(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "archived post not found"})
 			return
 		}
+		slog.Error("failed to restore published post", "error", err, "submissionID", current.ID, "postSlug", current.PublishedPostSlug, "reviewerID", reviewer.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore published post"})
 		return
 	}
@@ -527,6 +537,7 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 		}
 
 		if handler.publisher == nil {
+			slog.Error("post publisher is unavailable", "submissionID", submission.ID, "reviewerID", reviewer.ID)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post publisher is unavailable"})
 			return
 		}
@@ -544,6 +555,7 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 			AuthorName: submission.AuthorName,
 		}, submission.PublishedPostSlug)
 		if err != nil {
+			slog.Error("failed to publish submission", "error", err, "submissionID", submission.ID, "reviewerID", reviewer.ID, "slug", defaultString(strings.TrimSpace(request.Slug), submission.Slug))
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish submission"})
 			return
 		}
@@ -557,6 +569,7 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 	}
 
 	if _, err := handler.messages.Create(ctx.Request.Context(), reviewMessage(submission, request.Action), reviewer); err != nil {
+		slog.Error("failed to create review message", "error", err, "submissionID", submission.ID, "reviewerID", reviewer.ID, "recipientID", submission.AuthorID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create review message"})
 		return
 	}
@@ -566,6 +579,7 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 
 func (handler *Handler) publishPrivateSubmission(ctx *gin.Context, user auth.User, submission Submission) (Submission, error) {
 	if handler.publisher == nil {
+		slog.Error("post publisher is unavailable for private submission", "submissionID", submission.ID, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post publisher is unavailable"})
 		return Submission{}, ErrInvalidSubmission
 	}
@@ -587,6 +601,7 @@ func (handler *Handler) publishPrivateSubmission(ctx *gin.Context, user auth.Use
 		AuthorName: defaultString(strings.TrimSpace(submission.AuthorName), user.DisplayName),
 	}, submission.PublishedPostSlug)
 	if err != nil {
+		slog.Error("failed to publish private article", "error", err, "submissionID", submission.ID, "userID", user.ID, "slug", submission.Slug)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish private article"})
 		return Submission{}, err
 	}
@@ -611,6 +626,7 @@ func (handler *Handler) writeSubmissionError(ctx *gin.Context, err error) {
 	case errors.Is(err, ErrInvalidReview):
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid review action"})
 	default:
+		slog.Error("failed to update submission", "error", err, "path", ctx.FullPath(), "submissionID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update submission"})
 	}
 }

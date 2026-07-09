@@ -3,6 +3,7 @@ package topics
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -62,6 +63,7 @@ func (handler *Handler) list(ctx *gin.Context, admin bool) {
 
 	result, err := handler.repo.List(ctx.Request.Context(), query)
 	if err != nil {
+		slog.Error("failed to load topics", "error", err, "admin", admin, "status", query.Status, "keyword", query.Keyword, "featured", query.Featured)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load topics"})
 		return
 	}
@@ -100,6 +102,7 @@ func (handler *Handler) ListTopicPosts(ctx *gin.Context) {
 	pageSize := normalizePageSize(intQuery(ctx.Query("pageSize"), 10))
 	allPosts, err := handler.loadAllPublishedPosts(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load topic posts", "error", err, "topicSlug", ctx.Param("slug"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load topic posts"})
 		return
 	}
@@ -166,6 +169,7 @@ func (handler *Handler) enrichTopics(ctx context.Context, items []Topic) {
 
 	allPosts, err := handler.loadAllPublishedPosts(ctx)
 	if err != nil {
+		slog.Warn("failed to enrich topics with posts", "error", err)
 		return
 	}
 
@@ -177,6 +181,7 @@ func (handler *Handler) enrichTopics(ctx context.Context, items []Topic) {
 func (handler *Handler) enrichTopic(ctx context.Context, topic *Topic) {
 	allPosts, err := handler.loadAllPublishedPosts(ctx)
 	if err != nil {
+		slog.Warn("failed to enrich topic with posts", "error", err, "topicSlug", topic.Slug)
 		return
 	}
 
@@ -269,6 +274,7 @@ func (handler *Handler) writeError(ctx *gin.Context, err error) {
 		return
 	}
 
+	slog.Error("failed to update topic", "error", err, "id", ctx.Param("id"), "slug", ctx.Param("slug"), "path", ctx.FullPath())
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update topic"})
 }
 

@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -75,6 +76,7 @@ func (handler *Handler) GetSettings(ctx *gin.Context) {
 
 	settings, err := handler.repo.GetSettings(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load admin settings", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load settings"})
 		return
 	}
@@ -85,6 +87,7 @@ func (handler *Handler) GetSettings(ctx *gin.Context) {
 func (handler *Handler) GetPublicSettings(ctx *gin.Context) {
 	settings, err := handler.repo.GetSettings(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load public settings", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load settings"})
 		return
 	}
@@ -105,6 +108,7 @@ func (handler *Handler) UpdateSettings(ctx *gin.Context) {
 
 	settings, err := handler.repo.UpdateSettings(ctx.Request.Context(), request)
 	if err != nil {
+		slog.Error("failed to update settings", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update settings"})
 		return
 	}
@@ -119,6 +123,7 @@ func (handler *Handler) SendTestMail(ctx *gin.Context) {
 
 	result, err := handler.repo.SendTestMail(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to send test mail", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send test mail"})
 		return
 	}
@@ -133,6 +138,7 @@ func (handler *Handler) RunBackup(ctx *gin.Context) {
 
 	result, err := handler.repo.RunBackup(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to run backup", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to run backup"})
 		return
 	}
@@ -155,6 +161,7 @@ func (handler *Handler) GetPublicNavigation(ctx *gin.Context) {
 func (handler *Handler) writeNavigation(ctx *gin.Context) {
 	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load navigation", "error", err, "path", ctx.FullPath())
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load navigation"})
 		return
 	}
@@ -175,6 +182,7 @@ func (handler *Handler) UpdateNavigation(ctx *gin.Context) {
 
 	navigation, err := handler.repo.UpdateNavigation(ctx.Request.Context(), request)
 	if err != nil {
+		slog.Error("failed to update navigation", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update navigation"})
 		return
 	}
@@ -189,6 +197,7 @@ func (handler *Handler) ListRedirects(ctx *gin.Context) {
 
 	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load redirects", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load redirects"})
 		return
 	}
@@ -212,6 +221,7 @@ func (handler *Handler) CreateRedirect(ctx *gin.Context) {
 
 	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load redirects before create", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load redirects"})
 		return
 	}
@@ -225,6 +235,7 @@ func (handler *Handler) CreateRedirect(ctx *gin.Context) {
 	navigation.Redirects = updatedRedirects
 	navigation, err = handler.repo.UpdateNavigation(ctx.Request.Context(), navigation)
 	if err != nil {
+		slog.Error("failed to save redirect", "error", err, "from", request.From, "to", request.To)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save redirect"})
 		return
 	}
@@ -251,6 +262,7 @@ func (handler *Handler) ReplaceRedirects(ctx *gin.Context) {
 
 	navigation, err := handler.repo.GetNavigation(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load redirects before replace", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load redirects"})
 		return
 	}
@@ -258,6 +270,7 @@ func (handler *Handler) ReplaceRedirects(ctx *gin.Context) {
 	navigation.Redirects = normalizeRedirects(request.Items)
 	navigation, err = handler.repo.UpdateNavigation(ctx.Request.Context(), navigation)
 	if err != nil {
+		slog.Error("failed to save redirects", "error", err, "count", len(request.Items))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save redirects"})
 		return
 	}
@@ -282,6 +295,7 @@ func (handler *Handler) ListMedia(ctx *gin.Context) {
 		All:      boolQuery(ctx.Query("all")),
 	})
 	if err != nil {
+		slog.Error("failed to load media", "error", err, "keyword", ctx.Query("q"), "type", ctx.Query("type"), "sort", ctx.Query("sort"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load media"})
 		return
 	}
@@ -360,6 +374,7 @@ func (handler *Handler) uploadMedia(ctx *gin.Context, user auth.User, defaultCat
 	objectKey := filepath.ToSlash(filepath.Join(relativeDir, storedName))
 	mediaURL, err := handler.storage.Save(ctx.Request.Context(), objectKey, file, fileHeader.Size, contentType)
 	if err != nil {
+		slog.Error("failed to save upload", "error", err, "userID", user.ID, "fileName", fileHeader.Filename, "objectKey", objectKey, "contentType", contentType, "size", fileHeader.Size)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
 		return
 	}
@@ -391,6 +406,7 @@ func (handler *Handler) uploadMedia(ctx *gin.Context, user auth.User, defaultCat
 	created, err := handler.repo.CreateMedia(ctx.Request.Context(), asset)
 	if err != nil {
 		_ = handler.storage.Delete(ctx.Request.Context(), mediaURL)
+		slog.Error("failed to record media", "error", err, "userID", user.ID, "fileName", originalName, "url", mediaURL)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record media"})
 		return
 	}
@@ -446,6 +462,7 @@ func (handler *Handler) GetStats(ctx *gin.Context) {
 
 	stats, err := handler.repo.GetStats(ctx.Request.Context(), ctx.Query("range"))
 	if err != nil {
+		slog.Error("failed to load stats", "error", err, "range", ctx.Query("range"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load stats"})
 		return
 	}
@@ -460,6 +477,7 @@ func (handler *Handler) ExportStats(ctx *gin.Context) {
 
 	stats, err := handler.repo.GetStats(ctx.Request.Context(), ctx.Query("range"))
 	if err != nil {
+		slog.Error("failed to export stats", "error", err, "range", ctx.Query("range"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export stats"})
 		return
 	}
@@ -532,6 +550,7 @@ func (handler *Handler) ListAuditLogs(ctx *gin.Context) {
 		PageSize:     parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
+		slog.Error("failed to load audit logs", "error", err, "action", ctx.Query("action"), "resourceType", ctx.Query("resourceType"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load audit logs"})
 		return
 	}
@@ -581,6 +600,7 @@ func (handler *Handler) writeMediaError(ctx *gin.Context, err error) {
 		return
 	}
 
+	slog.Error("failed to update media", "error", err, "path", ctx.FullPath(), "mediaID", ctx.Param("id"))
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -60,6 +61,7 @@ func (handler *Handler) List(ctx *gin.Context) {
 		All:      boolQuery(ctx.Query("all")),
 	})
 	if err != nil {
+		slog.Error("failed to load admin posts", "error", err, "status", ctx.Query("status"), "keyword", ctx.Query("q"), "sort", ctx.Query("sort"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load admin posts"})
 		return
 	}
@@ -114,6 +116,7 @@ func (handler *Handler) GetPreview(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "preview not found or expired"})
 			return
 		}
+		slog.Error("failed to load admin post preview", "error", err, "postID", postID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load preview"})
 		return
 	}
@@ -247,6 +250,7 @@ func (handler *Handler) writeError(ctx *gin.Context, err error) {
 		return
 	}
 
+	slog.Error("failed to update admin post", "error", err, "path", ctx.FullPath(), "postID", ctx.Param("id"), "revisionID", ctx.Param("revisionId"))
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update admin post"})
 }
 

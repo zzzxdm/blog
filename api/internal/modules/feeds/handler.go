@@ -3,6 +3,7 @@ package feeds
 import (
 	"context"
 	"encoding/xml"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ func RegisterRoutes(router gin.IRouter, postRepo posts.Repository, settingsRepo 
 func (handler *Handler) RSS(ctx *gin.Context) {
 	result, err := handler.postRepo.List(ctx.Request.Context(), posts.ListQuery{Page: 1, PageSize: 50})
 	if err != nil {
+		slog.Error("failed to load rss", "error", err)
 		ctx.String(http.StatusInternalServerError, "failed to load rss")
 		return
 	}
@@ -97,6 +99,7 @@ func (handler *Handler) siteInfo(ctx *gin.Context) (string, string) {
 func (handler *Handler) Sitemap(ctx *gin.Context) {
 	result, err := handler.postRepo.List(ctx.Request.Context(), posts.ListQuery{Page: 1, PageSize: 50})
 	if err != nil {
+		slog.Error("failed to load sitemap", "error", err)
 		ctx.String(http.StatusInternalServerError, "failed to load sitemap")
 		return
 	}

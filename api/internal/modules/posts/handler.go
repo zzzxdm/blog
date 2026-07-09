@@ -2,6 +2,7 @@ package posts
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -50,6 +51,7 @@ func (handler *Handler) ListPrivate(ctx *gin.Context) {
 	}
 	lister, ok := handler.repo.(PrivateLister)
 	if !ok {
+		slog.Error("private post listing is unavailable")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "private post listing is unavailable"})
 		return
 	}
@@ -64,6 +66,7 @@ func (handler *Handler) ListPrivate(ctx *gin.Context) {
 		PageSize: intQuery(ctx, "pageSize", 10),
 	})
 	if err != nil {
+		slog.Error("failed to load private posts", "error", err, "userID", user.ID, "role", user.Role, "keyword", ctx.Query("q"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load private posts"})
 		return
 	}
@@ -77,6 +80,7 @@ func (handler *Handler) Archive(ctx *gin.Context) {
 	}
 	archiver, ok := handler.repo.(Archiver)
 	if !ok {
+		slog.Error("post archiving is unavailable", "slug", ctx.Param("slug"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post archiving is unavailable"})
 		return
 	}
@@ -85,6 +89,7 @@ func (handler *Handler) Archive(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 			return
 		}
+		slog.Error("failed to archive post", "error", err, "slug", ctx.Param("slug"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to archive post"})
 		return
 	}
@@ -110,6 +115,7 @@ func (handler *Handler) GetBySlug(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to load post", "error", err, "slug", ctx.Param("slug"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load post"})
 		return
 	}
@@ -125,6 +131,7 @@ func mergeQuery(values url.Values, key string, value string) string {
 func (handler *Handler) Stats(ctx *gin.Context) {
 	stats, err := handler.repo.Stats(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load site stats", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load site stats"})
 		return
 	}
@@ -177,6 +184,7 @@ func (handler *Handler) list(ctx *gin.Context, forceKeyword bool) {
 
 	result, err := handler.repo.List(ctx.Request.Context(), query)
 	if err != nil {
+		slog.Error("failed to load posts", "error", err, "keyword", query.Keyword, "category", query.Category, "tag", query.Tag, "author", query.Author, "sort", query.Sort, "page", query.Page, "pageSize", query.PageSize)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load posts"})
 		return
 	}

@@ -41,12 +41,12 @@ func (repo *SQLRepository) Get(ctx context.Context, postSlug string, userID stri
 				SELECT 1
 				FROM post_bookmarks bookmark
 				WHERE bookmark.post_slug = stats.post_slug
-					AND bookmark.user_id = $2
+					AND bookmark.user_id = CAST(NULLIF($2, '') AS bigint)
 			) AS bookmarked
 		FROM post_interaction_stats stats
 		LEFT JOIN post_reactions reaction
 			ON reaction.post_slug = stats.post_slug
-			AND reaction.user_id = $2
+			AND reaction.user_id = CAST(NULLIF($2, '') AS bigint)
 		WHERE stats.post_slug = $1
 	`, postSlug, userID).Scan(
 		&summary.PostSlug,

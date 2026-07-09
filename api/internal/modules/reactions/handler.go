@@ -2,6 +2,7 @@ package reactions
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -40,6 +41,7 @@ func (handler *Handler) Get(ctx *gin.Context) {
 
 	summary, err := handler.repo.Get(ctx.Request.Context(), ctx.Param("slug"), user.ID)
 	if err != nil {
+		slog.Error("failed to load reaction", "error", err, "slug", ctx.Param("slug"), "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load reaction"})
 		return
 	}
@@ -73,6 +75,7 @@ func (handler *Handler) SetReaction(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to update reaction", "error", err, "slug", ctx.Param("slug"), "userID", user.ID, "type", request.Type)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update reaction"})
 		return
 	}
@@ -95,6 +98,7 @@ func (handler *Handler) ClearReaction(ctx *gin.Context) {
 
 	summary, err := handler.repo.SetReaction(ctx.Request.Context(), ctx.Param("slug"), user.ID, "")
 	if err != nil {
+		slog.Error("failed to clear reaction", "error", err, "slug", ctx.Param("slug"), "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear reaction"})
 		return
 	}
@@ -123,6 +127,7 @@ func (handler *Handler) SetBookmark(ctx *gin.Context) {
 
 	summary, err := handler.repo.SetBookmark(ctx.Request.Context(), ctx.Param("slug"), user.ID, request.Bookmarked)
 	if err != nil {
+		slog.Error("failed to update bookmark", "error", err, "slug", ctx.Param("slug"), "userID", user.ID, "bookmarked", request.Bookmarked)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update bookmark"})
 		return
 	}
@@ -132,6 +137,7 @@ func (handler *Handler) SetBookmark(ctx *gin.Context) {
 
 func (handler *Handler) ensurePostExists(ctx *gin.Context) bool {
 	if handler.postRepo == nil {
+		slog.Error("post repository is unavailable for reaction", "slug", ctx.Param("slug"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post repository is unavailable"})
 		return false
 	}
@@ -142,6 +148,7 @@ func (handler *Handler) ensurePostExists(ctx *gin.Context) bool {
 			return false
 		}
 
+		slog.Error("failed to load post before reaction", "error", err, "slug", ctx.Param("slug"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load post"})
 		return false
 	}
@@ -175,6 +182,7 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
+		slog.Error("failed to load bookmarks", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load bookmarks"})
 		return
 	}

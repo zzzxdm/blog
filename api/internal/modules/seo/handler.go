@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -49,6 +50,7 @@ func (handler *Handler) Article(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to load seo article", "error", err, "slug", ctx.Param("slug"))
 		ctx.String(http.StatusInternalServerError, "failed to load post")
 		return
 	}
@@ -75,6 +77,7 @@ func (handler *Handler) Article(ctx *gin.Context) {
 		Keywords: strings.Join(post.Tags, ","),
 	})
 	if err != nil {
+		slog.Error("failed to render post metadata", "error", err, "slug", post.Slug)
 		ctx.String(http.StatusInternalServerError, "failed to render post metadata")
 		return
 	}
@@ -93,6 +96,7 @@ func (handler *Handler) Article(ctx *gin.Context) {
 		Content:     post.Content,
 		JSONLD:      template.JS(jsonLD),
 	}); err != nil {
+		slog.Error("failed to render seo article", "error", err, "slug", post.Slug)
 		ctx.String(http.StatusInternalServerError, "failed to render post")
 		return
 	}

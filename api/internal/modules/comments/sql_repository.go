@@ -27,7 +27,7 @@ func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
 func (repo *SQLRepository) List(ctx context.Context, postSlug string, viewerID string) (ListResult, error) {
 	items, err := repo.queryComments(ctx, `
 		WHERE c.post_slug = $1
-			AND (c.status = 'approved' OR c.author_id = $2)
+			AND (c.status = 'approved' OR c.author_id = CAST(NULLIF($2, '') AS bigint))
 		ORDER BY c.created_at ASC
 	`, postSlug, viewerID)
 	if err != nil {

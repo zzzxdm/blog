@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -194,6 +195,7 @@ func (handler *Handler) Login(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("login failed", "error", err, "email", normalizeEmail(request.Email))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
 		return
 	}
@@ -201,6 +203,7 @@ func (handler *Handler) Login(ctx *gin.Context) {
 	handler.clearLoginFailure(request.Email)
 	sessionDays := clampSessionDays(security.SessionDays)
 	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
+		slog.Error("failed to update login session expiry", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
 		return
 	}
@@ -237,12 +240,14 @@ func (handler *Handler) Register(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("register failed", "error", err, "email", normalizeEmail(request.Email))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "register failed"})
 		return
 	}
 
 	sessionDays := clampSessionDays(security.SessionDays)
 	if err := handler.store.SetSessionExpiry(token, sessionExpiry(sessionDays)); err != nil {
+		slog.Error("failed to update register session expiry", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update session expiry"})
 		return
 	}
@@ -251,6 +256,7 @@ func (handler *Handler) Register(ctx *gin.Context) {
 
 	verificationToken, err := handler.store.RequestEmailVerification(user.ID)
 	if err != nil {
+		slog.Error("failed to create email verification after register", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification"})
 		return
 	}
@@ -291,6 +297,7 @@ func (handler *Handler) Sessions(ctx *gin.Context) {
 
 	sessions, err := handler.store.ListSessions(user.ID, currentSessionToken(ctx))
 	if err != nil {
+		slog.Error("failed to load sessions", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load sessions"})
 		return
 	}
@@ -314,6 +321,7 @@ func (handler *Handler) DeleteSession(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to delete session", "error", err, "userID", user.ID, "sessionID", sessionID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete session"})
 		return
 	}
@@ -333,6 +341,7 @@ func (handler *Handler) ExportMe(ctx *gin.Context) {
 
 	data, err := handler.store.ExportUserData(user.ID, currentSessionToken(ctx))
 	if err != nil {
+		slog.Error("failed to export account data", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export account data"})
 		return
 	}
@@ -347,6 +356,7 @@ func (handler *Handler) DeleteMe(ctx *gin.Context) {
 	}
 
 	if err := handler.store.DeleteUser(user.ID); err != nil {
+		slog.Error("failed to delete account", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete account"})
 		return
 	}
@@ -378,6 +388,7 @@ func (handler *Handler) ChangePassword(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to change password", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
 		return
 	}
@@ -393,6 +404,7 @@ func (handler *Handler) RequestEmailVerification(ctx *gin.Context) {
 
 	token, err := handler.store.RequestEmailVerification(user.ID)
 	if err != nil {
+		slog.Error("failed to create email verification", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification"})
 		return
 	}
@@ -419,6 +431,7 @@ func (handler *Handler) VerifyEmail(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to verify email", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email"})
 		return
 	}
@@ -435,6 +448,7 @@ func (handler *Handler) deliverEmailVerification(ctx *gin.Context, user User, to
 	}
 
 	if err := handler.emailSender.SendEmailVerification(ctx.Request.Context(), user, token); err != nil {
+		slog.Error("failed to send email verification", "error", err, "userID", user.ID, "email", normalizeEmail(user.Email), "failSoft", failSoft)
 		if failSoft {
 			return gin.H{
 				"delivery": "email-failed",
@@ -464,6 +478,7 @@ func (handler *Handler) verifyTurnstile(ctx *gin.Context, settings SecuritySetti
 
 	ok, err := handler.turnstileVerifier.Verify(ctx.Request.Context(), settings.TurnstileSecretKey, token, ctx.ClientIP())
 	if err != nil {
+		slog.Error("turnstile verification failed", "error", err, "ip", ctx.ClientIP())
 		ctx.JSON(http.StatusBadGateway, gin.H{"error": "turnstile verification failed"})
 		return false
 	}
@@ -484,6 +499,7 @@ func (handler *Handler) ForgotPassword(ctx *gin.Context) {
 
 	user, token, err := handler.store.RequestPasswordReset(request.Email)
 	if err != nil {
+		slog.Error("failed to create password reset", "error", err, "email", normalizeEmail(request.Email))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
 		return
 	}
@@ -514,6 +530,7 @@ func (handler *Handler) deliverPasswordReset(ctx *gin.Context, user User, token 
 	}
 
 	if err := handler.emailSender.SendPasswordSetup(ctx.Request.Context(), user, token); err != nil {
+		slog.Error("failed to send password reset email", "error", err, "userID", user.ID, "email", normalizeEmail(user.Email))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send password reset email"})
 		return nil, false
 	}
@@ -539,6 +556,7 @@ func (handler *Handler) ResetPassword(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to reset password", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
 		return
 	}
@@ -553,6 +571,7 @@ func (handler *Handler) configuredSecuritySettings(ctx *gin.Context) SecuritySet
 
 	settings, err := handler.settings.SecuritySettings(ctx.Request.Context())
 	if err != nil {
+		slog.Warn("failed to load auth security settings", "error", err)
 		return SecuritySettings{SessionDays: defaultSessionDays}
 	}
 

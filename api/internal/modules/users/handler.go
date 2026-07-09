@@ -2,6 +2,7 @@ package users
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,6 +64,7 @@ func (handler *Handler) List(ctx *gin.Context) {
 		All:      boolQuery(ctx, "all"),
 	})
 	if err != nil {
+		slog.Error("failed to load users", "error", err, "keyword", ctx.Query("q"), "status", ctx.Query("status"), "role", ctx.Query("role"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load users"})
 		return
 	}
@@ -81,6 +83,7 @@ func (handler *Handler) Get(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
+		slog.Error("failed to load user", "error", err, "userID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
 		return
 	}
@@ -93,6 +96,7 @@ func (handler *Handler) ListSessions(ctx *gin.Context) {
 		return
 	}
 	if handler.authStore == nil {
+		slog.Error("session management is unavailable", "userID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "session management is unavailable"})
 		return
 	}
@@ -103,6 +107,7 @@ func (handler *Handler) ListSessions(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
+		slog.Error("failed to load user sessions", "error", err, "userID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user sessions"})
 		return
 	}
@@ -120,6 +125,7 @@ func (handler *Handler) Export(ctx *gin.Context) {
 
 	result, err := handler.repo.List(ctx.Request.Context(), ListQuery{All: true})
 	if err != nil {
+		slog.Error("failed to export users", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export users"})
 		return
 	}
@@ -138,6 +144,7 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 		return
 	}
 	if handler.authStore == nil {
+		slog.Error("user invitation is unavailable")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "user invitation is unavailable"})
 		return
 	}
@@ -163,12 +170,14 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to invite user", "error", err, "email", strings.ToLower(strings.TrimSpace(request.Email)), "role", request.Role)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to invite user"})
 		return
 	}
 
 	managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), invited)
 	if err != nil {
+		slog.Error("failed to sync invited user", "error", err, "userID", invited.ID, "email", strings.ToLower(strings.TrimSpace(invited.Email)))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync invited user"})
 		return
 	}
@@ -186,6 +195,7 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 			response.ResetToken = ""
 			response.Delivery = "email"
 		} else {
+			slog.Warn("failed to send invitation email", "error", err, "userID", invited.ID, "email", strings.ToLower(strings.TrimSpace(invited.Email)))
 			response.Delivery = "email-failed"
 		}
 	}
@@ -216,12 +226,14 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 				return
 			}
 
+			slog.Error("failed to sync user status to auth store", "error", err, "userID", ctx.Param("id"), "status", request.Status)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user status"})
 			return
 		}
 
 		managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
 		if err != nil {
+			slog.Error("failed to sync user status to user repo", "error", err, "userID", updated.ID, "status", request.Status)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user status"})
 			return
 		}
@@ -241,6 +253,7 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to update user status", "error", err, "userID", ctx.Param("id"), "status", request.Status)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
 	}
@@ -253,6 +266,7 @@ func (handler *Handler) UpdateRole(ctx *gin.Context) {
 		return
 	}
 	if handler.authStore == nil {
+		slog.Error("role update is unavailable", "userID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "role update is unavailable"})
 		return
 	}
@@ -274,12 +288,14 @@ func (handler *Handler) UpdateRole(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to update user role", "error", err, "userID", ctx.Param("id"), "role", request.Role)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user role"})
 		return
 	}
 
 	managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
 	if err != nil {
+		slog.Error("failed to sync user role to user repo", "error", err, "userID", updated.ID, "role", request.Role)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync user role"})
 		return
 	}
@@ -306,6 +322,7 @@ func (handler *Handler) Delete(ctx *gin.Context) {
 				return
 			}
 
+			slog.Error("failed to delete user from auth store", "error", err, "userID", userID, "adminID", admin.ID)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
 			return
 		}
@@ -322,6 +339,7 @@ func (handler *Handler) Delete(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to sync deleted user", "error", err, "userID", userID, "adminID", admin.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync deleted user"})
 		return
 	}
@@ -347,12 +365,14 @@ func (handler *Handler) Restore(ctx *gin.Context) {
 				return
 			}
 
+			slog.Error("failed to restore user in auth store", "error", err, "userID", userID)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore user"})
 			return
 		}
 
 		managed, err := handler.repo.EnsureFromAuth(ctx.Request.Context(), updated)
 		if err != nil {
+			slog.Error("failed to sync restored user", "error", err, "userID", updated.ID)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync restored user"})
 			return
 		}
@@ -372,6 +392,7 @@ func (handler *Handler) Restore(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to restore user", "error", err, "userID", userID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore user"})
 		return
 	}
@@ -384,6 +405,7 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 		return
 	}
 	if handler.authStore == nil {
+		slog.Error("password reset is unavailable", "userID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "password reset is unavailable"})
 		return
 	}
@@ -395,12 +417,14 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to load user for password reset", "error", err, "userID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
 		return
 	}
 
 	_, token, err := handler.authStore.RequestPasswordReset(user.Email)
 	if err != nil {
+		slog.Error("failed to create password reset", "error", err, "userID", user.ID, "email", strings.ToLower(strings.TrimSpace(user.Email)))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
 		return
 	}
@@ -425,6 +449,7 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 			response.ResetToken = ""
 			response.Delivery = "email"
 		} else {
+			slog.Warn("failed to send admin password reset email", "error", err, "userID", user.ID, "email", strings.ToLower(strings.TrimSpace(user.Email)))
 			response.Delivery = "email-failed"
 		}
 	}
@@ -440,6 +465,7 @@ func (handler *Handler) GetAccount(ctx *gin.Context) {
 
 	settings, err := handler.repo.GetAccount(ctx.Request.Context(), user)
 	if err != nil {
+		slog.Error("failed to load account settings", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load account settings"})
 		return
 	}
@@ -461,6 +487,7 @@ func (handler *Handler) UpdateAccount(ctx *gin.Context) {
 
 	settings, err := handler.repo.UpdateAccount(ctx.Request.Context(), user, request)
 	if err != nil {
+		slog.Error("failed to update account settings", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update account settings"})
 		return
 	}
@@ -479,6 +506,7 @@ func (handler *Handler) UpdateAvatar(ctx *gin.Context) {
 
 	settings, err := handler.repo.GetAccount(ctx.Request.Context(), user)
 	if err != nil {
+		slog.Error("failed to load account settings for avatar", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load account settings"})
 		return
 	}
@@ -504,6 +532,7 @@ func (handler *Handler) UpdateAvatar(ctx *gin.Context) {
 	settings.AvatarText = avatarText
 	settings, err = handler.repo.UpdateAccount(ctx.Request.Context(), user, settings)
 	if err != nil {
+		slog.Error("failed to update avatar", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update avatar"})
 		return
 	}
@@ -538,6 +567,7 @@ func (handler *Handler) syncAccountProfile(ctx *gin.Context, userID string, sett
 		return true
 	}
 	if _, err := handler.authStore.UpdateProfile(userID, settings.DisplayName, settings.AvatarText); err != nil {
+		slog.Error("failed to sync account profile", "error", err, "userID", userID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sync account profile"})
 		return false
 	}

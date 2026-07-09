@@ -2,6 +2,7 @@ package messages
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,6 +58,7 @@ func (handler *Handler) List(ctx *gin.Context) {
 		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
+		slog.Error("failed to load user messages", "error", err, "userID", user.ID, "status", ctx.Query("status"), "type", ctx.Query("type"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
 		return
 	}
@@ -77,6 +79,7 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
+		slog.Error("failed to load admin messages", "error", err, "status", ctx.Query("status"), "type", ctx.Query("type"), "keyword", ctx.Query("q"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
 		return
 	}
@@ -95,6 +98,7 @@ func (handler *Handler) AdminExport(ctx *gin.Context) {
 		All:    true,
 	})
 	if err != nil {
+		slog.Error("failed to export messages", "error", err, "status", ctx.Query("status"), "type", ctx.Query("type"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export messages"})
 		return
 	}
@@ -127,6 +131,7 @@ func (handler *Handler) AdminCreate(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to create message", "error", err, "adminID", user.ID, "recipientID", request.RecipientID, "type", request.Type)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create message"})
 		return
 	}
@@ -169,6 +174,7 @@ func (handler *Handler) AdminBroadcast(ctx *gin.Context) {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": "recipients, title and body are required"})
 				return
 			}
+			slog.Error("failed to broadcast message", "error", err, "adminID", user.ID, "recipientID", recipient.ID, "type", request.Type)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to broadcast message"})
 			return
 		}
@@ -220,6 +226,7 @@ func (handler *Handler) AdminStatistics(ctx *gin.Context) {
 func (handler *Handler) adminMessageByID(ctx *gin.Context, id string) (Message, bool) {
 	result, err := handler.repo.AdminList(ctx.Request.Context(), ListQuery{All: true})
 	if err != nil {
+		slog.Error("failed to load admin message by id", "error", err, "messageID", id)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message"})
 		return Message{}, false
 	}
@@ -241,6 +248,7 @@ func (handler *Handler) GetMine(ctx *gin.Context) {
 
 	result, err := handler.repo.List(ctx.Request.Context(), user.ID, ListQuery{All: true})
 	if err != nil {
+		slog.Error("failed to load user message by id", "error", err, "userID", user.ID, "messageID", ctx.Param("id"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load message"})
 		return
 	}
@@ -277,6 +285,7 @@ func (handler *Handler) MarkAllRead(ctx *gin.Context) {
 
 	stats, err := handler.repo.MarkAllRead(ctx.Request.Context(), user.ID)
 	if err != nil {
+		slog.Error("failed to mark all messages read", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark messages read"})
 		return
 	}
@@ -305,6 +314,7 @@ func (handler *Handler) writeMessageError(ctx *gin.Context, err error) {
 		return
 	}
 
+	slog.Error("failed to update message", "error", err, "path", ctx.FullPath(), "messageID", ctx.Param("id"))
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update message"})
 }
 

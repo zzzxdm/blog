@@ -3,6 +3,7 @@ package comments
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -52,6 +53,7 @@ func (handler *Handler) List(ctx *gin.Context) {
 
 	result, err := handler.repo.List(ctx.Request.Context(), ctx.Param("slug"), viewer.ID)
 	if err != nil {
+		slog.Error("failed to load public comments", "error", err, "slug", ctx.Param("slug"), "viewerID", viewer.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
 		return
 	}
@@ -90,6 +92,7 @@ func (handler *Handler) Create(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to create comment", "error", err, "slug", ctx.Param("slug"), "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create comment"})
 		return
 	}
@@ -138,6 +141,7 @@ func (handler *Handler) CreateReply(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to create reply", "error", err, "parentID", ctx.Param("id"), "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create reply"})
 		return
 	}
@@ -158,6 +162,7 @@ func (handler *Handler) requireCommentSettings(ctx *gin.Context) (operations.Set
 
 	settings, err := handler.settings.GetSettings(ctx.Request.Context())
 	if err != nil {
+		slog.Error("failed to load comment settings", "error", err, "path", ctx.FullPath())
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comment settings"})
 		return operations.Settings{}, false
 	}
@@ -186,6 +191,7 @@ func (handler *Handler) ToggleLike(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to update comment like", "error", err, "commentID", ctx.Param("id"), "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update comment like"})
 		return
 	}
@@ -215,6 +221,7 @@ func (handler *Handler) Report(ctx *gin.Context) {
 			return
 		}
 
+		slog.Error("failed to report comment", "error", err, "commentID", ctx.Param("id"), "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to report comment"})
 		return
 	}
@@ -236,6 +243,7 @@ func (handler *Handler) ListMine(ctx *gin.Context) {
 		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
+		slog.Error("failed to load user comments", "error", err, "userID", user.ID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
 		return
 	}
@@ -271,6 +279,7 @@ func (handler *Handler) AdminList(ctx *gin.Context) {
 		PageSize: parsePositiveInt(ctx.Query("pageSize")),
 	})
 	if err != nil {
+		slog.Error("failed to load admin comments", "error", err, "status", ctx.Query("status"), "keyword", ctx.Query("q"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comments"})
 		return
 	}
@@ -288,6 +297,7 @@ func (handler *Handler) AdminExport(ctx *gin.Context) {
 		All:    true,
 	})
 	if err != nil {
+		slog.Error("failed to export comments", "error", err, "status", ctx.Query("status"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export comments"})
 		return
 	}
@@ -342,6 +352,7 @@ func (handler *Handler) ListReports(ctx *gin.Context) {
 
 	result, err := handler.repo.ListReports(ctx.Request.Context(), ctx.Query("status"))
 	if err != nil {
+		slog.Error("failed to load comment reports", "error", err, "status", ctx.Query("status"))
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load comment reports"})
 		return
 	}
@@ -383,6 +394,7 @@ func (handler *Handler) writeCommentError(ctx *gin.Context, err error) {
 		return
 	}
 
+	slog.Error("failed to update comment", "error", err, "path", ctx.FullPath(), "commentID", ctx.Param("id"))
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update comment"})
 }
 
