@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   ChatDotSquare,
+  Close,
   CollectionTag,
   Document,
   EditPen,
@@ -18,7 +19,7 @@ import {
   User,
   View
 } from "@element-plus/icons-vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import { getSiteSettings, type SiteSettings } from "../shared/api";
@@ -34,6 +35,7 @@ defineProps<{
 const route = useRoute();
 const siteSettings = ref<SiteSettings | null>(null);
 const sidebarCollapsed = ref(false);
+const mobileSidebarOpen = ref(false);
 const siteName = computed(() => siteSettings.value?.siteName.trim() || "云间笔记");
 const brandMark = computed(() => siteName.value.slice(0, 1) || "云");
 
@@ -62,6 +64,10 @@ onMounted(() => {
   void loadSiteSettings();
 });
 
+watch(() => route.fullPath, () => {
+  mobileSidebarOpen.value = false;
+});
+
 async function loadSiteSettings() {
   try {
     siteSettings.value = await getSiteSettings();
@@ -74,6 +80,9 @@ function isActive(to: string) {
   if (to === "/") {
     return false;
   }
+  if (to === "/admin") {
+    return route.path === "/admin";
+  }
 
   return route.path === to || route.path.startsWith(`${to}/`);
 }
@@ -82,23 +91,51 @@ function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value;
   window.localStorage.setItem("admin:sidebar-collapsed", String(sidebarCollapsed.value));
 }
+
+function toggleMobileSidebar() {
+  mobileSidebarOpen.value = !mobileSidebarOpen.value;
+}
+
+function closeMobileSidebar() {
+  mobileSidebarOpen.value = false;
+}
 </script>
 
 <template>
   <div class="mobile-admin-bar">
-    <RouterLink class="brand" to="/admin">
+    <button
+      class="icon-button mobile-admin-menu"
+      type="button"
+      aria-controls="admin-sidebar"
+      :aria-expanded="mobileSidebarOpen"
+      :aria-label="mobileSidebarOpen ? '关闭后台菜单' : '打开后台菜单'"
+      @click="toggleMobileSidebar"
+    >
+      <Close v-if="mobileSidebarOpen" class="button-icon" aria-hidden="true" />
+      <MenuIcon v-else class="button-icon" aria-hidden="true" />
+    </button>
+    <RouterLink class="brand" to="/admin" @click="closeMobileSidebar">
       <span class="brand-mark">{{ brandMark }}</span>
       <span>{{ mobileTitle || title }}</span>
     </RouterLink>
-    <slot name="mobile-action">
-      <RouterLink v-if="primaryAction && primaryActionTo" class="button" :to="primaryActionTo">{{ primaryAction }}</RouterLink>
-    </slot>
+    <div class="mobile-admin-actions">
+      <slot name="mobile-action">
+        <RouterLink v-if="primaryAction && primaryActionTo" class="button" :to="primaryActionTo">{{ primaryAction }}</RouterLink>
+      </slot>
+    </div>
   </div>
 
-  <div class="admin-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-    <aside class="admin-sidebar">
+  <div class="admin-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'mobile-sidebar-open': mobileSidebarOpen }">
+    <button
+      v-if="mobileSidebarOpen"
+      class="admin-sidebar-backdrop"
+      type="button"
+      aria-label="关闭后台菜单"
+      @click="closeMobileSidebar"
+    ></button>
+    <aside id="admin-sidebar" class="admin-sidebar">
       <div class="admin-sidebar-header">
-        <RouterLink class="admin-brand" to="/admin" :title="`${siteName}后台`">
+        <RouterLink class="admin-brand" to="/admin" :title="`${siteName}后台`" @click="closeMobileSidebar">
           <span class="brand-mark">{{ brandMark }}</span>
           <span class="admin-brand-text">{{ siteName }}后台</span>
         </RouterLink>
@@ -111,6 +148,14 @@ function toggleSidebar() {
         >
           {{ sidebarCollapsed ? "›" : "‹" }}
         </button>
+        <button
+          class="icon-button admin-mobile-close"
+          type="button"
+          aria-label="关闭后台菜单"
+          @click="closeMobileSidebar"
+        >
+          <Close class="button-icon" aria-hidden="true" />
+        </button>
       </div>
       <nav class="admin-nav" aria-label="后台导航">
         <RouterLink
@@ -119,6 +164,7 @@ function toggleSidebar() {
           :class="{ active: isActive(item.to) }"
           :to="item.to"
           :title="item.label"
+          @click="closeMobileSidebar"
         >
           <span class="admin-nav-icon" aria-hidden="true"><component :is="item.icon" /></span>
           <span class="admin-nav-label">{{ item.label }}</span>

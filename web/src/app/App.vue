@@ -17,6 +17,7 @@ const route = useRoute();
 const auth = useAuthStore();
 const messages = useMessageStore();
 const navOpen = ref(false);
+const mobileSubmenus = ref<Record<string, boolean>>({});
 const searchOpen = ref(false);
 const themeMode = ref<ThemeMode>("light");
 const categories = ref<Category[]>([]);
@@ -50,6 +51,7 @@ onMounted(() => {
 
 watch(() => route.fullPath, () => {
   navOpen.value = false;
+  mobileSubmenus.value = {};
   if (auth.user) {
     void messages.refreshUnread();
   }
@@ -137,6 +139,17 @@ function isActiveNav(url: string) {
   }
   return route.path === path || route.path.startsWith(`${path}/`);
 }
+
+function isMobileSubmenuOpen(url: string) {
+  return Boolean(mobileSubmenus.value[url]);
+}
+
+function toggleMobileSubmenu(url: string) {
+  mobileSubmenus.value = {
+    ...mobileSubmenus.value,
+    [url]: !mobileSubmenus.value[url]
+  };
+}
 </script>
 
 <template>
@@ -162,22 +175,46 @@ function isActiveNav(url: string) {
       </div>
       <nav id="site-nav" class="nav-links" :class="{ 'is-collapsible': mobileCollapse, 'is-open': navOpen }" aria-label="主导航">
         <template v-for="item in topNavItems" :key="item.id">
-          <div v-if="item.url === '/archive'" class="nav-menu-item">
-            <RouterLink :class="{ active: isActiveNav(item.url) }" class="nav-parent" :to="item.url">
-              {{ item.label }} <span class="nav-caret">⌄</span>
-            </RouterLink>
-            <div class="nav-submenu">
+          <div v-if="item.url === '/archive'" class="nav-menu-item" :class="{ 'is-mobile-open': isMobileSubmenuOpen(item.url) }">
+            <div class="nav-parent-row">
+              <RouterLink :class="{ active: isActiveNav(item.url) }" class="nav-parent" :to="item.url">
+                {{ item.label }} <span class="nav-caret nav-desktop-caret">⌄</span>
+              </RouterLink>
+              <button
+                class="nav-submenu-toggle"
+                type="button"
+                :aria-controls="`nav-submenu-${item.id}`"
+                :aria-expanded="isMobileSubmenuOpen(item.url)"
+                :aria-label="`${isMobileSubmenuOpen(item.url) ? '收起' : '展开'}${item.label}`"
+                @click="toggleMobileSubmenu(item.url)"
+              >
+                <span class="nav-caret" aria-hidden="true">⌄</span>
+              </button>
+            </div>
+            <div class="nav-submenu" :id="`nav-submenu-${item.id}`">
               <RouterLink to="/archive">全部文章</RouterLink>
               <RouterLink v-for="category in navCategories" :key="category.id" :to="`/archive?category=${encodeURIComponent(category.name)}`">
                 {{ category.name }}
               </RouterLink>
             </div>
           </div>
-          <div v-else-if="item.url === '/topics'" class="nav-menu-item">
-            <RouterLink :class="{ active: isActiveNav(item.url) }" class="nav-parent" :to="item.url">
-              {{ item.label }} <span class="nav-caret">⌄</span>
-            </RouterLink>
-            <div class="nav-submenu">
+          <div v-else-if="item.url === '/topics'" class="nav-menu-item" :class="{ 'is-mobile-open': isMobileSubmenuOpen(item.url) }">
+            <div class="nav-parent-row">
+              <RouterLink :class="{ active: isActiveNav(item.url) }" class="nav-parent" :to="item.url">
+                {{ item.label }} <span class="nav-caret nav-desktop-caret">⌄</span>
+              </RouterLink>
+              <button
+                class="nav-submenu-toggle"
+                type="button"
+                :aria-controls="`nav-submenu-${item.id}`"
+                :aria-expanded="isMobileSubmenuOpen(item.url)"
+                :aria-label="`${isMobileSubmenuOpen(item.url) ? '收起' : '展开'}${item.label}`"
+                @click="toggleMobileSubmenu(item.url)"
+              >
+                <span class="nav-caret" aria-hidden="true">⌄</span>
+              </button>
+            </div>
+            <div class="nav-submenu" :id="`nav-submenu-${item.id}`">
               <RouterLink to="/topics?topic=blog-system">博客系统</RouterLink>
               <RouterLink to="/topics?topic=vue3-content">Vue3 内容站</RouterLink>
               <RouterLink to="/topics?topic=writing-workflow">写作工作流</RouterLink>
