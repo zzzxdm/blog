@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>我的收藏 - 云间笔记</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav">
+        <a class="brand" href="./index.html" aria-label="云间笔记首页">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="./index.html">首页</a>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./archive.html">归档 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./archive.html">全部文章</a>
+              <a href="./archive.html">工程实践</a>
+              <a href="./archive.html">产品设计</a>
+              <a href="./archive.html">内容运营</a>
+            </div>
+          </div>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./topics.html">专题 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./topics.html">博客系统</a>
+              <a href="./topics.html">Vue3 内容站</a>
+              <a href="./topics.html">写作工作流</a>
+              <a href="./topics.html">资源清单</a>
+            </div>
+          </div>
+          <a href="./submit.html">投稿</a>
+          <a class="active" href="./account.html">我的</a>
+          <a href="./admin-posts.html">后台</a>
+        </nav>
+        <div class="header-actions">
+          <a class="icon-button" href="./account-messages.html" aria-label="站内信">信</a>
+          <a class="button-secondary" href="./login.html">退出</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="section-heading">
+        <div>
+          <h1>我的收藏</h1>
+          <p>整理值得反复阅读的文章，并支持按专题、分类和时间筛选。</p>
+        </div>
+        <a class="button-secondary" href="./archive.html">继续浏览</a>
+      </section>
+
+      <section class="account-layout">
+        <aside class="panel">
+          <div class="profile-card">
+            <div class="profile-hero">
+              <span class="avatar">林</span>
+              <div>
+                <strong>林一</strong>
+                <div class="meta-row">
+                  <span>已验证邮箱</span>
+                  <span>普通注册用户</span>
+                </div>
+              </div>
+            </div>
+            <nav class="account-nav" aria-label="个人中心导航">
+              <a href="./account.html">概览</a>
+              <a href="./account-comments.html">我的评论</a>
+              <a class="active" href="./account-bookmarks.html">我的收藏</a>
+              <a href="./account-submissions.html">我的投稿</a>
+              <a href="./account-messages.html">站内信</a>
+              <a href="./account-settings.html">账号设置</a>
+            </nav>
+          </div>
+        </aside>
+
+        <div class="settings-stack">
+          <section class="stats-grid" aria-label="收藏统计">
+            <div class="stat-card">
+              <span>收藏文章</span>
+              <strong>18</strong>
+            </div>
+            <div class="stat-card">
+              <span>本月新增</span>
+              <strong>5</strong>
+            </div>
+            <div class="stat-card">
+              <span>工程实践</span>
+              <strong>9</strong>
+            </div>
+            <div class="stat-card">
+              <span>待读</span>
+              <strong>4</strong>
+            </div>
+          </section>
+
+          <section class="panel">
+            <form class="archive-toolbar">
+              <input class="input" type="search" placeholder="搜索收藏文章" aria-label="搜索收藏">
+              <select class="input" aria-label="收藏分类">
+                <option>全部分类</option>
+                <option>工程实践</option>
+                <option>产品设计</option>
+                <option>内容治理</option>
+              </select>
+              <select class="input" aria-label="排序">
+                <option>最近收藏</option>
+                <option>最近发布</option>
+                <option>阅读最多</option>
+              </select>
+            </form>
+            <div class="article-list">
+              <article class="article-card">
+                <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=700&q=80" alt="开发桌面">
+                <div class="article-card-body">
+                  <div class="meta-row">
+                    <span class="tag">工程实践</span>
+                    <span>收藏于今天</span>
+                  </div>
+                  <h3><a href="./article.html">如何设计一个内容长期增长的博客系统</a></h3>
+                  <p>内容模型、发布流程、SEO、缓存、搜索和数据治理。</p>
+                  <div class="meta-row">
+                    <span>12 分钟阅读</span>
+                    <span>2,984 次阅读</span>
+                    <button class="button-secondary" type="button">取消收藏</button>
+                  </div>
+                </div>
+              </article>
+              <article class="article-card">
+                <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=700&q=80" alt="数据看板">
+                <div class="article-card-body">
+                  <div class="meta-row">
+                    <span class="tag rust">Vue3</span>
+                    <span>收藏于昨天</span>
+                  </div>
+                  <h3><a href="./article.html">Vue3 内容站的缓存和接口边界</a></h3>
+                  <p>前端状态、API 聚合、页面缓存和 SEO meta 的协作方式。</p>
+                  <div class="meta-row">
+                    <span>8 分钟阅读</span>
+                    <span>待读</span>
+                    <button class="button-secondary" type="button">取消收藏</button>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+    <site-footbar></site-footbar>
+    <script src="./footbar.js"></script>
+    <site-search></site-search>
+    <site-backtop></site-backtop>
+    <script src="./site-widgets.js"></script>
+  </body>
+</html>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>验证邮箱</title>
+  </head>
+  <body style="margin:0;background:#f5f7fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f7fb;padding:32px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e9f2;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="padding:28px 32px 18px;border-bottom:1px solid #edf0f6;">
+                <div style="font-size:14px;color:#637083;">{{.SiteName}}</div>
+                <h1 style="margin:10px 0 0;font-size:24px;line-height:1.35;color:#111827;">验证你的邮箱</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px 32px;">
+                <p style="margin:0 0 14px;font-size:15px;line-height:1.8;">你好 {{.DisplayName}}，请确认 {{.Email}} 是你的邮箱地址。</p>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.8;color:#4b5563;">点击下面的按钮即可完成验证，验证入口会在 {{.ExpiresIn}} 后失效。</p>
+                <p style="margin:0 0 24px;">
+                  <a href="{{.ActionURL}}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:12px 18px;border-radius:8px;">完成邮箱验证</a>
+                </p>
+                <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">如果按钮无法打开，也可以复制下面的链接到浏览器：</p>
+                <p style="margin:0 0 18px;word-break:break-all;font-size:13px;line-height:1.6;color:#2563eb;">{{.ActionURL}}</p>
+                <p style="margin:0;font-size:13px;color:#6b7280;">备用 token：<span style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#111827;">{{.Token}}</span></p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 32px;background:#f9fafb;color:#6b7280;font-size:12px;line-height:1.7;">如果不是你创建的账号，可以忽略这封邮件。</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

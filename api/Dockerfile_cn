@@ -1,0 +1,45 @@
+# =========================
+# Build Stage
+# =========================
+FROM golang:1.24-alpine AS build
+
+WORKDIR /app
+
+# 1️⃣ 国内 Go module 加速（必须）
+ENV GOPROXY=https://goproxy.cn,direct \
+    GOSUMDB=sum.golang.google.cn
+
+# 2️⃣ 可选：Alpine 国内源（提升 apk 下载速度）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# =========================
+# 3️⃣ 关键：依赖缓存层（必须）
+# =========================
+COPY go.mod go.sum ./
+RUN go mod download
+
+# =========================
+# 业务代码
+# =========================
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -o /bin/blog-api ./cmd/server
+
+
+# =========================
+# Runtime Stage
+# =========================
+FROM alpine:3.21
+
+WORKDIR /app
+
+# 可选：Alpine 国内源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+COPY --from=build /bin/blog-api /usr/local/bin/blog-api
+COPY --from=build /app/email-templates ./email-templates
+
+EXPOSE 8080
+
+CMD ["blog-api"]

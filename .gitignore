@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+vendor/
+.cache/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Local env
+.env
+.env.*
+!api/.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local backups
+backups/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.codex/
+.codegraph
+
+# Go
+*.test
+*.out
+api/tmp/
+api/build-errors.log
+api/uploads/
+
+# agent
+AGENTS.md
+.agents/

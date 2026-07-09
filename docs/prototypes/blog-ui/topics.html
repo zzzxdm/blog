@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>专题 - 云间笔记</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav">
+        <a class="brand" href="./index.html" aria-label="云间笔记首页">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="./index.html">首页</a>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./archive.html">归档 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./archive.html">全部文章</a>
+              <a href="./archive.html">工程实践</a>
+              <a href="./archive.html">产品设计</a>
+              <a href="./archive.html">内容运营</a>
+            </div>
+          </div>
+          <div class="nav-menu-item">
+            <a class="active nav-parent" href="./topics.html">专题 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./topics.html">博客系统</a>
+              <a href="./topics.html">Vue3 内容站</a>
+              <a href="./topics.html">写作工作流</a>
+              <a href="./topics.html">资源清单</a>
+            </div>
+          </div>
+          <a href="./submit.html">投稿</a>
+          <a href="./account.html">我的</a>
+          <a href="./admin-posts.html">后台</a>
+        </nav>
+        <div class="header-actions">
+          <button class="icon-button" data-search-open type="button" aria-label="搜索">⌕</button>
+          <button class="icon-button" aria-label="切换深色模式">◐</button>
+          <a class="button-secondary" href="./login.html">登录</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="topic-hero">
+        <div class="topic-lead">
+          <div class="meta-row">
+            <span class="tag amber">专题</span>
+            <span>24 个专题</span>
+            <span>128 篇文章</span>
+          </div>
+          <h1>围绕一个问题持续写，而不是只发布零散文章。</h1>
+          <p>专题用于组织系列内容，比如博客系统设计、Vue3 内容站、内容运营和写作工作流。读者可以按主题连续阅读。</p>
+          <a class="button" href="./archive.html">查看全部文章</a>
+        </div>
+
+        <aside class="panel">
+          <div class="panel-title">
+            <h2>热门专题</h2>
+          </div>
+          <ol class="rank-list">
+            <li>
+              <span class="rank-number">1</span>
+              <a href="./topics.html">
+                <strong>现代化博客系统</strong>
+                <span>18 篇文章 · 12.4k 阅读</span>
+              </a>
+            </li>
+            <li>
+              <span class="rank-number">2</span>
+              <a href="./topics.html">
+                <strong>Vue3 内容站</strong>
+                <span>12 篇文章 · 9.8k 阅读</span>
+              </a>
+            </li>
+            <li>
+              <span class="rank-number">3</span>
+              <a href="./topics.html">
+                <strong>写作工作流</strong>
+                <span>9 篇文章 · 6.1k 阅读</span>
+              </a>
+            </li>
+          </ol>
+        </aside>
+      </section>
+
+      <section class="section-heading">
+        <div>
+          <h2>全部专题</h2>
+          <p>按长期维护的内容方向组织，适合系统阅读。</p>
+        </div>
+      </section>
+
+      <section class="compact-grid" aria-label="专题列表">
+        <article class="topic-card">
+          <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=900&q=80" alt="代码编辑器和开发设备">
+          <div class="topic-card-body">
+            <div class="meta-row">
+              <span class="tag">18 篇文章</span>
+              <span>最近更新：今天</span>
+            </div>
+            <h3><a href="./topics.html">现代化博客系统</a></h3>
+            <p>从产品功能、技术架构、用户系统、评论、搜索和后台管理完整设计一个博客系统。</p>
+            <a class="button-secondary" href="./article.html">继续阅读</a>
+          </div>
+        </article>
+
+        <article class="topic-card">
+          <img src="https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=900&q=80" alt="代码编辑器中的程序文件">
+          <div class="topic-card-body">
+            <div class="meta-row">
+              <span class="tag rust">12 篇文章</span>
+              <span>最近更新：2 天前</span>
+            </div>
+            <h3><a href="./topics.html">Vue3 内容站</a></h3>
+            <p>路由、状态管理、接口缓存、SEO meta、图片优化和部署策略。</p>
+            <a class="button-secondary" href="./article.html">继续阅读</a>
+          </div>
+        </article>
+
+        <article class="topic-card">
+          <img src="https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80" alt="笔记本和写作草稿">
+          <div class="topic-card-body">
+            <div class="meta-row">
+              <span class="tag amber">9 篇文章</span>
+              <span>最近更新：5 天前</span>
+            </div>
+            <h3><a href="./topics.html">写作工作流</a></h3>
+            <p>草稿、版本历史、编辑器、发布审批和长期内容维护。</p>
+            <a class="button-secondary" href="./article.html">继续阅读</a>
+          </div>
+        </article>
+      </section>
+
+      <section class="article-layout">
+        <div>
+          <div class="section-heading">
+            <div>
+              <h2>现代化博客系统</h2>
+              <p>当前重点专题，按推荐阅读顺序排列。</p>
+            </div>
+          </div>
+          <div class="topic-list">
+            <article class="topic-list-item">
+              <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=400&q=80" alt="产品分析界面">
+              <div>
+                <strong><a href="./article.html">从首页到文章页，博客的信息架构怎么排</a></strong>
+                <div class="meta-row">
+                  <span>产品设计</span>
+                  <span>10 分钟阅读</span>
+                </div>
+              </div>
+              <span class="status published">已读 42%</span>
+            </article>
+            <article class="topic-list-item">
+              <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=400&q=80" alt="服务器机房">
+              <div>
+                <strong><a href="./article.html">Redis 和 PostgreSQL 在博客中的分工</a></strong>
+                <div class="meta-row">
+                  <span>架构</span>
+                  <span>14 分钟阅读</span>
+                </div>
+              </div>
+              <span class="status draft">未读</span>
+            </article>
+            <article class="topic-list-item">
+              <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=400&q=80" alt="团队协作">
+              <div>
+                <strong><a href="./article.html">用户评论系统应该怎么设计</a></strong>
+                <div class="meta-row">
+                  <span>用户系统</span>
+                  <span>8 分钟阅读</span>
+                </div>
+              </div>
+              <span class="status review">新文章</span>
+            </article>
+          </div>
+        </div>
+
+        <aside class="sidebar">
+          <section class="panel">
+            <div class="panel-title">
+              <h2>专题筛选</h2>
+            </div>
+            <div class="tag-cloud">
+              <a class="tag" href="./topics.html">工程实践</a>
+              <a class="tag rust" href="./topics.html">架构</a>
+              <a class="tag amber" href="./topics.html">写作</a>
+              <a class="tag" href="./topics.html">SEO</a>
+              <a class="tag rust" href="./topics.html">产品设计</a>
+              <a class="tag amber" href="./topics.html">运营</a>
+            </div>
+          </section>
+
+        </aside>
+      </section>
+    </main>
+    <site-footbar></site-footbar>
+    <script src="./footbar.js"></script>
+    <site-search></site-search>
+    <site-backtop></site-backtop>
+    <script src="./site-widgets.js"></script>
+  </body>
+</html>

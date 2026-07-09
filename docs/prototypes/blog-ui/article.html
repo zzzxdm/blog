@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>如何设计一个内容长期增长的博客系统 - 云间笔记</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav">
+        <a class="brand" href="./index.html" aria-label="云间笔记首页">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="./index.html">首页</a>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./archive.html">归档 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./archive.html">全部文章</a>
+              <a href="./archive.html">工程实践</a>
+              <a href="./archive.html">产品设计</a>
+              <a href="./archive.html">内容运营</a>
+            </div>
+          </div>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./topics.html">专题 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./topics.html">博客系统</a>
+              <a href="./topics.html">Vue3 内容站</a>
+              <a href="./topics.html">写作工作流</a>
+              <a href="./topics.html">资源清单</a>
+            </div>
+          </div>
+          <a href="./submit.html">投稿</a>
+          <a href="./account.html">我的</a>
+          <a href="./admin-posts.html">后台</a>
+        </nav>
+        <div class="header-actions">
+          <button class="icon-button" data-search-open type="button" aria-label="搜索">⌕</button>
+          <button class="icon-button" aria-label="切换深色模式">◐</button>
+          <a class="button-secondary" href="./account.html">林一</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="article-shell">
+      <article>
+        <header class="article-hero">
+          <div class="article-breadcrumb-row">
+            <button class="button-secondary" data-back data-fallback="./archive.html" type="button">← 返回</button>
+            <nav class="breadcrumb" aria-label="当前位置">
+              <a href="./index.html">首页</a>
+              <span class="breadcrumb-separator">/</span>
+              <a href="./archive.html">工程实践</a>
+              <span class="breadcrumb-separator">/</span>
+              <span>如何设计一个内容长期增长的博客系统</span>
+            </nav>
+          </div>
+          <div class="meta-row">
+            <span class="tag">工程实践</span>
+            <span>12 分钟阅读</span>
+            <span>2026-07-04</span>
+          </div>
+          <h1>如何设计一个内容长期增长的博客系统</h1>
+          <p class="dek">博客不是文章列表加详情页。真正可持续的系统需要同时照顾写作、发布、搜索、运营、迁移和长期维护。</p>
+          <div class="author-row">
+            <span class="avatar">管</span>
+            <div>
+              <strong>管理员</strong>
+              <div class="meta-row">
+                <span>系统设计</span>
+                <span>2,984 次阅读</span>
+                <span>128 次赞</span>
+                <span>7 次踩</span>
+                <span>34 次收藏</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <figure class="article-cover">
+          <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df0856?auto=format&fit=crop&w=1400&q=80" alt="用于开发博客系统的代码编辑器">
+        </figure>
+
+        <section class="article-body">
+          <p>一个现代化博客系统需要从内容资产的生命周期开始设计。文章不是一次性页面，而是会被修改、引用、搜索、迁移和长期展示的结构化内容。</p>
+          <p>如果早期只实现简单的增删改查，后期补版本历史、重定向、搜索索引和 RSS 输出时，往往会遇到数据模型不够稳定的问题。</p>
+
+          <h2 id="content-model">内容模型先于页面</h2>
+          <p>文章需要拥有稳定的 `slug`、可维护的分类标签、SEO 元数据、封面图、摘要、阅读时长、发布时间和更新时间。内容模型稳定后，前台页面、搜索索引和 RSS 输出都可以从同一份数据生成。</p>
+          <blockquote>内容系统的核心不是页面，而是可被长期复用、迁移和分发的数据。</blockquote>
+
+          <h2 id="workflow">发布流程需要留出空间</h2>
+          <p>成熟博客通常支持草稿、预览、审核、定时发布和版本历史。个人博客可以简化审批流程，但不应省略草稿、预览和版本回滚。</p>
+
+          <div class="code-block">
+            <div class="code-header">
+              <span>post-status.ts</span>
+              <button class="button-secondary" type="button">复制</button>
+            </div>
+            <pre><code>type PostStatus = "draft" | "scheduled" | "published" | "archived";
+
+type PostVisibility = "public" | "private" | "members";
+
+interface Post {
+  title: string;
+  slug: string;
+  status: PostStatus;
+  visibility: PostVisibility;
+  publishedAt?: Date;
+}</code></pre>
+          </div>
+
+          <h2 id="reading">阅读体验要克制</h2>
+          <p>文章页不需要复杂装饰。合适的行宽、稳定的目录、清晰的代码块、图片懒加载和足够好的移动端排版，比炫目的视觉元素更重要。</p>
+          <p>对于技术博客，代码复制、目录跳转、相关文章和评论区是高频能力。它们应该服务阅读，而不是打断阅读。</p>
+
+          <h2 id="operations">运营能力决定长期价值</h2>
+          <p>阅读量、热门文章、内容标签、内容来源和评论反馈可以帮助作者判断内容是否有效。对于持续写作来说，数据反馈是内容迭代的重要基础。</p>
+        </section>
+
+        <section class="article-feedback" aria-label="文章反馈">
+          <div>
+            <strong>文章反馈</strong>
+            <div class="meta-row">
+              <span>128 次赞</span>
+              <span>7 次踩</span>
+              <span>已收藏 34 次</span>
+            </div>
+          </div>
+          <div class="reaction-group">
+            <button class="reaction-button active" type="button" aria-label="点赞文章">
+              <span class="reaction-symbol">↑</span>
+              <span>128</span>
+            </button>
+            <button class="reaction-button" type="button" aria-label="点踩文章">
+              <span class="reaction-symbol">↓</span>
+              <span>7</span>
+            </button>
+            <button class="button-secondary" type="button">收藏</button>
+          </div>
+        </section>
+
+        <section class="comments" aria-label="评论">
+          <div class="section-heading">
+            <div>
+              <h2>评论</h2>
+              <p>34 条讨论，最新回复来自 2 小时前。</p>
+            </div>
+            <button class="button-secondary" type="button">按时间排序</button>
+          </div>
+          <div class="comment-box">
+            <div class="author-row">
+              <span class="avatar">林</span>
+              <div>
+                <strong>林一</strong>
+                <div class="meta-row">
+                  <span>已登录</span>
+                  <a href="./account.html">查看我的评论</a>
+                </div>
+              </div>
+            </div>
+            <textarea placeholder="写下你的想法，支持 Markdown 基础语法"></textarea>
+            <div class="meta-row">
+              <button class="button" type="button">提交评论</button>
+              <span>评论提交后进入审核队列。</span>
+            </div>
+          </div>
+
+          <div class="comment-list">
+            <article class="comment-item">
+              <div class="comment-head">
+                <div class="author-row">
+                  <span class="avatar">陈</span>
+                  <div>
+                    <strong>陈默</strong>
+                    <div class="meta-row">
+                      <span>2 小时前</span>
+                      <span>产品设计师</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="status published">已通过</span>
+              </div>
+              <p>文章里提到“内容模型先于页面”很关键。很多博客后期难维护，就是因为一开始把文章当页面模板来处理了。</p>
+              <div class="comment-actions">
+                <button type="button">点赞 18</button>
+                <button type="button">回复</button>
+                <button type="button">举报</button>
+              </div>
+            </article>
+
+            <article class="comment-item reply">
+              <div class="comment-head">
+                <div class="author-row">
+                  <span class="avatar">管</span>
+                  <div>
+                    <strong>管理员</strong>
+                    <div class="meta-row">
+                      <span>作者</span>
+                      <span>1 小时前</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="tag rust">作者回复</span>
+              </div>
+              <p>是的，所以我会优先把 slug、SEO、状态、版本历史这些字段纳入第一版数据模型。</p>
+              <div class="comment-actions">
+                <button type="button">点赞 9</button>
+                <button type="button">回复</button>
+              </div>
+            </article>
+
+            <article class="comment-item">
+              <div class="comment-head">
+                <div class="author-row">
+                  <span class="avatar">林</span>
+                  <div>
+                    <strong>林一</strong>
+                    <div class="meta-row">
+                      <span>刚刚</span>
+                      <span>我的评论</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="status review">待审核</span>
+              </div>
+              <p>站内信和评论回复通知是否应该共用一套消息模型？</p>
+              <div class="comment-actions">
+                <button type="button">编辑</button>
+                <button type="button">删除</button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </article>
+
+      <aside class="toc" aria-label="文章目录">
+        <section class="panel">
+          <div class="panel-title">
+            <h2>目录</h2>
+          </div>
+          <nav>
+            <a class="active" href="#content-model">内容模型先于页面</a>
+            <a href="#workflow">发布流程需要留出空间</a>
+            <a href="#reading">阅读体验要克制</a>
+            <a href="#operations">运营能力决定长期价值</a>
+          </nav>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h2>作者</h2>
+          </div>
+          <div class="author-row">
+            <span class="avatar">管</span>
+            <div>
+              <strong>管理员</strong>
+              <div class="meta-row">
+                <span>128 篇文章</span>
+                <span>24 个专题</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            <h2>相关文章</h2>
+          </div>
+          <ul class="link-list">
+            <li>
+              <a href="./article.html">
+                <strong>博客系统的缓存和搜索边界</strong>
+                <span>架构 · 14 分钟</span>
+              </a>
+            </li>
+            <li>
+              <a href="./article.html">
+                <strong>用版本历史保护内容资产</strong>
+                <span>内容治理 · 6 分钟</span>
+              </a>
+            </li>
+          </ul>
+        </section>
+      </aside>
+    </main>
+    <site-footbar></site-footbar>
+    <script src="./footbar.js"></script>
+    <site-search></site-search>
+    <site-backtop></site-backtop>
+    <script src="./site-widgets.js"></script>
+  </body>
+</html>

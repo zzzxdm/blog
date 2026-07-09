@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>我的评论 - 云间笔记</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="nav">
+        <a class="brand" href="./index.html" aria-label="云间笔记首页">
+          <span class="brand-mark">云</span>
+          <span>云间笔记</span>
+        </a>
+        <nav class="nav-links" aria-label="主导航">
+          <a href="./index.html">首页</a>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./archive.html">归档 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./archive.html">全部文章</a>
+              <a href="./archive.html">工程实践</a>
+              <a href="./archive.html">产品设计</a>
+              <a href="./archive.html">内容运营</a>
+            </div>
+          </div>
+          <div class="nav-menu-item">
+            <a class="nav-parent" href="./topics.html">专题 <span class="nav-caret">⌄</span></a>
+            <div class="nav-submenu">
+              <a href="./topics.html">博客系统</a>
+              <a href="./topics.html">Vue3 内容站</a>
+              <a href="./topics.html">写作工作流</a>
+              <a href="./topics.html">资源清单</a>
+            </div>
+          </div>
+          <a href="./submit.html">投稿</a>
+          <a class="active" href="./account.html">我的</a>
+          <a href="./admin-posts.html">后台</a>
+        </nav>
+        <div class="header-actions">
+          <a class="icon-button" href="./account-messages.html" aria-label="站内信">信</a>
+          <a class="button-secondary" href="./login.html">退出</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="section-heading">
+        <div>
+          <h1>我的评论</h1>
+          <p>查看评论审核状态、回复记录和已通过评论。</p>
+        </div>
+        <a class="button-secondary" href="./article.html">去评论</a>
+      </section>
+
+      <section class="account-layout">
+        <aside class="panel">
+          <div class="profile-card">
+            <div class="profile-hero">
+              <span class="avatar">林</span>
+              <div>
+                <strong>林一</strong>
+                <div class="meta-row">
+                  <span>已验证邮箱</span>
+                  <span>普通注册用户</span>
+                </div>
+              </div>
+            </div>
+            <nav class="account-nav" aria-label="个人中心导航">
+              <a href="./account.html">概览</a>
+              <a class="active" href="./account-comments.html">我的评论</a>
+              <a href="./account-bookmarks.html">我的收藏</a>
+              <a href="./account-submissions.html">我的投稿</a>
+              <a href="./account-messages.html">站内信</a>
+              <a href="./account-settings.html">账号设置</a>
+            </nav>
+          </div>
+        </aside>
+
+        <div class="settings-stack">
+          <section class="stats-grid" aria-label="评论统计">
+            <div class="stat-card">
+              <span>全部评论</span>
+              <strong>42</strong>
+            </div>
+            <div class="stat-card">
+              <span>待审核</span>
+              <strong>1</strong>
+            </div>
+            <div class="stat-card">
+              <span>获赞</span>
+              <strong>126</strong>
+            </div>
+            <div class="stat-card">
+              <span>被回复</span>
+              <strong>8</strong>
+            </div>
+          </section>
+
+          <section class="table-panel">
+            <form class="table-toolbar">
+              <input class="input" type="search" placeholder="搜索评论内容或文章标题" aria-label="搜索我的评论">
+              <select class="input" aria-label="评论状态">
+                <option>全部状态</option>
+                <option>待审核</option>
+                <option>已通过</option>
+                <option>已删除</option>
+              </select>
+              <select class="input" aria-label="排序">
+                <option>最近评论</option>
+                <option>获赞最多</option>
+                <option>被回复优先</option>
+              </select>
+            </form>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>评论</th>
+                  <th>文章</th>
+                  <th>状态</th>
+                  <th>互动</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>站内信和评论回复通知是否应该共用一套消息模型？</strong>
+                    <div class="meta-row">
+                      <span>回复主评论 #128</span>
+                    </div>
+                  </td>
+                  <td>如何设计一个内容长期增长的博客系统</td>
+                  <td><span class="status review">待审核</span></td>
+                  <td>0 赞</td>
+                  <td>刚刚</td>
+                  <td><button class="button-secondary" type="button">编辑</button></td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>版本历史对于多人协作很重要，个人博客其实也需要。</strong>
+                    <div class="meta-row">
+                      <span>管理员已回复</span>
+                    </div>
+                  </td>
+                  <td>为什么博客后台需要文章版本历史</td>
+                  <td><span class="status published">已通过</span></td>
+                  <td>18 赞 · 1 回复</td>
+                  <td>昨天</td>
+                  <td><a class="button-secondary" href="./article.html">查看</a></td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>PostgreSQL 全文搜索足够覆盖多数个人博客场景。</strong>
+                  </td>
+                  <td>Vue3 内容站的搜索设计</td>
+                  <td><span class="status published">已通过</span></td>
+                  <td>9 赞</td>
+                  <td>2026-07-01</td>
+                  <td><a class="button-secondary" href="./article.html">查看</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </section>
+    </main>
+    <site-footbar></site-footbar>
+    <script src="./footbar.js"></script>
+    <site-search></site-search>
+    <site-backtop></site-backtop>
+    <script src="./site-widgets.js"></script>
+  </body>
+</html>

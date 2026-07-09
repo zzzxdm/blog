@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>数据统计 - 云间笔记后台</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="mobile-admin-bar">
+      <a class="brand" href="./admin-stats.html">
+        <span class="brand-mark">云</span>
+        <span>数据统计</span>
+      </a>
+      <button class="button" type="button">导出</button>
+    </div>
+
+    <div class="admin-shell">
+      <aside class="admin-sidebar">
+        <a class="admin-brand" href="./admin-posts.html">
+          <span class="brand-mark">云</span>
+          <span>云间笔记后台</span>
+        </a>
+        <nav class="admin-nav" aria-label="后台导航">
+          <a href="./index.html">查看站点</a>
+          <a href="./admin-posts.html">文章</a>
+          <a href="./admin-submissions.html">投稿</a>
+          <a href="./editor.html">写作</a>
+          <a href="./admin-comments.html">评论</a>
+          <a href="./admin-users.html">用户</a>
+          <a href="./admin-messages.html">站内信</a>
+          <a href="./admin-media.html">媒体库</a>
+          <a href="./admin-navigation.html">导航</a>
+          <a class="active" href="./admin-stats.html">统计</a>
+          <a href="./admin-settings.html">设置</a>
+        </nav>
+      </aside>
+
+      <main class="admin-main">
+        <header class="admin-topbar">
+          <div>
+            <h1>数据统计</h1>
+            <p>查看内容趋势、热门内容、内容标签、来源和评论互动。</p>
+          </div>
+          <div class="header-actions">
+            <select class="input" aria-label="时间范围">
+              <option>最近 30 天</option>
+              <option>最近 7 天</option>
+              <option>今年</option>
+            </select>
+            <button class="button-secondary" type="button">导出报表</button>
+          </div>
+        </header>
+
+        <section class="stats-grid" aria-label="核心指标">
+          <div class="stat-card">
+            <span>阅读量</span>
+            <strong>86,400</strong>
+            <div class="meta-row"><span>当前范围累计</span></div>
+          </div>
+          <div class="stat-card">
+            <span>发布文章</span>
+            <strong>18</strong>
+            <div class="meta-row"><span>已公开</span></div>
+          </div>
+          <div class="stat-card">
+            <span>平均阅读</span>
+            <strong>4.3 分钟</strong>
+            <div class="meta-row"><span>按阅读时长估算</span></div>
+          </div>
+          <div class="stat-card">
+            <span>互动数</span>
+            <strong>1,246</strong>
+            <div class="meta-row"><span>评论、点赞和收藏</span></div>
+          </div>
+        </section>
+
+        <section class="admin-grid-2">
+          <div class="settings-stack">
+            <section class="chart-card">
+              <div class="panel-title">
+                <h2>访问趋势</h2>
+                <span class="tag">阅读量</span>
+              </div>
+              <div class="bar-chart">
+                <div class="bar-row">
+                  <span>周一</span>
+                  <span class="bar-track"><span class="bar-fill" style="width: 68%;"></span></span>
+                  <strong>8.4k</strong>
+                </div>
+                <div class="bar-row">
+                  <span>周二</span>
+                  <span class="bar-track"><span class="bar-fill" style="width: 74%;"></span></span>
+                  <strong>9.1k</strong>
+                </div>
+                <div class="bar-row">
+                  <span>周三</span>
+                  <span class="bar-track"><span class="bar-fill rust" style="width: 92%;"></span></span>
+                  <strong>11.3k</strong>
+                </div>
+                <div class="bar-row">
+                  <span>周四</span>
+                  <span class="bar-track"><span class="bar-fill" style="width: 81%;"></span></span>
+                  <strong>9.9k</strong>
+                </div>
+                <div class="bar-row">
+                  <span>周五</span>
+                  <span class="bar-track"><span class="bar-fill amber" style="width: 64%;"></span></span>
+                  <strong>7.8k</strong>
+                </div>
+                <div class="bar-row">
+                  <span>周六</span>
+                  <span class="bar-track"><span class="bar-fill" style="width: 48%;"></span></span>
+                  <strong>5.9k</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="table-panel">
+              <div class="panel-title" style="padding: 16px 16px 0;">
+                <h2>热门文章</h2>
+                <a class="button-secondary" href="./admin-posts.html">查看文章</a>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>文章</th>
+                    <th>阅读</th>
+                    <th>收藏</th>
+                    <th>评论</th>
+                    <th>互动率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Vue3 内容站的缓存与 SEO 边界</td>
+                    <td>12,420</td>
+                    <td>312</td>
+                    <td>48</td>
+                    <td>3.8%</td>
+                  </tr>
+                  <tr>
+                    <td>如何设计一个内容长期增长的博客系统</td>
+                    <td>9,884</td>
+                    <td>286</td>
+                    <td>34</td>
+                    <td>4.1%</td>
+                  </tr>
+                  <tr>
+                    <td>让旧文章继续被搜索引擎找到</td>
+                    <td>7,209</td>
+                    <td>190</td>
+                    <td>19</td>
+                    <td>2.4%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </div>
+
+          <aside class="settings-stack">
+            <section class="chart-card">
+              <h2>内容来源</h2>
+              <div class="bar-chart">
+                <div class="bar-row">
+                  <span>后台发布</span>
+                  <span class="bar-track"><span class="bar-fill" style="width: 72%;"></span></span>
+                  <strong>46%</strong>
+                </div>
+                <div class="bar-row">
+                  <span>用户投稿</span>
+                  <span class="bar-track"><span class="bar-fill rust" style="width: 34%;"></span></span>
+                  <strong>22%</strong>
+                </div>
+                <div class="bar-row">
+                  <span>导入内容</span>
+                  <span class="bar-track"><span class="bar-fill amber" style="width: 28%;"></span></span>
+                  <strong>18%</strong>
+                </div>
+                <div class="bar-row">
+                  <span>其他来源</span>
+                  <span class="bar-track"><span class="bar-fill" style="width: 20%;"></span></span>
+                  <strong>14%</strong>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h2>热门内容标签</h2>
+              </div>
+              <ol class="rank-list">
+                <li>
+                  <span class="rank-number">1</span>
+                  <div>
+                    <strong>Vue3</strong>
+                    <span>8 篇关联</span>
+                  </div>
+                </li>
+                <li>
+                  <span class="rank-number">2</span>
+                  <div>
+                    <strong>博客系统设计</strong>
+                    <span>6 篇关联</span>
+                  </div>
+                </li>
+                <li>
+                  <span class="rank-number">3</span>
+                  <div>
+                    <strong>Markdown</strong>
+                    <span>4 篇关联</span>
+                  </div>
+                </li>
+              </ol>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <h2>内容建议</h2>
+              </div>
+              <ul class="link-list">
+                <li>
+                  <strong>评论审核相关内容增长明显</strong>
+                  <span>可以补一篇用户评论系统设计。</span>
+                </li>
+                <li>
+                  <strong>专题页带来 18% 收藏</strong>
+                  <span>建议继续完善专题导航。</span>
+                </li>
+              </ul>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
