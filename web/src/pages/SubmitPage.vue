@@ -43,11 +43,14 @@ const message = ref("");
 const error = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
+const titleInput = ref<HTMLInputElement | null>(null);
 const turnstileEl = ref<HTMLElement | null>(null);
 const turnstileWidgetId = ref("");
 const turnstileToken = ref("");
 const turnstileError = ref("");
 const siteSettings = ref<SiteSettings | null>(null);
+const validationAttempted = ref(false);
+const submitAttempted = ref(false);
 
 const title = ref("");
 const summary = ref("");
@@ -88,6 +91,9 @@ const turnstileRequired = computed(() => Boolean(
   siteSettings.value.turnstileSubmission &&
   siteSettings.value.turnstileSiteKey
 ));
+const titleError = computed(() => validationAttempted.value && !title.value.trim() ? "请输入标题" : "");
+const turnstileMissingError = computed(() => submitAttempted.value && turnstileRequired.value && !turnstileToken.value ? (turnstileError.value || "请先完成人机验证") : "");
+const turnstileDisplayError = computed(() => turnstileError.value || turnstileMissingError.value);
 
 onMounted(() => {
   void loadSiteSettings();
@@ -106,6 +112,18 @@ watch(turnstileRequired, (required) => {
   }
 
   removeTurnstile();
+});
+
+watch(title, (value) => {
+  if (value.trim() && error.value === "请输入标题后再保存") {
+    error.value = "";
+  }
+});
+
+watch(turnstileToken, (value) => {
+  if (value && error.value === "请先完成人机验证") {
+    error.value = "";
+  }
 });
 
 async function loadSiteSettings() {
@@ -202,27 +220,40 @@ async function submitForReview() {
 }
 
 async function persist(submit: boolean) {
+  validationAttempted.value = true;
+  submitAttempted.value = submit;
+
   if (!auth.user) {
     error.value = "请先登录后再投稿";
+    toast.error("无法保存", error.value);
     return;
   }
   if (!canEdit.value) {
     error.value = "当前投稿状态不能修改";
+    toast.error("无法保存", error.value);
     return;
   }
   if (!title.value.trim()) {
     error.value = "请输入标题后再保存";
     message.value = "";
+    toast.error(submit ? "无法提交审核" : "无法保存草稿", error.value);
+    await nextTick();
+    titleInput.value?.focus();
     return;
   }
   if (submit && !content.value.trim()) {
     error.value = isPrivate.value ? "请填写正文后再发布私密文章" : "请填写正文后再提交审核";
     message.value = "";
+    toast.error(isPrivate.value ? "无法发布私密文章" : "无法提交审核", error.value);
     return;
   }
   if (submit && turnstileRequired.value && !turnstileToken.value) {
-    error.value = turnstileError.value || "请先完成人机验证";
+    turnstileError.value = turnstileError.value || "请先完成人机验证";
+    error.value = turnstileError.value;
     message.value = "";
+    toast.error(isPrivate.value ? "无法发布私密文章" : "无法提交审核", error.value);
+    await nextTick();
+    turnstileEl.value?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
 
@@ -243,6 +274,7 @@ async function persist(submit: boolean) {
     toast.success(submit ? submitTitle : "草稿已保存", submit ? submitMessage : "内容已保存在你的投稿列表。");
   } catch (err) {
     error.value = submissionErrorMessage(err);
+    toast.error(submit ? "投稿提交失败" : "草稿保存失败", error.value);
     if (submit) {
       resetTurnstile();
     }
@@ -456,7 +488,18 @@ function statusClass(value: string) {
             </div>
             <div class="field">
               <label for="title">标题</label>
-              <input v-model="title" class="input" id="title" :disabled="!canEdit">
+              <input
+                v-model="title"
+                ref="titleInput"
+                class="input"
+                :class="{ 'input-invalid': titleError }"
+                id="title"
+                :disabled="!canEdit"
+                aria-required="true"
+                :aria-invalid="Boolean(titleError)"
+                aria-describedby="submission-title-error"
+              >
+              <span v-if="titleError" id="submission-title-error" class="field-error">{{ titleError }}</span>
             </div>
             <div class="field">
               <label for="summary">摘要</label>
@@ -525,7 +568,7 @@ function statusClass(value: string) {
 		            <div v-if="turnstileRequired" class="field">
 		              <label>人机验证</label>
 		              <div ref="turnstileEl"></div>
-		              <p v-if="turnstileError" class="error" role="alert">{{ turnstileError }}</p>
+		              <p v-if="turnstileDisplayError" class="error" role="alert">{{ turnstileDisplayError }}</p>
 		            </div>
             <button class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit || status === 'published'" @click="saveDraft">
               {{ saving ? "保存中..." : "保存草稿" }}
