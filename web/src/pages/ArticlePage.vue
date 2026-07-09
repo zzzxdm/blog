@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import MarkdownPreview from "../components/MarkdownPreview.vue";
+import MarkdownThemeSwitcher from "../components/MarkdownThemeSwitcher.vue";
 import {
   ApiError,
   createComment,
@@ -20,6 +22,7 @@ import {
 } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
 import { extractMarkdownHeadings, renderMarkdown } from "../shared/markdown";
+import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
 
@@ -46,10 +49,10 @@ const articleBody = ref<HTMLElement | null>(null);
 const readingProgress = ref(0);
 const reactionLoading = ref(false);
 const reactionError = ref("");
+const { selectedPreviewTheme, selectedCodeTheme } = useMarkdownPreviewTheme();
 const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCount ?? 0);
 const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
 const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 0);
-const renderedPostContent = computed(() => renderMarkdown(post.value?.content ?? ""));
 const tocItems = computed(() => extractMarkdownHeadings(post.value?.content ?? ""));
 const commentsEnabled = computed(() => siteSettings.value?.commentsEnabled ?? true);
 const readingProgressEnabled = computed(() => siteSettings.value?.readingProgressEnabled ?? false);
@@ -409,8 +412,15 @@ watch(() => auth.user?.id, () => {
           <img :src="post.coverImage" :alt="post.title">
         </figure>
 
-        <section ref="articleBody" class="article-body">
-          <div v-html="renderedPostContent"></div>
+        <MarkdownThemeSwitcher v-model:preview-theme="selectedPreviewTheme" v-model:code-theme="selectedCodeTheme" />
+
+        <section ref="articleBody" class="article-markdown">
+          <MarkdownPreview
+            :content="post.content"
+            :preview-id="`article-${post.id}`"
+            :preview-theme="selectedPreviewTheme"
+            :code-theme="selectedCodeTheme"
+          />
         </section>
 
         <section class="article-feedback" aria-label="文章反馈">

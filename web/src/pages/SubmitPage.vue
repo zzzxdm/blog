@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from "vue-router";
 import { ElOption, ElSelect } from "element-plus";
 import "element-plus/es/components/select/style/css";
 
+import RichMarkdownEditor from "../components/RichMarkdownEditor.vue";
 import {
   createSubmission,
   getCategories,
@@ -18,7 +19,6 @@ import {
   type SubmissionVisibility,
   type Tag
 } from "../shared/api";
-import { renderMarkdown } from "../shared/markdown";
 import { useAuthStore } from "../stores/auth";
 import { useToastStore } from "../stores/toast";
 
@@ -43,13 +43,11 @@ const message = ref("");
 const error = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
-const editorArea = ref<HTMLTextAreaElement | null>(null);
 const turnstileEl = ref<HTMLElement | null>(null);
 const turnstileWidgetId = ref("");
 const turnstileToken = ref("");
 const turnstileError = ref("");
 const siteSettings = ref<SiteSettings | null>(null);
-const linkUrl = ref("https://");
 
 const title = ref("");
 const summary = ref("");
@@ -77,7 +75,6 @@ const tagSelectOptions = computed(() => {
   });
   return [...options.values()];
 });
-const renderedPreviewContent = computed(() => renderMarkdown(content.value));
 const status = computed(() => current.value?.status || "draft");
 const isPrivate = computed(() => visibility.value === "private");
 const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled ?? true);
@@ -341,70 +338,6 @@ function removeTurnstile() {
   turnstileWidgetId.value = "";
 }
 
-function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | "link") {
-  if (!canEdit.value) {
-    return;
-  }
-
-  const textarea = editorArea.value;
-  const start = textarea?.selectionStart ?? content.value.length;
-  const end = textarea?.selectionEnd ?? content.value.length;
-  const selected = content.value.slice(start, end);
-  let inner = selected;
-  let replacement = "";
-  let selectionStart = start;
-  let selectionEnd = start;
-
-  if (type === "bold") {
-    inner = selected || "加粗文字";
-    replacement = `**${inner}**`;
-    selectionStart = start + 2;
-    selectionEnd = selectionStart + inner.length;
-  } else if (type === "italic") {
-    inner = selected || "斜体文字";
-    replacement = `*${inner}*`;
-    selectionStart = start + 1;
-    selectionEnd = selectionStart + inner.length;
-  } else if (type === "heading") {
-    inner = selected || "小标题";
-    replacement = `## ${inner}`;
-    selectionStart = start + 3;
-    selectionEnd = selectionStart + inner.length;
-  } else if (type === "quote") {
-    inner = selected || "引用内容";
-    replacement = inner.split("\n").map((line) => `> ${line}`).join("\n");
-    selectionStart = start;
-    selectionEnd = start + replacement.length;
-  } else if (type === "code") {
-    inner = selected || "code";
-    if (inner.includes("\n")) {
-      replacement = `\`\`\`\n${inner}\n\`\`\``;
-      selectionStart = start + 4;
-    } else {
-      replacement = `\`${inner}\``;
-      selectionStart = start + 1;
-    }
-    selectionEnd = selectionStart + inner.length;
-  } else {
-    const url = linkUrl.value.trim();
-    if (!url || url === "https://") {
-      error.value = "请输入链接地址。";
-      message.value = "";
-      return;
-    }
-    inner = selected || "链接文字";
-    replacement = `[${inner}](${url})`;
-    selectionStart = start + 1;
-    selectionEnd = selectionStart + inner.length;
-  }
-
-  content.value = `${content.value.slice(0, start)}${replacement}${content.value.slice(end)}`;
-  void nextTick(() => {
-    editorArea.value?.focus();
-    editorArea.value?.setSelectionRange(selectionStart, selectionEnd);
-  });
-}
-
 function statusText(value: string) {
   if (value === "submitted") {
     return "待审核";
@@ -468,27 +401,15 @@ function statusClass(value: string) {
 
     <section v-else class="editor-layout">
       <div class="editor-panel">
-        <div class="editor-toolbar">
-          <div class="tool-group" aria-label="投稿编辑工具栏">
-            <button class="tool" type="button" aria-label="加粗" :disabled="!canEdit" @click="applyMarkdown('bold')">B</button>
-            <button class="tool" type="button" aria-label="斜体" :disabled="!canEdit" @click="applyMarkdown('italic')">I</button>
-            <button class="tool" type="button" aria-label="标题" :disabled="!canEdit" @click="applyMarkdown('heading')">H</button>
-            <button class="tool" type="button" aria-label="引用" :disabled="!canEdit" @click="applyMarkdown('quote')">"</button>
-            <button class="tool" type="button" aria-label="代码" :disabled="!canEdit" @click="applyMarkdown('code')">{ }</button>
-            <button class="tool" type="button" aria-label="链接" :disabled="!canEdit" @click="applyMarkdown('link')">↗</button>
-          </div>
-          <label class="editor-link-input"><span class="sr-only">链接地址</span><input v-model="linkUrl" class="input" type="url" placeholder="https://example.com" aria-label="链接地址" :disabled="!canEdit"></label>
-        </div>
-
-        <div class="editor-grid">
-          <textarea ref="editorArea" v-model="content" class="markdown-area" aria-label="投稿 Markdown 编辑区" :disabled="!canEdit"></textarea>
-
-          <article class="preview-area">
-            <h1>{{ title || "未命名投稿" }}</h1>
-            <p v-if="summary">{{ summary }}</p>
-            <div v-html="renderedPreviewContent"></div>
-          </article>
-        </div>
+        <RichMarkdownEditor
+          v-model="content"
+          editor-id="submission-editor"
+          upload-category="投稿插图"
+          placeholder="撰写投稿正文，支持 Markdown、实时预览、表情、粘贴或拖拽上传图片。"
+          :disabled="!canEdit"
+          @save="saveDraft"
+          @upload-error="(value) => { error = value; message = ''; }"
+        />
       </div>
 
       <aside class="settings-stack">

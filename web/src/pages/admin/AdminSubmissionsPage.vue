@@ -2,7 +2,10 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import MarkdownPreview from "../../components/MarkdownPreview.vue";
+import MarkdownThemeSwitcher from "../../components/MarkdownThemeSwitcher.vue";
 import PaginationControls from "../../components/PaginationControls.vue";
+import RichMarkdownEditor from "../../components/RichMarkdownEditor.vue";
 import {
   getAdminUsers,
   getAdminSubmissions,
@@ -17,6 +20,7 @@ import {
   type SubmissionStats
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useMarkdownPreviewTheme } from "../../shared/markdownPreview";
 import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
 
@@ -53,9 +57,9 @@ const sortMode = ref("latest");
 const page = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
+const { selectedPreviewTheme, selectedCodeTheme } = useMarkdownPreviewTheme();
 
 const selected = computed(() => submissions.value.find((item) => item.id === selectedId.value) || submissions.value[0]);
-const previewParagraphs = computed(() => selected.value?.content.split(/\n+/).map((item) => item.trim()).filter(Boolean) || []);
 const selectedAuthorUser = computed(() => users.value.find((user) => user.id === selected.value?.authorId));
 const authorSubmissionStats = computed(() => {
   const authorId = selected.value?.authorId || "";
@@ -455,7 +459,17 @@ function userStatusText(value?: ManagedUser["status"]) {
               <div class="field"><label for="edit-slug">Slug</label><input v-model="editSlug" class="input" id="edit-slug"></div>
             </div>
             <div class="field"><label for="edit-summary">摘要</label><textarea v-model="editSummary" class="input" id="edit-summary"></textarea></div>
-            <div class="field"><label for="edit-content">正文</label><textarea v-model="editContent" class="input" id="edit-content" style="min-height: 260px;"></textarea></div>
+            <div class="field">
+              <label>正文</label>
+              <RichMarkdownEditor
+                v-model="editContent"
+                editor-id="admin-submission-editor"
+                height="420px"
+                upload-category="投稿修订插图"
+                placeholder="修订投稿正文，支持 Markdown、实时预览、表情、粘贴或拖拽上传图片。"
+                @upload-error="(value) => { error = value; message = ''; }"
+              />
+            </div>
             <div class="admin-grid-2">
               <div class="field"><label for="edit-category">分类</label><input v-model="editCategory" class="input" id="edit-category"></div>
               <div class="field"><label for="edit-tags">标签</label><input v-model="editTags" class="input" id="edit-tags"></div>
@@ -469,7 +483,13 @@ function userStatusText(value?: ManagedUser["status"]) {
           <article v-else class="preview-area" style="min-height: 420px;">
             <h1>{{ selected.title }}</h1>
             <p>{{ selected.summary }}</p>
-            <p v-for="paragraph in previewParagraphs" :key="paragraph">{{ paragraph }}</p>
+            <MarkdownThemeSwitcher v-model:preview-theme="selectedPreviewTheme" v-model:code-theme="selectedCodeTheme" />
+            <MarkdownPreview
+              :content="selected.content"
+              :preview-id="`admin-submission-preview-${selected.id}`"
+              :preview-theme="selectedPreviewTheme"
+              :code-theme="selectedCodeTheme"
+            />
           </article>
         </section>
       </div>

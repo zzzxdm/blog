@@ -2,17 +2,19 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import MarkdownPreview from "../components/MarkdownPreview.vue";
+import MarkdownThemeSwitcher from "../components/MarkdownThemeSwitcher.vue";
 import { getPreviewPost, type AdminPost } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
-import { renderMarkdown } from "../shared/markdown";
+import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
 
 const route = useRoute();
 const post = ref<AdminPost | null>(null);
 const loading = ref(false);
 const error = ref("");
+const { selectedPreviewTheme, selectedCodeTheme } = useMarkdownPreviewTheme();
 
 const token = computed(() => String(route.params.token ?? ""));
-const renderedContent = computed(() => renderMarkdown(post.value?.content ?? ""));
 const avatarText = computed(() => post.value?.authorName.slice(0, 1) || "预");
 
 watch(token, () => void load(), { immediate: true });
@@ -82,8 +84,15 @@ function formatDate(value: string) {
           <img :src="post.coverImage" :alt="post.title">
         </figure>
 
-        <section class="article-body">
-          <div v-html="renderedContent"></div>
+        <MarkdownThemeSwitcher v-model:preview-theme="selectedPreviewTheme" v-model:code-theme="selectedCodeTheme" />
+
+        <section class="article-markdown">
+          <MarkdownPreview
+            :content="post.content"
+            :preview-id="`preview-${post.id}`"
+            :preview-theme="selectedPreviewTheme"
+            :code-theme="selectedCodeTheme"
+          />
         </section>
       </article>
     </template>

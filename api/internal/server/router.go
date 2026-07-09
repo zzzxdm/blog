@@ -87,6 +87,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(navigationRedirects(repos.OperationsRepo))
 	router.Use(auth.Middleware(repos.AuthStore))
 	router.Use(auditAdminOperations(repos.OperationsRepo))
+	mediaStorage := newMediaStorage(cfg)
 	feeds.RegisterRoutes(router, repos.PostRepo, repos.OperationsRepo, cfg.PublicURL)
 	seo.RegisterRoutes(router, repos.PostRepo, repos.OperationsRepo, cfg.PublicURL)
 
@@ -107,7 +108,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
-	operations.RegisterRoutes(api, repos.OperationsRepo, uploadDir(cfg.UploadDir))
+	operations.RegisterRoutes(api, repos.OperationsRepo, mediaStorage)
 	users.RegisterRoutesWithEmailSender(api, repos.UserRepo, repos.AuthStore, repos.AuthEmailSender)
 
 	var publisher posts.SubmissionPublisher
@@ -178,6 +179,26 @@ func uploadDir(value string) string {
 	}
 
 	return value
+}
+
+func newMediaStorage(cfg config.Config) operations.MediaStorage {
+	if strings.EqualFold(cfg.MediaStorage, "minio") {
+		storage, err := operations.NewMinIOMediaStorage(operations.MinIOStorageConfig{
+			Endpoint:  cfg.MinIOEndpoint,
+			AccessKey: cfg.MinIOAccessKey,
+			SecretKey: cfg.MinIOSecretKey,
+			Bucket:    cfg.MinIOBucket,
+			UseSSL:    cfg.MinIOUseSSL,
+			PublicURL: cfg.MinIOPublicURL,
+		})
+		if err != nil {
+			panic("failed to configure minio media storage: " + err.Error())
+		}
+
+		return storage
+	}
+
+	return operations.NewLocalMediaStorage(uploadDir(cfg.UploadDir))
 }
 
 func cors(origin string) gin.HandlerFunc {

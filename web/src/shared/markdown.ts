@@ -134,7 +134,11 @@ function renderInline(value: string): string {
     return `\u0000${codeSpans.length - 1}\u0000`;
   });
 
-  rendered = rendered.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_match, label: string, href: string) => {
+  rendered = rendered.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+(['"])(.*?)\3)?\)/g, (_match, alt: string, src: string, _quote: string, title: string) => {
+    const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : "";
+    return `<img src="${escapeAttribute(safeHref(src))}" alt="${escapeAttribute(alt)}"${titleAttribute}>`;
+  });
+  rendered = rendered.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+(['"]).*?\3)?\)/g, (_match, label: string, href: string) => {
     return `<a href="${escapeAttribute(safeHref(href))}" rel="nofollow noopener">${label}</a>`;
   });
   rendered = rendered.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");

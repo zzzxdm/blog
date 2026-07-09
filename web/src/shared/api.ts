@@ -1334,6 +1334,14 @@ export async function getAdminMediaAsset(id: string): Promise<MediaAsset> {
 }
 
 export async function uploadAdminMedia(file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
+  return uploadMediaTo("/admin/media", file, payload);
+}
+
+export async function uploadMedia(file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
+  return uploadMediaTo("/media/uploads", file, payload);
+}
+
+async function uploadMediaTo(path: string, file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
   const form = new FormData();
   form.set("file", file);
 
@@ -1344,7 +1352,7 @@ export async function uploadAdminMedia(file: File, payload: { alt?: string; cate
     form.set("category", payload.category);
   }
 
-  const response = await fetch(`${API_BASE_URL}/admin/media`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     credentials: "include",
     body: form

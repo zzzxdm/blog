@@ -33,6 +33,7 @@ Thumbs.db
 *.out
 api/tmp/
 api/build-errors.log
+api/uploads/
 
 # agent
 AGENTS.md

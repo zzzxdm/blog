@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import RichMarkdownEditor from "../../components/RichMarkdownEditor.vue";
 import {
   createAdminPost,
   createAdminPostPreview,
@@ -22,7 +23,6 @@ import {
   type Tag
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
-import { renderMarkdown } from "../../shared/markdown";
 import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
 
@@ -41,9 +41,6 @@ const message = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
-const editorArea = ref<HTMLTextAreaElement | null>(null);
-const previewArea = ref<HTMLElement | null>(null);
-const linkUrl = ref("https://");
 
 const title = ref("");
 const summary = ref("");
@@ -58,7 +55,6 @@ const status = ref<AdminPostStatus>("draft");
 const visibility = ref<AdminPostVisibility>("public");
 const scheduledAt = ref(nextScheduleValue());
 
-const renderedPreviewContent = computed(() => renderMarkdown(content.value));
 const description = computed(() => current.value ? `自动保存于 ${formatDateTime(current.value.updatedAt)}，当前版本 ${current.value.version}。` : "新文章草稿。");
 
 onMounted(() => {
@@ -304,70 +300,6 @@ async function restoreRevision(revision: AdminPostRevision) {
   }
 }
 
-function applyMarkdown(type: "bold" | "italic" | "heading" | "quote" | "code" | "link") {
-  const textarea = editorArea.value;
-  const start = textarea?.selectionStart ?? content.value.length;
-  const end = textarea?.selectionEnd ?? content.value.length;
-  const selected = content.value.slice(start, end);
-  let inner = selected;
-  let replacement = "";
-  let selectionStart = start;
-  let selectionEnd = start;
-
-  if (type === "bold") {
-    inner = selected || "加粗文字";
-    replacement = `**${inner}**`;
-    selectionStart = start + 2;
-    selectionEnd = selectionStart + inner.length;
-  } else if (type === "italic") {
-    inner = selected || "斜体文字";
-    replacement = `*${inner}*`;
-    selectionStart = start + 1;
-    selectionEnd = selectionStart + inner.length;
-  } else if (type === "heading") {
-    inner = selected || "小标题";
-    replacement = `## ${inner}`;
-    selectionStart = start + 3;
-    selectionEnd = selectionStart + inner.length;
-  } else if (type === "quote") {
-    inner = selected || "引用内容";
-    replacement = inner.split("\n").map((line) => `> ${line}`).join("\n");
-    selectionStart = start;
-    selectionEnd = start + replacement.length;
-  } else if (type === "code") {
-    inner = selected || "code";
-    if (inner.includes("\n")) {
-      replacement = `\`\`\`\n${inner}\n\`\`\``;
-      selectionStart = start + 4;
-    } else {
-      replacement = `\`${inner}\``;
-      selectionStart = start + 1;
-    }
-    selectionEnd = selectionStart + inner.length;
-  } else {
-    const url = linkUrl.value.trim();
-    if (!url || url === "https://") {
-      error.value = "请输入链接地址。";
-      message.value = "";
-      return;
-    }
-    inner = selected || "链接文字";
-    replacement = `[${inner}](${url})`;
-    selectionStart = start + 1;
-    selectionEnd = selectionStart + inner.length;
-  }
-
-  content.value = `${content.value.slice(0, start)}${replacement}${content.value.slice(end)}`;
-  void nextTick(() => {
-    editorArea.value?.focus();
-    editorArea.value?.setSelectionRange(selectionStart, selectionEnd);
-  });
-}
-
-function scrollToPreview() {
-  previewArea.value?.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
 function statusText(value: AdminPostStatus) {
   if (value === "published") return "已发布";
   if (value === "scheduled") return "待发布";
@@ -421,27 +353,14 @@ function toDateTimeLocal(value: string) {
 
     <section class="editor-layout">
       <div class="editor-panel">
-          <div class="editor-toolbar">
-            <div class="tool-group" aria-label="编辑工具栏">
-            <button class="tool" type="button" aria-label="加粗" @click="applyMarkdown('bold')">B</button>
-            <button class="tool" type="button" aria-label="斜体" @click="applyMarkdown('italic')">I</button>
-            <button class="tool" type="button" aria-label="标题" @click="applyMarkdown('heading')">H</button>
-            <button class="tool" type="button" aria-label="引用" @click="applyMarkdown('quote')">"</button>
-            <button class="tool" type="button" aria-label="代码" @click="applyMarkdown('code')">{ }</button>
-            <button class="tool" type="button" aria-label="链接" @click="applyMarkdown('link')">↗</button>
-          </div>
-          <label class="editor-link-input"><span class="sr-only">链接地址</span><input v-model="linkUrl" class="input" type="url" placeholder="https://example.com" aria-label="链接地址"></label>
-        </div>
-
-        <div class="editor-grid">
-          <textarea ref="editorArea" v-model="content" class="markdown-area" aria-label="Markdown 编辑区"></textarea>
-
-          <article ref="previewArea" class="preview-area">
-            <h1>{{ title || "未命名文章" }}</h1>
-            <p v-if="summary">{{ summary }}</p>
-            <div v-html="renderedPreviewContent"></div>
-          </article>
-        </div>
+        <RichMarkdownEditor
+          v-model="content"
+          editor-id="admin-post-editor"
+          upload-category="文章插图"
+          placeholder="撰写文章正文，支持 Markdown、实时预览、表情、粘贴或拖拽上传图片。"
+          @save="saveDraft"
+          @upload-error="(value) => { error = value; message = ''; }"
+        />
       </div>
 
       <aside class="settings-stack" aria-label="文章设置">

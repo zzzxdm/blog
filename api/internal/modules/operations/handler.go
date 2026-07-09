@@ -10,7 +10,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,25 +25,26 @@ import (
 const maxMediaUploadBytes = 10 << 20
 
 type Handler struct {
-	repo      Repository
-	uploadDir string
-	jobsMu    sync.RWMutex
-	jobs      map[string]AdminJob
+	repo    Repository
+	storage MediaStorage
+	jobsMu  sync.RWMutex
+	jobs    map[string]AdminJob
 }
 
-func NewHandler(repo Repository, uploadDir string) *Handler {
-	if uploadDir == "" {
-		uploadDir = "uploads"
+func NewHandler(repo Repository, storage MediaStorage) *Handler {
+	if storage == nil {
+		storage = NewLocalMediaStorage("uploads")
 	}
 
-	return &Handler{repo: repo, uploadDir: uploadDir, jobs: map[string]AdminJob{}}
+	return &Handler{repo: repo, storage: storage, jobs: map[string]AdminJob{}}
 }
 
-func RegisterRoutes(router gin.IRouter, repo Repository, uploadDir string) {
-	handler := NewHandler(repo, uploadDir)
+func RegisterRoutes(router gin.IRouter, repo Repository, storage MediaStorage) {
+	handler := NewHandler(repo, storage)
 
 	router.GET("/settings", handler.GetPublicSettings)
 	router.GET("/navigation", handler.GetPublicNavigation)
+	router.POST("/media/uploads", handler.UploadUserMedia)
 	router.GET("/admin/settings", handler.GetSettings)
 	router.PUT("/admin/settings", handler.UpdateSettings)
 	router.POST("/admin/settings/test-mail", handler.SendTestMail)
@@ -309,6 +309,19 @@ func (handler *Handler) UploadMedia(ctx *gin.Context) {
 		return
 	}
 
+	handler.uploadMedia(ctx, user, "上传")
+}
+
+func (handler *Handler) UploadUserMedia(ctx *gin.Context) {
+	user, ok := auth.RequireUser(ctx)
+	if !ok {
+		return
+	}
+
+	handler.uploadMedia(ctx, user, "写作插图")
+}
+
+func (handler *Handler) uploadMedia(ctx *gin.Context, user auth.User, defaultCategory string) {
 	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, maxMediaUploadBytes+(1<<20))
 
 	fileHeader, err := ctx.FormFile("file")
@@ -341,30 +354,12 @@ func (handler *Handler) UploadMedia(ctx *gin.Context) {
 	}
 
 	now := time.Now()
-	relativeDir := now.Format("2006/01")
+	relativeDir := now.Format("2006/01/02")
 	originalName := safeOriginalName(fileHeader.Filename)
 	storedName := uniqueStoredName(originalName, extension, now)
-	targetDir := filepath.Join(handler.uploadDir, relativeDir)
-	targetPath := filepath.Join(targetDir, storedName)
-
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare upload directory"})
-		return
-	}
-
-	destination, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	objectKey := filepath.ToSlash(filepath.Join(relativeDir, storedName))
+	mediaURL, err := handler.storage.Save(ctx.Request.Context(), objectKey, file, fileHeader.Size, contentType)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
-		return
-	}
-	if _, err := io.Copy(destination, file); err != nil {
-		_ = destination.Close()
-		_ = os.Remove(targetPath)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
-		return
-	}
-	if err := destination.Close(); err != nil {
-		_ = os.Remove(targetPath)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save upload"})
 		return
 	}
@@ -375,13 +370,13 @@ func (handler *Handler) UploadMedia(ctx *gin.Context) {
 	}
 	category := strings.TrimSpace(ctx.PostForm("category"))
 	if category == "" {
-		category = "上传"
+		category = defaultCategory
 	}
 
 	asset := MediaAsset{
 		ID:         idgen.NextString(),
 		FileName:   originalName,
-		URL:        "/uploads/" + filepath.ToSlash(filepath.Join(relativeDir, storedName)),
+		URL:        mediaURL,
 		Alt:        alt,
 		Type:       mediaKind(contentType),
 		Category:   category,
@@ -395,7 +390,7 @@ func (handler *Handler) UploadMedia(ctx *gin.Context) {
 
 	created, err := handler.repo.CreateMedia(ctx.Request.Context(), asset)
 	if err != nil {
-		_ = os.Remove(targetPath)
+		_ = handler.storage.Delete(ctx.Request.Context(), mediaURL)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record media"})
 		return
 	}
@@ -440,7 +435,7 @@ func (handler *Handler) DeleteMedia(ctx *gin.Context) {
 		return
 	}
 
-	_ = handler.removeLocalUpload(asset)
+	_ = handler.storage.Delete(ctx.Request.Context(), asset.URL)
 	ctx.JSON(http.StatusOK, gin.H{"ok": true, "asset": asset})
 }
 
@@ -587,33 +582,6 @@ func (handler *Handler) writeMediaError(ctx *gin.Context, err error) {
 	}
 
 	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
-}
-
-func (handler *Handler) removeLocalUpload(asset MediaAsset) error {
-	if !strings.HasPrefix(asset.URL, "/uploads/") {
-		return nil
-	}
-
-	relativePath := strings.TrimPrefix(asset.URL, "/uploads/")
-	targetPath := filepath.Join(handler.uploadDir, filepath.FromSlash(relativePath))
-	root, err := filepath.Abs(handler.uploadDir)
-	if err != nil {
-		return err
-	}
-	target, err := filepath.Abs(targetPath)
-	if err != nil {
-		return err
-	}
-
-	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
-		return nil
-	}
-
-	if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-
-	return nil
 }
 
 func detectMediaType(file multipart.File, _ string) (string, string, error) {
