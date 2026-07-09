@@ -11,6 +11,7 @@ import {
   getMySubmissions,
   getSiteSettings,
   getTags,
+  uploadMedia,
   updateSubmission,
   type Category,
   type SiteSettings,
@@ -44,6 +45,7 @@ const error = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const titleInput = ref<HTMLInputElement | null>(null);
+const coverFileInput = ref<HTMLInputElement | null>(null);
 const turnstileEl = ref<HTMLElement | null>(null);
 const turnstileWidgetId = ref("");
 const turnstileToken = ref("");
@@ -51,6 +53,7 @@ const turnstileError = ref("");
 const siteSettings = ref<SiteSettings | null>(null);
 const validationAttempted = ref(false);
 const submitAttempted = ref(false);
+const coverUploading = ref(false);
 
 const title = ref("");
 const summary = ref("");
@@ -84,6 +87,45 @@ const submissionsEnabled = computed(() => siteSettings.value?.submissionsEnabled
 const submissionGuide = computed(() => siteSettings.value?.submissionGuide || "登录用户可以提交公开投稿或私密文章，公开投稿审核通过后会发布到站点。");
 const submissionLimit = computed(() => siteSettings.value?.submissionLimit || "每天最多 3 篇");
 const canEdit = computed(() => submissionsEnabled.value && (!current.value || current.value.status === "draft" || current.value.status === "returned" || (current.value.status === "published" && current.value.visibility === "private")));
+const isPublishedPrivate = computed(() => current.value?.status === "published" && current.value.visibility === "private");
+const isConvertingPrivateToPublic = computed(() => isPublishedPrivate.value && visibility.value === "public");
+const showSaveDraft = computed(() => !isPublishedPrivate.value);
+const submitPanelTitle = computed(() => {
+  if (isConvertingPrivateToPublic.value) {
+    return "提交公开审核";
+  }
+  if (isPublishedPrivate.value) {
+    return "更新私密文章";
+  }
+  return isPrivate.value ? "私密文章会直接发布" : "公开文章需要审核";
+});
+const submitPanelDescription = computed(() => {
+  if (isConvertingPrivateToPublic.value) {
+    return "当前私密文章会提交给编辑审核，审核通过后转为公开文章。审核期间原私密文章仍可访问。";
+  }
+  if (isPublishedPrivate.value) {
+    return "修改后会直接更新当前私密文章；也可以切换为公开并提交审核。";
+  }
+  return isPrivate.value ? "发布后仅你和管理员可以访问，之后可改为公开并提交审核。" : "提交后进入待审核状态。编辑可能会通过、退回修改或拒绝投稿。";
+});
+const primaryActionText = computed(() => {
+  if (saving.value) {
+    if (isConvertingPrivateToPublic.value) {
+      return "提交中...";
+    }
+    if (isPublishedPrivate.value) {
+      return "更新中...";
+    }
+    return isPrivate.value ? "发布中..." : "提交中...";
+  }
+  if (isConvertingPrivateToPublic.value) {
+    return "提交公开审核";
+  }
+  if (isPublishedPrivate.value) {
+    return "更新私密文章";
+  }
+  return isPrivate.value ? "发布私密文章" : "提交审核";
+});
 const turnstileRequired = computed(() => Boolean(
   auth.user &&
   canEdit.value &&
@@ -91,9 +133,7 @@ const turnstileRequired = computed(() => Boolean(
   siteSettings.value.turnstileSubmission &&
   siteSettings.value.turnstileSiteKey
 ));
-const titleError = computed(() => validationAttempted.value && !title.value.trim() ? "请输入标题" : "");
-const turnstileMissingError = computed(() => submitAttempted.value && turnstileRequired.value && !turnstileToken.value ? (turnstileError.value || "请先完成人机验证") : "");
-const turnstileDisplayError = computed(() => turnstileError.value || turnstileMissingError.value);
+const titleInvalid = computed(() => validationAttempted.value && !title.value.trim());
 
 onMounted(() => {
   void loadSiteSettings();
@@ -112,12 +152,6 @@ watch(turnstileRequired, (required) => {
   }
 
   removeTurnstile();
-});
-
-watch(title, (value) => {
-  if (value.trim() && error.value === "请输入标题后再保存") {
-    error.value = "";
-  }
 });
 
 watch(turnstileToken, (value) => {
@@ -211,7 +245,61 @@ function normalizeSelectedTags() {
   selectedTags.value = normalizeTags(selectedTags.value);
 }
 
+function openCoverPicker() {
+  if (!auth.user || !canEdit.value || coverUploading.value) {
+    return;
+  }
+
+  coverFileInput.value?.click();
+}
+
+async function handleCoverPicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] || null;
+  input.value = "";
+  if (!file) {
+    return;
+  }
+
+  await uploadCover(file);
+}
+
+async function uploadCover(file: File) {
+  if (!file.type.startsWith("image/")) {
+    toast.error("封面上传失败", "只能上传图片文件。");
+    return;
+  }
+
+  coverUploading.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const asset = await uploadMedia(file, {
+      alt: title.value.trim() || defaultAlt(file.name),
+      category: "投稿封面"
+    });
+    coverImage.value = asset.url;
+    toast.success("封面已上传", "已更新封面预览。");
+  } catch (err) {
+    const uploadError = err instanceof Error ? err.message : "封面上传失败";
+    toast.error("封面上传失败", uploadError);
+  } finally {
+    coverUploading.value = false;
+  }
+}
+
 async function saveDraft() {
+  if (isPublishedPrivate.value) {
+    if (isConvertingPrivateToPublic.value) {
+      toast.warning("无法保存草稿", "转公开投稿需要点击提交公开审核。");
+      return;
+    }
+
+    await persist(true);
+    return;
+  }
+
   await persist(false);
 }
 
@@ -222,6 +310,8 @@ async function submitForReview() {
 async function persist(submit: boolean) {
   validationAttempted.value = true;
   submitAttempted.value = submit;
+  const convertingPrivateToPublic = isConvertingPrivateToPublic.value;
+  const updatingPublishedPrivate = isPublishedPrivate.value && !convertingPrivateToPublic;
 
   if (!auth.user) {
     error.value = "请先登录后再投稿";
@@ -234,24 +324,25 @@ async function persist(submit: boolean) {
     return;
   }
   if (!title.value.trim()) {
-    error.value = "请输入标题后再保存";
+    error.value = "";
     message.value = "";
-    toast.error(submit ? "无法提交审核" : "无法保存草稿", error.value);
+    toast.error(actionFailureTitle(submit), "请输入标题后再保存");
     await nextTick();
     titleInput.value?.focus();
     return;
   }
   if (submit && !content.value.trim()) {
-    error.value = isPrivate.value ? "请填写正文后再发布私密文章" : "请填写正文后再提交审核";
+    const validationMessage = isPrivate.value ? "请填写正文后再发布或更新私密文章" : "请填写正文后再提交审核";
+    error.value = "";
     message.value = "";
-    toast.error(isPrivate.value ? "无法发布私密文章" : "无法提交审核", error.value);
+    toast.error(actionFailureTitle(submit), validationMessage);
     return;
   }
   if (submit && turnstileRequired.value && !turnstileToken.value) {
-    turnstileError.value = turnstileError.value || "请先完成人机验证";
-    error.value = turnstileError.value;
+    const validationMessage = turnstileError.value || "请先完成人机验证";
+    error.value = "";
     message.value = "";
-    toast.error(isPrivate.value ? "无法发布私密文章" : "无法提交审核", error.value);
+    toast.error(actionFailureTitle(submit), validationMessage);
     await nextTick();
     turnstileEl.value?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
@@ -268,19 +359,32 @@ async function persist(submit: boolean) {
     if (submit) {
       resetTurnstile();
     }
-    const submitTitle = isPrivate.value ? "私密文章已发布" : "已提交审核";
-    const submitMessage = isPrivate.value ? "只有你和管理员可以访问这篇文章。" : "审核结果会通过站内信通知你。";
+    const submitTitle = convertingPrivateToPublic ? "已提交公开审核" : (updatingPublishedPrivate ? "私密文章已更新" : (isPrivate.value ? "私密文章已发布" : "已提交审核"));
+    const submitMessage = convertingPrivateToPublic ? "审核通过后会转为公开文章。" : (updatingPublishedPrivate ? "当前私密文章已更新。" : (isPrivate.value ? "只有你和管理员可以访问这篇文章。" : "审核结果会通过站内信通知你。"));
     message.value = submit ? submitMessage : "草稿已保存。";
     toast.success(submit ? submitTitle : "草稿已保存", submit ? submitMessage : "内容已保存在你的投稿列表。");
   } catch (err) {
     error.value = submissionErrorMessage(err);
-    toast.error(submit ? "投稿提交失败" : "草稿保存失败", error.value);
+    toast.error(submit ? actionFailureTitle(submit) : "草稿保存失败", error.value);
     if (submit) {
       resetTurnstile();
     }
   } finally {
     saving.value = false;
   }
+}
+
+function actionFailureTitle(submit: boolean) {
+  if (!submit) {
+    return "无法保存草稿";
+  }
+  if (isConvertingPrivateToPublic.value) {
+    return "无法提交公开审核";
+  }
+  if (isPublishedPrivate.value) {
+    return "无法更新私密文章";
+  }
+  return isPrivate.value ? "无法发布私密文章" : "无法提交审核";
 }
 
 function submissionErrorMessage(err: unknown) {
@@ -370,6 +474,10 @@ function removeTurnstile() {
   turnstileWidgetId.value = "";
 }
 
+function defaultAlt(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "");
+}
+
 function statusText(value: string) {
   if (value === "submitted") {
     return "待审核";
@@ -381,7 +489,10 @@ function statusText(value: string) {
     return "已拒绝";
   }
   if (value === "published") {
-    return visibility.value === "private" ? "私密已发布" : "已发布";
+    if (isConvertingPrivateToPublic.value) {
+      return "转公开编辑中";
+    }
+    return current.value?.visibility === "private" ? "私密已发布" : "已发布";
   }
   if (value === "archived") {
     return "已下架";
@@ -454,20 +565,20 @@ function statusClass(value: string) {
               <span class="step-index">1</span>
               <div>
                 <strong>填写内容</strong>
-                <div class="meta-row"><span>{{ current ? "草稿已保存" : "正在编辑" }}</span></div>
+                <div class="meta-row"><span>{{ isPublishedPrivate ? "正在编辑私密文章" : (current ? "草稿已保存" : "正在编辑") }}</span></div>
               </div>
             </div>
-            <div class="step" :class="{ current: status === 'draft' || status === 'returned', done: status === 'submitted' || status === 'published' }">
+            <div class="step" :class="{ current: status === 'draft' || status === 'returned' || isConvertingPrivateToPublic, done: status === 'submitted' || (status === 'published' && !isConvertingPrivateToPublic) }">
               <span class="step-index">2</span>
               <div>
-                <strong>{{ isPrivate ? "私密发布" : "提交审核" }}</strong>
-                <div class="meta-row"><span>{{ isPrivate ? "私密文章不进入公开审核队列" : "编辑会检查质量、格式和安全" }}</span></div>
+                <strong>{{ isConvertingPrivateToPublic ? "提交公开审核" : (isPrivate ? "私密发布" : "提交审核") }}</strong>
+                <div class="meta-row"><span>{{ isConvertingPrivateToPublic ? "审核通过后转为公开文章" : (isPrivate ? "私密文章不进入公开审核队列" : "编辑会检查质量、格式和安全") }}</span></div>
               </div>
             </div>
             <div class="step" :class="{ current: status === 'submitted', done: status === 'published' }">
               <span class="step-index">3</span>
               <div>
-                <strong>{{ isPrivate ? "仅作者可见" : "通过后发布" }}</strong>
+                <strong>{{ isPrivate ? "仅作者可见" : "通过后公开" }}</strong>
                 <div class="meta-row"><span>{{ isPrivate ? "之后可改为公开并提交审核" : "发布后进入公开文章列表" }}</span></div>
               </div>
             </div>
@@ -492,14 +603,12 @@ function statusClass(value: string) {
                 v-model="title"
                 ref="titleInput"
                 class="input"
-                :class="{ 'input-invalid': titleError }"
+                :class="{ 'input-invalid': titleInvalid }"
                 id="title"
                 :disabled="!canEdit"
                 aria-required="true"
-                :aria-invalid="Boolean(titleError)"
-                aria-describedby="submission-title-error"
+                :aria-invalid="titleInvalid"
               >
-              <span v-if="titleError" id="submission-title-error" class="field-error">{{ titleError }}</span>
             </div>
             <div class="field">
               <label for="summary">摘要</label>
@@ -550,6 +659,19 @@ function statusClass(value: string) {
               alt="文章封面预览"
               style="border-radius: 8px; aspect-ratio: 16 / 9; object-fit: cover;"
             >
+            <div class="cover-actions">
+              <button class="button-secondary" type="button" :disabled="!auth.user || !canEdit || coverUploading" @click="openCoverPicker">
+                {{ coverUploading ? "上传中..." : "上传封面" }}
+              </button>
+              <input
+                ref="coverFileInput"
+                class="sr-only"
+                type="file"
+                accept="image/*"
+                :disabled="!auth.user || !canEdit || coverUploading"
+                @change="handleCoverPicked"
+              >
+            </div>
             <input v-model="coverImage" class="input" aria-label="封面图片 URL" :disabled="!canEdit">
           </div>
         </section>
@@ -560,21 +682,21 @@ function statusClass(value: string) {
           </div>
           <div class="settings-stack">
             <div class="review-note">
-              <strong>{{ isPrivate ? "私密文章会直接发布" : "公开文章需要审核" }}</strong>
-              <p>{{ isPrivate ? "发布后仅你和管理员可以访问，之后可改为公开并提交审核。" : "提交后进入待审核状态。编辑可能会通过、退回修改或拒绝投稿。" }}</p>
+              <strong>{{ submitPanelTitle }}</strong>
+              <p>{{ submitPanelDescription }}</p>
               <p v-if="!isPrivate">当前频率限制：{{ submissionLimit }}。</p>
 	            </div>
 		            <p v-if="error" class="error">{{ error }}</p>
 		            <div v-if="turnstileRequired" class="field">
 		              <label>人机验证</label>
 		              <div ref="turnstileEl"></div>
-		              <p v-if="turnstileDisplayError" class="error" role="alert">{{ turnstileDisplayError }}</p>
+		              <p v-if="turnstileError" class="error" role="alert">{{ turnstileError }}</p>
 		            </div>
-            <button class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit || status === 'published'" @click="saveDraft">
+            <button v-if="showSaveDraft" class="button-secondary" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="saveDraft">
               {{ saving ? "保存中..." : "保存草稿" }}
             </button>
             <button class="button" type="button" :disabled="saving || loadingSubmission || !auth.user || !canEdit" @click="submitForReview">
-              {{ saving ? "提交中..." : (isPrivate ? "发布私密文章" : "提交审核") }}
+              {{ primaryActionText }}
             </button>
           </div>
         </section>

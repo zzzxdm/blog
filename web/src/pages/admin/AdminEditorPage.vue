@@ -13,6 +13,7 @@ import {
   getTags,
   publishAdminPost,
   restoreAdminPostRevision,
+  uploadAdminMedia,
   updateAdminPost,
   type AdminPost,
   type AdminPostPayload,
@@ -41,6 +42,7 @@ const message = ref("");
 const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
+const coverFileInput = ref<HTMLInputElement | null>(null);
 
 const title = ref("");
 const summary = ref("");
@@ -54,6 +56,7 @@ const seoDescription = ref("");
 const status = ref<AdminPostStatus>("draft");
 const visibility = ref<AdminPostVisibility>("public");
 const scheduledAt = ref(nextScheduleValue());
+const coverUploading = ref(false);
 
 const description = computed(() => current.value ? `自动保存于 ${formatDateTime(current.value.updatedAt)}，当前版本 ${current.value.version}。` : "新文章草稿。");
 
@@ -124,6 +127,50 @@ function applyPost(post: AdminPost) {
   status.value = post.status;
   visibility.value = post.visibility || "public";
   scheduledAt.value = post.scheduledAt ? toDateTimeLocal(post.scheduledAt) : nextScheduleValue();
+}
+
+function openCoverPicker() {
+  if (coverUploading.value) {
+    return;
+  }
+
+  coverFileInput.value?.click();
+}
+
+async function handleCoverPicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] || null;
+  input.value = "";
+  if (!file) {
+    return;
+  }
+
+  await uploadCover(file);
+}
+
+async function uploadCover(file: File) {
+  if (!file.type.startsWith("image/")) {
+    toast.error("封面上传失败", "只能上传图片文件。");
+    return;
+  }
+
+  coverUploading.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const asset = await uploadAdminMedia(file, {
+      alt: title.value.trim() || defaultAlt(file.name),
+      category: "封面图"
+    });
+    coverImage.value = asset.url;
+    toast.success("封面已上传", "已更新封面预览。");
+  } catch (err) {
+    const uploadError = err instanceof Error ? err.message : "封面上传失败";
+    toast.error("封面上传失败", uploadError);
+  } finally {
+    coverUploading.value = false;
+  }
 }
 
 function payload(nextStatus: AdminPostStatus): AdminPostPayload {
@@ -329,6 +376,10 @@ function toDateTimeLocal(value: string) {
   const pad = (item: number) => String(item).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
+
+function defaultAlt(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "");
+}
 </script>
 
 <template>
@@ -422,6 +473,19 @@ function toDateTimeLocal(value: string) {
               alt="当前文章封面图"
               style="border-radius: 8px; aspect-ratio: 16 / 9; object-fit: cover;"
             >
+            <div class="cover-actions">
+              <button class="button-secondary" type="button" :disabled="coverUploading" @click="openCoverPicker">
+                {{ coverUploading ? "上传中..." : "上传封面" }}
+              </button>
+              <input
+                ref="coverFileInput"
+                class="sr-only"
+                type="file"
+                accept="image/*"
+                :disabled="coverUploading"
+                @change="handleCoverPicked"
+              >
+            </div>
             <input v-model="coverImage" class="input" aria-label="封面图片 URL">
             <div class="field">
               <label>强调色</label>

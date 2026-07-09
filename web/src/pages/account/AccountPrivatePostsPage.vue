@@ -112,6 +112,7 @@ function submissionForPost(post: Post) {
               <span>{{ item.readingTime }} 分钟阅读</span>
               <span>{{ item.viewCount }} 次阅读</span>
               <RouterLink class="button-secondary" :to="`/posts/${item.slug}`">查看文章</RouterLink>
+              <RouterLink v-if="submissionForPost(item)" class="button-secondary" :to="`/submit?id=${encodeURIComponent(submissionForPost(item).id)}`">编辑私密文章</RouterLink>
               <RouterLink v-if="submissionForPost(item)" class="button-secondary" :to="`/submit?id=${encodeURIComponent(submissionForPost(item).id)}&visibility=public`">转公开投稿</RouterLink>
             </div>
           </div>

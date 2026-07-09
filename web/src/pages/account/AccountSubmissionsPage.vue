@@ -159,6 +159,7 @@ function statusClass(value: Submission["status"]) {
               <div class="header-actions">
                 <template v-if="item.status === 'published' && item.publishedPostSlug">
                   <RouterLink class="button-secondary" :to="`/posts/${item.publishedPostSlug}`">查看文章</RouterLink>
+                  <RouterLink v-if="item.visibility === 'private'" class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}`">编辑私密文章</RouterLink>
                   <RouterLink v-if="item.visibility === 'private'" class="button-secondary" :to="`/submit?id=${encodeURIComponent(item.id)}&visibility=public`">转公开投稿</RouterLink>
                 </template>
                 <span v-else-if="item.status === 'archived'" class="muted">已下架</span>

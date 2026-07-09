@@ -2901,6 +2901,12 @@ td {
   font-weight: 800;
 }
 
+.cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .checkbox-line {
   display: inline-flex;
   align-items: center;
