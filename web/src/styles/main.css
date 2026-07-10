@@ -1331,6 +1331,10 @@ textarea {
   padding: 32px 0 64px;
 }
 
+.article-shell > article {
+  min-width: 0;
+}
+
 .reading-progress {
   position: fixed;
   z-index: 95;
@@ -1354,6 +1358,7 @@ textarea {
   margin: 12px 0 14px;
   font-size: clamp(34px, 6vw, 62px);
   line-height: 1.03;
+  overflow-wrap: anywhere;
 }
 
 .article-breadcrumb-row {
@@ -1408,7 +1413,18 @@ textarea {
 .article-markdown {
   position: relative;
   z-index: 0;
+  min-width: 0;
+  max-width: 100%;
   margin: 24px 0 32px;
+}
+
+.markdown-preview,
+.article-markdown .md-editor,
+.article-markdown .md-editor-previewOnly,
+.article-markdown .md-editor-preview,
+.article-markdown .md-editor-preview-wrapper {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .article-markdown .md-editor-previewOnly {
@@ -1417,6 +1433,89 @@ textarea {
 
 .article-markdown .md-editor-preview-wrapper {
   overflow: visible;
+}
+
+.article-markdown .md-editor-preview {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.78;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.article-markdown .md-editor-preview h1,
+.article-markdown .md-editor-preview h2,
+.article-markdown .md-editor-preview h3,
+.article-markdown .md-editor-preview h4,
+.article-markdown .md-editor-preview h5,
+.article-markdown .md-editor-preview h6 {
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.article-markdown .md-editor-preview p,
+.article-markdown .md-editor-preview li,
+.article-markdown .md-editor-preview blockquote {
+  overflow-wrap: anywhere;
+}
+
+.article-markdown .md-editor-preview img,
+.article-markdown .md-editor-preview video,
+.article-markdown .md-editor-preview canvas,
+.article-markdown .md-editor-preview svg,
+.article-markdown .md-editor-preview iframe {
+  max-width: 100%;
+}
+
+.article-markdown .md-editor-preview img,
+.article-markdown .md-editor-preview video,
+.article-markdown .md-editor-preview canvas,
+.article-markdown .md-editor-preview svg {
+  height: auto;
+}
+
+.article-markdown .md-editor-preview iframe {
+  width: 100%;
+  border: 0;
+  aspect-ratio: 16 / 9;
+}
+
+.article-markdown .md-editor-preview pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.article-markdown .md-editor-preview pre code {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.article-markdown .md-editor-preview code:not(pre code) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.article-markdown .md-editor-preview table {
+  display: block;
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+
+.article-markdown .md-editor-preview .katex-display,
+.article-markdown .md-editor-preview .mermaid,
+.article-markdown .md-editor-preview mjx-container {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .markdown-theme-switcher {
@@ -3095,6 +3194,27 @@ textarea.input {
     margin-top: 0;
   }
 
+  .article-shell {
+    width: min(100% - 24px, 760px);
+    gap: 24px;
+    padding-top: 22px;
+  }
+
+  .article-hero h1 {
+    font-size: 34px;
+    line-height: 1.12;
+  }
+
+  .article-breadcrumb-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .article-markdown .md-editor-preview {
+    font-size: 16px;
+    line-height: 1.72;
+  }
+
   .auth-visual,
   .auth-visual img {
     min-height: 420px;
@@ -3388,6 +3508,51 @@ textarea.input {
 
   .feature-content {
     padding: 22px;
+  }
+
+  .article-shell {
+    width: 100%;
+    padding: 16px 14px 44px;
+  }
+
+  .article-cover {
+    margin: 18px 0;
+    border-radius: 6px;
+  }
+
+  .article-hero h1 {
+    font-size: 30px;
+  }
+
+  .article-hero .dek {
+    font-size: 16px;
+  }
+
+  .article-markdown {
+    margin: 18px 0 26px;
+  }
+
+  .article-markdown .md-editor-preview h1 {
+    font-size: 28px;
+  }
+
+  .article-markdown .md-editor-preview h2 {
+    font-size: 24px;
+  }
+
+  .article-markdown .md-editor-preview h3 {
+    font-size: 20px;
+  }
+
+  .article-markdown .md-editor-preview blockquote {
+    margin-right: 0;
+    margin-left: 0;
+    padding-left: 14px;
+  }
+
+  .article-markdown .md-editor-preview pre {
+    margin-right: -2px;
+    margin-left: -2px;
   }
 
   .article-card,
