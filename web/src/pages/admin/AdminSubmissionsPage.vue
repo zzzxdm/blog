@@ -153,9 +153,11 @@ async function review(action: "approve" | "return" | "reject") {
       category: publishCategory.value
     });
     message.value = action === "approve" ? `已发布为 /posts/${updated.publishedPostSlug}` : "审核结果已发送给投稿人。";
+    toast.success(action === "approve" ? "投稿已通过" : "审核结果已发送", message.value);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "审核操作失败";
+    toast.error("审核操作失败", error.value);
   } finally {
     acting.value = false;
   }
@@ -276,10 +278,12 @@ async function saveEdit() {
     publishSlug.value = updated.slug;
     publishCategory.value = updated.category;
     message.value = `已保存《${updated.title}》的审核修订。`;
+    toast.success("审核修订已保存", updated.title);
     editing.value = false;
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "投稿修订保存失败";
+    toast.error("投稿修订保存失败", error.value);
   } finally {
     savingEdit.value = false;
   }
@@ -297,8 +301,10 @@ async function upgradeAuthor() {
   try {
     const user = await updateAdminUserRole(selected.value.authorId, "author");
     message.value = `已将 ${user.displayName} 升级为作者。`;
+    toast.success("作者已升级", user.displayName);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "作者升级失败";
+    toast.error("作者升级失败", error.value);
   } finally {
     upgradingAuthor.value = false;
   }

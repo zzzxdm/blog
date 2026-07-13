@@ -142,15 +142,18 @@ async function saveCategory() {
     if (categoryId.value) {
       await updateAdminCategory(categoryId.value, payload);
       message.value = "分类已更新。";
+      toast.success("分类已更新", payload.name);
     } else {
       await createAdminCategory(payload);
       message.value = "分类已创建。";
+      toast.success("分类已创建", payload.name);
     }
 
     resetCategoryForm();
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "分类保存失败";
+    toast.error("分类保存失败", error.value);
   } finally {
     saving.value = false;
   }
@@ -221,15 +224,18 @@ async function saveTag() {
     if (tagId.value) {
       await updateAdminTag(tagId.value, payload);
       message.value = "标签已更新。";
+      toast.success("标签已更新", payload.name);
     } else {
       await createAdminTag(payload);
       message.value = "标签已创建。";
+      toast.success("标签已创建", payload.name);
     }
 
     resetTagForm();
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "标签保存失败";
+    toast.error("标签保存失败", error.value);
   } finally {
     saving.value = false;
   }

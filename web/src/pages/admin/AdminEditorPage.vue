@@ -91,6 +91,7 @@ async function load() {
     await loadRevisions(post.id);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "文章加载失败";
+    toast.error("文章加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -198,11 +199,13 @@ async function save(nextStatus: AdminPostStatus) {
   if (!title.value.trim()) {
     error.value = "请输入标题后再保存";
     message.value = "";
+    toast.warning("无法保存草稿", error.value);
     return;
   }
   if (nextStatus === "review" && !content.value.trim()) {
     error.value = "请填写正文后再提交审核";
     message.value = "";
+    toast.warning("无法提交审核", error.value);
     return;
   }
 
@@ -220,6 +223,7 @@ async function save(nextStatus: AdminPostStatus) {
     toast.success("草稿已保存", `当前版本 ${saved.version}。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "保存失败";
+    toast.error("保存失败", error.value);
   } finally {
     saving.value = false;
   }
@@ -233,6 +237,7 @@ async function publish() {
   if (!title.value.trim() || !content.value.trim()) {
     error.value = "请填写标题和正文后再发布。";
     message.value = "";
+    toast.warning("无法发布", error.value);
     return;
   }
 
@@ -251,6 +256,7 @@ async function publish() {
     toast.success("文章已发布", `/posts/${published.publishedPostSlug || published.slug}`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "发布失败";
+    toast.error("发布失败", error.value);
   } finally {
     saving.value = false;
   }
@@ -264,11 +270,13 @@ async function schedulePost() {
   if (!scheduledAt.value) {
     error.value = "请选择发布时间。";
     message.value = "";
+    toast.warning("无法定时发布", error.value);
     return;
   }
   if (!title.value.trim() || !content.value.trim()) {
     error.value = "请填写标题和正文后再定时发布。";
     message.value = "";
+    toast.warning("无法定时发布", error.value);
     return;
   }
 
@@ -290,6 +298,7 @@ async function openPreview() {
   if (!title.value.trim()) {
     error.value = "请输入标题后再生成预览";
     message.value = "";
+    toast.warning("无法生成预览", error.value);
     return;
   }
 
@@ -310,6 +319,7 @@ async function openPreview() {
     toast.success("预览链接已生成", `${formatDate(preview.expiresAt)} 前有效。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "预览生成失败";
+    toast.error("预览生成失败", error.value);
   } finally {
     previewing.value = false;
   }
@@ -342,6 +352,7 @@ async function restoreRevision(revision: AdminPostRevision) {
     toast.success("版本已恢复", `已恢复到版本 ${revision.version}。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "版本恢复失败";
+    toast.error("版本恢复失败", error.value);
   } finally {
     restoringId.value = "";
   }

@@ -56,6 +56,7 @@ async function load() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号设置加载失败";
+    toast.error("账号设置加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -83,6 +84,7 @@ async function save() {
     toast.success("账号设置已保存", "公开资料和偏好已更新。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号设置保存失败";
+    toast.error("账号设置保存失败", error.value);
   } finally {
     saving.value = false;
   }
@@ -119,6 +121,7 @@ function trimAvatarText() {
 async function savePassword() {
   if (!currentPassword.value || !newPassword.value) {
     error.value = "请输入当前密码和新密码";
+    toast.warning("无法更新密码", error.value);
     return;
   }
 
@@ -134,6 +137,7 @@ async function savePassword() {
     toast.success("密码已更新", "下次登录请使用新密码。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "密码修改失败";
+    toast.error("密码修改失败", error.value);
   } finally {
     passwordSaving.value = false;
   }
@@ -148,11 +152,14 @@ async function sendVerification() {
     const response = await requestEmailVerification();
     verificationToken.value = response.verificationToken || "";
     message.value = response.verificationToken ? `验证 token：${response.verificationToken}` : "验证入口已发送。";
-    if (!response.verificationToken) {
+    if (response.verificationToken) {
+      toast.info("验证 token 已生成", "请使用页面上的 token 完成验证。");
+    } else {
       toast.success("验证入口已发送", "请检查邮箱收件箱。");
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "发送验证失败";
+    toast.error("发送验证失败", error.value);
   } finally {
     verificationSaving.value = false;
   }
@@ -161,6 +168,7 @@ async function sendVerification() {
 async function confirmVerification() {
   if (!verificationToken.value) {
     error.value = "请输入邮箱验证 token";
+    toast.warning("无法确认验证", error.value);
     return;
   }
 
@@ -179,6 +187,7 @@ async function confirmVerification() {
     toast.success("邮箱已验证", "现在可以投稿、评论和收藏。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "邮箱验证失败";
+    toast.error("邮箱验证失败", error.value);
   } finally {
     verificationSaving.value = false;
   }
@@ -210,6 +219,7 @@ async function removeSession(session: SessionInfo) {
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "登录设备移除失败";
+    toast.error("登录设备移除失败", error.value);
   } finally {
     sessionActingId.value = "";
   }
@@ -233,6 +243,7 @@ async function exportData() {
     toast.success("账号数据已导出", "下载文件已生成。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号数据导出失败";
+    toast.error("账号数据导出失败", error.value);
   } finally {
     exporting.value = false;
   }
@@ -260,6 +271,7 @@ async function deleteAccount() {
     await router.push("/");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "账号注销失败";
+    toast.error("账号注销失败", error.value);
   } finally {
     deletingAccount.value = false;
   }
