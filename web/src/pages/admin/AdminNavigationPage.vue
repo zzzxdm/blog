@@ -14,6 +14,10 @@ import { useToastStore } from "../../stores/toast";
 type NavListKey = "topItems" | "footerItems";
 
 const toast = useToastStore();
+const navListLabels: Record<NavListKey, string> = {
+  topItems: "顶部菜单",
+  footerItems: "底部菜单"
+};
 const navigation = ref<OperationsNavigation | null>(null);
 const loading = ref(false);
 const saving = ref(false);
@@ -70,6 +74,7 @@ function addItem(target: NavListKey) {
     order: list.length + 1
   });
   normalizeItemOrder(list);
+  toast.info("菜单项已添加", `请完善${navListLabels[target]}后保存。`);
 }
 
 function removeItem(target: NavListKey, item: NavItem) {
@@ -79,6 +84,7 @@ function removeItem(target: NavListKey, item: NavItem) {
 
   navigation.value[target] = navigation.value[target].filter((candidate) => candidate.id !== item.id);
   normalizeItemOrder(navigation.value[target]);
+  toast.info("菜单项已移除", `${item.label || "未命名菜单"} 将在保存后生效。`);
 }
 
 function moveItem(target: NavListKey, item: NavItem, direction: -1 | 1) {
@@ -96,6 +102,7 @@ function moveItem(target: NavListKey, item: NavItem, direction: -1 | 1) {
   const [moved] = list.splice(index, 1);
   list.splice(nextIndex, 0, moved);
   normalizeItemOrder(list);
+  toast.info("菜单顺序已调整", `${moved.label || "未命名菜单"} 将在保存后生效。`);
 }
 
 function addRedirect() {
@@ -108,6 +115,7 @@ function addRedirect() {
     to: "/",
     code: 301
   });
+  toast.info("重定向已添加", "请完善跳转规则后保存。");
 }
 
 function removeRedirect(redirect: RedirectRule) {
@@ -116,6 +124,7 @@ function removeRedirect(redirect: RedirectRule) {
   }
 
   navigation.value.redirects = navigation.value.redirects.filter((candidate) => candidate !== redirect);
+  toast.info("重定向已移除", `${redirect.from || "未填写来源"} 将在保存后生效。`);
 }
 
 function normalizedNavigation(value: OperationsNavigation): OperationsNavigation {

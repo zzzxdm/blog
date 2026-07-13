@@ -33,15 +33,19 @@ watch(settings, (value) => {
   blockedWordsText.value = value?.blockedWords.join(", ") || "";
 });
 
-async function load() {
+async function load(notify = false) {
   loading.value = true;
   error.value = "";
 
   try {
     settings.value = await getAdminSettings();
     applyPrimaryColor(settings.value.themePrimary);
+    if (notify) {
+      toast.success("设置已重新加载", "已同步服务器端最新配置。");
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "设置加载失败";
+    toast.error("设置加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -67,6 +71,7 @@ async function save() {
     toast.success("设置已保存", "站点配置已更新。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "设置保存失败";
+    toast.error("设置保存失败", error.value);
   } finally {
     saving.value = false;
   }
@@ -79,6 +84,7 @@ function selectTheme(color: string) {
 
   settings.value.themePrimary = color;
   applyPrimaryColor(color);
+  toast.info("主色已切换", "保存设置后会对所有访客生效。");
 }
 
 function isSelectedTheme(color: string) {
@@ -91,6 +97,7 @@ function setThemeMode(mode: ThemeMode) {
   if (settings.value) {
     applyPrimaryColor(settings.value.themePrimary);
   }
+  toast.info(mode === "dark" ? "已切换深色预览" : "已切换浅色预览", "保存设置后会对所有访客生效。");
 }
 
 function toggleDarkModeSetting(event: Event) {
@@ -114,6 +121,7 @@ async function testMail() {
     toast.success("测试邮件已发送", result.message);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "测试邮件生成失败";
+    toast.error("测试邮件发送失败", error.value);
   } finally {
     testingMail.value = false;
   }
@@ -145,7 +153,7 @@ async function runBackup() {
 
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button" @click="load">重新加载</button>
+        <button class="button-secondary" type="button" @click="load(true)">重新加载</button>
         <button class="button" type="button" :disabled="saving || !settings" @click="save">{{ saving ? "保存中..." : "保存设置" }}</button>
       </div>
     </template>

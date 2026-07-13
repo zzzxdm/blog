@@ -44,10 +44,12 @@ function addRedirect() {
     to: "/new-path",
     code: 301
   });
+  toast.info("规则已添加", "请完善旧地址和新地址后保存。");
 }
 
 function removeRedirect(redirect: RedirectRule) {
   redirects.value = redirects.value.filter((item) => item !== redirect);
+  toast.info("规则已删除", `${redirect.from || "未填写旧地址"} 将在保存后生效。`);
 }
 
 async function save() {
