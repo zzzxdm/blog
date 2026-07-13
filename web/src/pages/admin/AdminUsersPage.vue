@@ -81,6 +81,7 @@ async function load() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户列表加载失败";
+    toast.error("用户列表加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -106,6 +107,17 @@ function viewUser(user: ManagedUser) {
   selectedId.value = user.id;
   error.value = "";
   message.value = "";
+  toast.info("已打开用户详情", user.displayName);
+}
+
+function toggleInvitePanel() {
+  inviteOpen.value = !inviteOpen.value;
+  toast.info(inviteOpen.value ? "已展开邀请表单" : "已收起邀请表单");
+}
+
+function closeInvitePanel() {
+  inviteOpen.value = false;
+  toast.info("已取消邀请", "邀请表单已收起。");
 }
 
 async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
@@ -361,13 +373,13 @@ function formatDate(value: string) {
 <template>
   <AdminLayout title="用户管理" description="管理注册用户、作者账号、禁言状态和评论行为。" mobile-title="用户管理" primary-action="邀请作者">
     <template #mobile-action>
-      <button class="button" type="button" @click="inviteOpen = !inviteOpen">{{ inviteOpen ? "收起" : "邀请" }}</button>
+      <button class="button" type="button" @click="toggleInvitePanel">{{ inviteOpen ? "收起" : "邀请" }}</button>
     </template>
 
     <template #actions>
       <div class="header-actions">
         <button class="button-secondary" type="button" :disabled="exporting" @click="exportUsers">{{ exporting ? "导出中..." : "导出用户" }}</button>
-        <button class="button" type="button" @click="inviteOpen = !inviteOpen">{{ inviteOpen ? "收起邀请" : "邀请作者" }}</button>
+        <button class="button" type="button" @click="toggleInvitePanel">{{ inviteOpen ? "收起邀请" : "邀请作者" }}</button>
       </div>
     </template>
 
@@ -427,7 +439,7 @@ function formatDate(value: string) {
         <div class="field"><label for="invite-role">角色</label><select v-model="inviteRole" class="input" id="invite-role"><option value="author">作者</option><option value="editor">编辑</option></select></div>
         <div class="header-actions">
           <button class="button" type="submit" :disabled="inviting || !inviteEmail">{{ inviting ? "邀请中..." : "发送邀请" }}</button>
-          <button class="button-secondary" type="button" :disabled="inviting" @click="inviteOpen = false">取消</button>
+          <button class="button-secondary" type="button" :disabled="inviting" @click="closeInvitePanel">取消</button>
         </div>
       </form>
     </section>

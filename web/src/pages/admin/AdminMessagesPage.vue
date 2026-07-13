@@ -78,6 +78,7 @@ async function load() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信记录加载失败";
+    toast.error("站内信记录加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -240,6 +241,7 @@ function viewMessage(item: StationMessage) {
   selectedId.value = item.id;
   message.value = "";
   error.value = "";
+  toast.info("已打开站内信", item.title);
 }
 
 function formatTime(value: string) {

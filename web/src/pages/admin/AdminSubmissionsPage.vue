@@ -115,6 +115,7 @@ async function load() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "投稿审核列表加载失败";
+    toast.error("投稿审核列表加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -240,6 +241,7 @@ function beginEdit() {
 
   seedEdit(selected.value);
   editing.value = true;
+  toast.info("已进入审核编辑", selected.value.title);
 }
 
 function cancelEdit() {
@@ -247,6 +249,12 @@ function cancelEdit() {
     seedEdit(selected.value);
   }
   editing.value = false;
+  toast.info("已退出审核编辑", selected.value?.title || "当前投稿");
+}
+
+function selectSubmission(item: Submission) {
+  selectedId.value = item.id;
+  toast.info("已打开投稿", item.title);
 }
 
 function editPayload(): SubmissionPayload {
@@ -428,7 +436,7 @@ function userStatusText(value?: ManagedUser["status"]) {
                 <td><span class="status" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
                 <td>{{ item.riskLevel }}</td>
                 <td>{{ formatDate(item.submittedAt) }}</td>
-                <td><button class="button-secondary" type="button" @click="selectedId = item.id">查看</button></td>
+                <td><button class="button-secondary" type="button" @click="selectSubmission(item)">查看</button></td>
               </tr>
               <tr v-if="submissions.length === 0">
                 <td colspan="6" class="muted">没有匹配的投稿。</td>
