@@ -1,4 +1,57 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const CSRF_COOKIE_NAME = "blog_csrf";
+const CSRF_HEADER_NAME = "X-CSRF-Token";
+
+function readCookie(name: string): string {
+  if (typeof document === "undefined") {
+    return "";
+  }
+
+  const prefix = `${encodeURIComponent(name)}=`;
+  const parts = document.cookie.split("; ");
+  for (const part of parts) {
+    if (part.startsWith(prefix)) {
+      return decodeURIComponent(part.slice(prefix.length));
+    }
+    // Also handle unencoded cookie names.
+    if (part.startsWith(`${name}=`)) {
+      return decodeURIComponent(part.slice(name.length + 1));
+    }
+  }
+  return "";
+}
+
+function csrfHeaders(): Record<string, string> {
+  const token = readCookie(CSRF_COOKIE_NAME);
+  return token ? { [CSRF_HEADER_NAME]: token } : {};
+}
+
+function isWriteMethod(method?: string): boolean {
+  const value = (method || "GET").toUpperCase();
+  return value === "POST" || value === "PUT" || value === "PATCH" || value === "DELETE";
+}
+
+let csrfBootstrap: Promise<void> | null = null;
+
+async function ensureCsrfCookie(): Promise<void> {
+  if (readCookie(CSRF_COOKIE_NAME)) {
+    return;
+  }
+
+  if (!csrfBootstrap) {
+    csrfBootstrap = fetch(`${API_BASE_URL}/health`, {
+      credentials: "include"
+    })
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => {
+        csrfBootstrap = null;
+      });
+  }
+
+  await csrfBootstrap;
+}
+
 
 export interface HealthResponse {
   status: string;
@@ -1370,6 +1423,7 @@ export async function replaceAdminMediaFile(id: string, file: File): Promise<Med
 }
 
 async function uploadMediaTo(path: string, file: File, payload: { alt?: string; category?: string } = {}, method: "POST" | "PUT"): Promise<MediaAsset> {
+  await ensureCsrfCookie();
   const form = new FormData();
   form.set("file", file);
 
@@ -1383,6 +1437,7 @@ async function uploadMediaTo(path: string, file: File, payload: { alt?: string; 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     credentials: "include",
+    headers: csrfHeaders(),
     body: form
   });
 
@@ -1569,13 +1624,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
 
   try {
+    if (isWriteMethod(init.method)) {
+      await ensureCsrfCookie();
+    }
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(isWriteMethod(init.method) ? csrfHeaders() : {})
+    };
+    const extraHeaders = init.headers;
+    if (extraHeaders instanceof Headers) {
+      extraHeaders.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(extraHeaders)) {
+      for (const [key, value] of extraHeaders) {
+        headers[key] = value;
+      }
+    } else if (extraHeaders) {
+      Object.assign(headers, extraHeaders as Record<string, string>);
+    }
+
     response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...init.headers
-      },
-      ...init
+      headers
     });
   } catch (err) {
     throw apiErrorFromFetch(err);

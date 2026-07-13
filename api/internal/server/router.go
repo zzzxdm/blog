@@ -67,6 +67,8 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	secureCookies := cookieSecure(cfg.AppEnv, cfg.PublicURL, cfg.WebOrigin)
+	auth.ConfigureCookieSecurity(secureCookies)
 	requireRepositories(repos)
 	if repos.AuthEmailSender == nil {
 		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)
@@ -79,7 +81,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(cors(cfg.WebOrigin))
-	router.Use(csrfProtection(cfg.WebOrigin, cfg.PublicURL))
+	router.Use(csrfProtection(cfg.WebOrigin, cfg.PublicURL, secureCookies))
 	router.Use(rateLimit(120, time.Minute))
 	router.Use(authSensitiveRateLimit())
 	router.Static("/uploads", uploadDir(cfg.UploadDir))
@@ -201,6 +203,20 @@ func newMediaStorage(cfg config.Config) operations.MediaStorage {
 	return operations.NewLocalMediaStorage(uploadDir(cfg.UploadDir))
 }
 
+func cookieSecure(appEnv string, urls ...string) bool {
+	if strings.EqualFold(strings.TrimSpace(appEnv), "production") {
+		return true
+	}
+
+	for _, value := range urls {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "https://") {
+			return true
+		}
+	}
+
+	return false
+}
+
 func cors(origin string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		ctx.Header("Access-Control-Allow-Origin", origin)
@@ -216,3 +232,5 @@ func cors(origin string) gin.HandlerFunc {
 		ctx.Next()
 	}
 }
+
+

@@ -13,6 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var cookieSecureFlag bool
+
+// ConfigureCookieSecurity controls the Secure flag for session cookies.
+func ConfigureCookieSecurity(secure bool) {
+	cookieSecureFlag = secure
+}
+
 const (
 	SessionCookieName  = "blog_session"
 	currentUserKey     = "currentUser"
@@ -643,12 +650,12 @@ func sessionExpiry(days int) time.Time {
 
 func setSessionCookie(ctx *gin.Context, token string, days int) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(SessionCookieName, token, clampSessionDays(days)*24*60*60, "/", "", false, true)
+	ctx.SetCookie(SessionCookieName, token, clampSessionDays(days)*24*60*60, "/", "", cookieSecureFlag, true)
 }
 
 func clearSessionCookie(ctx *gin.Context) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(SessionCookieName, "", -1, "/", "", false, true)
+	ctx.SetCookie(SessionCookieName, "", -1, "/", "", cookieSecureFlag, true)
 }
 
 func currentSessionToken(ctx *gin.Context) string {
@@ -659,3 +666,4 @@ func currentSessionToken(ctx *gin.Context) string {
 
 	return token
 }
+

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"net/url"
 	"strings"
@@ -8,38 +10,103 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func csrfProtection(webOrigin string, publicURL string) gin.HandlerFunc {
+const (
+	csrfCookieName = "blog_csrf"
+	csrfHeaderName = "X-CSRF-Token"
+	csrfTokenBytes = 32
+)
+
+func csrfProtection(webOrigin string, publicURL string, cookieSecure bool) gin.HandlerFunc {
 	allowedOrigins := map[string]bool{}
 	addAllowedOrigin(allowedOrigins, webOrigin)
 	addAllowedOrigin(allowedOrigins, publicURL)
 
 	return func(ctx *gin.Context) {
-		if !strings.HasPrefix(ctx.Request.URL.Path, "/api/") || !isWriteMethod(ctx.Request.Method) {
+		if !strings.HasPrefix(ctx.Request.URL.Path, "/api/") {
 			ctx.Next()
 			return
 		}
 
-		if rawOrigin := strings.TrimSpace(ctx.GetHeader("Origin")); rawOrigin != "" {
-			origin := normalizedHeaderOrigin(rawOrigin)
-			if origin == "" || !originAllowed(ctx, allowedOrigins, origin) {
-				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "csrf origin rejected"})
-				return
-			}
+		token := ensureCSRFCookie(ctx, cookieSecure)
 
+		if !isWriteMethod(ctx.Request.Method) {
 			ctx.Next()
 			return
 		}
 
-		if rawReferer := strings.TrimSpace(ctx.GetHeader("Referer")); rawReferer != "" {
-			referer := normalizedRefererOrigin(rawReferer)
-			if referer == "" || !originAllowed(ctx, allowedOrigins, referer) {
-				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "csrf referer rejected"})
-				return
-			}
+		if !csrfOriginAllowed(ctx, allowedOrigins) {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "csrf origin rejected"})
+			return
+		}
+
+		headerToken := strings.TrimSpace(ctx.GetHeader(csrfHeaderName))
+		if headerToken == "" || token == "" || !secureTokenEqual(headerToken, token) {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "csrf token rejected"})
+			return
 		}
 
 		ctx.Next()
 	}
+}
+
+func ensureCSRFCookie(ctx *gin.Context, cookieSecure bool) string {
+	if token, err := ctx.Cookie(csrfCookieName); err == nil {
+		token = strings.TrimSpace(token)
+		if token != "" {
+			return token
+		}
+	}
+
+	token, err := newCSRFToken()
+	if err != nil {
+		return ""
+	}
+
+	setCSRFCookie(ctx, token, cookieSecure)
+	return token
+}
+
+func setCSRFCookie(ctx *gin.Context, token string, cookieSecure bool) {
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	// Readable by JS for double-submit CSRF header.
+	ctx.SetCookie(csrfCookieName, token, 7*24*60*60, "/", "", cookieSecure, false)
+}
+
+func newCSRFToken() (string, error) {
+	buf := make([]byte, csrfTokenBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func secureTokenEqual(left string, right string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	var diff byte
+	for i := 0; i < len(left); i++ {
+		diff |= left[i] ^ right[i]
+	}
+	return diff == 0
+}
+
+func csrfOriginAllowed(ctx *gin.Context, allowedOrigins map[string]bool) bool {
+	if rawOrigin := strings.TrimSpace(ctx.GetHeader("Origin")); rawOrigin != "" {
+		origin := normalizedHeaderOrigin(rawOrigin)
+		return origin != "" && originAllowed(ctx, allowedOrigins, origin)
+	}
+
+	if rawReferer := strings.TrimSpace(ctx.GetHeader("Referer")); rawReferer != "" {
+		referer := normalizedRefererOrigin(rawReferer)
+		return referer != "" && originAllowed(ctx, allowedOrigins, referer)
+	}
+
+	// Same-origin browser writes usually send Origin/Referer.
+	// Allow only when the request host itself is an allowed origin (direct API call tooling).
+	requestOriginValue := requestOrigin(ctx)
+	return requestOriginValue != "" && allowedOrigins[requestOriginValue]
 }
 
 func addAllowedOrigin(allowedOrigins map[string]bool, value string) {
