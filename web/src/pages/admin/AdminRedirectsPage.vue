@@ -3,7 +3,9 @@ import { computed, onMounted, ref } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import { getAdminRedirects, replaceAdminRedirects, type RedirectRule } from "../../shared/api";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const redirects = ref<RedirectRule[]>([]);
 const loading = ref(false);
 const saving = ref(false);
@@ -30,6 +32,7 @@ async function load() {
     redirects.value = (await getAdminRedirects()).items;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "重定向规则加载失败";
+    toast.error("重定向规则加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -55,8 +58,10 @@ async function save() {
   try {
     redirects.value = (await replaceAdminRedirects(normalizedRedirects(redirects.value))).items;
     message.value = "重定向规则已保存。";
+    toast.success("重定向规则已保存", `当前共 ${redirects.value.length} 条规则。`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "重定向规则保存失败";
+    toast.error("重定向规则保存失败", error.value);
   } finally {
     saving.value = false;
   }

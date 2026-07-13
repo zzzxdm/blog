@@ -15,7 +15,9 @@ import {
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
 import { downloadJson, exportFileName } from "../../shared/download";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const runningKey = ref("");
 const error = ref("");
 const message = ref("");
@@ -45,8 +47,10 @@ async function runExport(key: string) {
       downloadJson(exportFileName("stats"), await exportAdminStats("30d"));
     }
     message.value = "导出文件已生成。";
+    toast.success("导出文件已生成", exportTitle(key));
   } catch (err) {
     error.value = err instanceof Error ? err.message : "导出失败";
+    toast.error("导出失败", error.value);
   } finally {
     runningKey.value = "";
   }
@@ -79,11 +83,21 @@ async function createImport() {
     });
     jobs.value.unshift(job);
     message.value = job.message;
+    toast.info("导入任务已创建", job.message);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "导入任务创建失败";
+    toast.error("导入任务创建失败", error.value);
   } finally {
     runningKey.value = "";
   }
+}
+
+function exportTitle(key: string) {
+  if (key === "users") return "用户数据";
+  if (key === "comments") return "评论数据";
+  if (key === "messages") return "站内信数据";
+  if (key === "stats") return "统计报表";
+  return key;
 }
 </script>
 

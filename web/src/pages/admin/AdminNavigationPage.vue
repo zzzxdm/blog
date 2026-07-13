@@ -9,9 +9,11 @@ import {
   type OperationsNavigation,
   type RedirectRule
 } from "../../shared/api";
+import { useToastStore } from "../../stores/toast";
 
 type NavListKey = "topItems" | "footerItems";
 
+const toast = useToastStore();
 const navigation = ref<OperationsNavigation | null>(null);
 const loading = ref(false);
 const saving = ref(false);
@@ -28,6 +30,7 @@ async function load() {
     navigation.value = await getAdminNavigation();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "导航加载失败";
+    toast.error("导航加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -45,8 +48,10 @@ async function save() {
   try {
     navigation.value = await updateAdminNavigation(normalizedNavigation(navigation.value));
     message.value = "导航已保存。";
+    toast.success("导航已保存", "前台菜单和重定向配置已更新。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "导航保存失败";
+    toast.error("导航保存失败", error.value);
   } finally {
     saving.value = false;
   }

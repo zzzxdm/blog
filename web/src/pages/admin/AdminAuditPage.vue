@@ -8,7 +8,9 @@ import {
   type AuditLog
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const logs = ref<AuditLog[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -23,7 +25,7 @@ const blockedCount = computed(() => logs.value.filter((item) => item.status !== 
 
 onMounted(load);
 
-async function load() {
+async function load(notify = false) {
   loading.value = true;
   error.value = "";
 
@@ -38,8 +40,12 @@ async function load() {
     total.value = response.total;
     page.value = response.page;
     pageSize.value = response.pageSize;
+    if (notify) {
+      toast.success("操作日志已刷新", `当前筛选共 ${total.value} 条日志。`);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "操作日志加载失败";
+    toast.error("操作日志加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -130,7 +136,7 @@ function formatDate(value: string) {
 <template>
   <AdminLayout title="操作日志" description="追踪后台关键写操作、操作者、资源、访问来源和处理结果。" mobile-title="操作日志" primary-action="刷新">
     <template #mobile-action>
-      <button class="button" type="button" :disabled="loading" @click="load">{{ loading ? "刷新中..." : "刷新" }}</button>
+      <button class="button" type="button" :disabled="loading" @click="load(true)">{{ loading ? "刷新中..." : "刷新" }}</button>
     </template>
 
     <template #actions>
@@ -167,7 +173,7 @@ function formatDate(value: string) {
           <option value="media.create">上传媒体</option>
           <option value="user.update">更新用户</option>
         </select>
-        <button class="button-secondary" type="button" :disabled="loading" @click="load">刷新</button>
+        <button class="button-secondary" type="button" :disabled="loading" @click="load(true)">刷新</button>
       </div>
     </template>
 

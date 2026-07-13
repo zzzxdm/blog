@@ -100,9 +100,11 @@ async function importMarkdown(event: Event) {
     const payload = markdownPayload(content, file.name);
     const post = await createAdminPost(payload);
     message.value = `已导入草稿：${post.title}`;
+    toast.success("Markdown 已导入", `已创建草稿：${post.title}`);
     await router.push(`/admin/editor?id=${post.id}`);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "Markdown 导入失败";
+    toast.error("Markdown 导入失败", error.value);
   } finally {
     importing.value = false;
   }

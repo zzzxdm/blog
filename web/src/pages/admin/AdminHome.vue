@@ -20,7 +20,9 @@ import {
   type SubmissionStats
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 interface TodoItem {
   title: string;
   source: string;
@@ -115,6 +117,7 @@ async function load() {
     stats.value = statsResponse;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "后台概览加载失败";
+    toast.error("后台概览加载失败", error.value);
   } finally {
     loading.value = false;
   }

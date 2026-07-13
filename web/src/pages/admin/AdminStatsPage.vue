@@ -8,7 +8,9 @@ import {
   type AdminStats
 } from "../../shared/api";
 import { downloadJson, exportFileName } from "../../shared/download";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const stats = ref<AdminStats>({
   range: "30d",
   rangeLabel: "最近 30 天",
@@ -34,6 +36,7 @@ async function load() {
     stats.value = await getAdminStats(range.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "统计数据加载失败";
+    toast.error("统计数据加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -45,8 +48,10 @@ async function exportReport() {
 
   try {
     downloadJson(exportFileName(`stats-report-${range.value}`), await exportAdminStats(range.value));
+    toast.success("统计报表已导出", stats.value.rangeLabel || range.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "统计报表导出失败";
+    toast.error("统计报表导出失败", error.value);
   } finally {
     exporting.value = false;
   }
