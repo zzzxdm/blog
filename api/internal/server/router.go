@@ -69,6 +69,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 
 	secureCookies := cookieSecure(cfg.AppEnv, cfg.PublicURL, cfg.WebOrigin)
 	auth.ConfigureCookieSecurity(secureCookies)
+	auth.ConfigureDevAuthTokens(!strings.EqualFold(strings.TrimSpace(cfg.AppEnv), "production"))
 	requireRepositories(repos)
 	if repos.AuthEmailSender == nil {
 		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)

@@ -183,11 +183,15 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 	}
 
 	response := InvitationResult{
-		OK:              true,
-		User:            managed,
-		InitialPassword: secrets.InitialPassword,
-		ResetToken:      secrets.ResetToken,
-		Delivery:        "dev-response",
+		OK:       true,
+		User:     managed,
+		Delivery: "dev-response",
+	}
+	if auth.CanExposeDevAuthTokens() {
+		response.InitialPassword = secrets.InitialPassword
+		response.ResetToken = secrets.ResetToken
+	} else {
+		response.Delivery = "unavailable"
 	}
 	if handler.emailSender != nil {
 		if err := handler.emailSender.SendInvitation(ctx.Request.Context(), invited, secrets.InitialPassword, secrets.ResetToken); err == nil {
@@ -197,9 +201,12 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 		} else {
 			slog.Warn("failed to send invitation email", "error", err, "userID", invited.ID, "email", strings.ToLower(strings.TrimSpace(invited.Email)))
 			response.Delivery = "email-failed"
+			if !auth.CanExposeDevAuthTokens() {
+				response.InitialPassword = ""
+				response.ResetToken = ""
+			}
 		}
 	}
-
 	ctx.JSON(http.StatusCreated, response)
 }
 
@@ -428,10 +435,14 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 	}
 
 	response := PasswordResetResult{
-		OK:         true,
-		User:       user,
-		ResetToken: token,
-		Delivery:   "dev-response",
+		OK:       true,
+		User:     user,
+		Delivery: "dev-response",
+	}
+	if auth.CanExposeDevAuthTokens() {
+		response.ResetToken = token
+	} else {
+		response.Delivery = "unavailable"
 	}
 	if handler.emailSender != nil {
 		authUser := auth.User{
@@ -449,9 +460,11 @@ func (handler *Handler) RequestPasswordReset(ctx *gin.Context) {
 		} else {
 			slog.Warn("failed to send admin password reset email", "error", err, "userID", user.ID, "email", strings.ToLower(strings.TrimSpace(user.Email)))
 			response.Delivery = "email-failed"
+			if !auth.CanExposeDevAuthTokens() {
+				response.ResetToken = ""
+			}
 		}
 	}
-
 	ctx.JSON(http.StatusOK, response)
 }
 

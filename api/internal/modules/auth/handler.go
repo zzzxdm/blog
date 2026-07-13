@@ -14,10 +14,21 @@ import (
 )
 
 var cookieSecureFlag bool
+var allowDevAuthTokens = true
 
 // ConfigureCookieSecurity controls the Secure flag for session cookies.
 func ConfigureCookieSecurity(secure bool) {
 	cookieSecureFlag = secure
+}
+
+// ConfigureDevAuthTokens controls whether verification/reset tokens may appear in API responses.
+// Production must call this with false.
+func ConfigureDevAuthTokens(allow bool) {
+	allowDevAuthTokens = allow
+}
+
+func CanExposeDevAuthTokens() bool {
+	return allowDevAuthTokens
 }
 
 const (
@@ -445,10 +456,14 @@ func (handler *Handler) VerifyEmail(ctx *gin.Context) {
 
 func (handler *Handler) deliverEmailVerification(ctx *gin.Context, user User, token string, failSoft bool) (gin.H, bool) {
 	if handler.emailSender == nil {
-		return gin.H{
-			"verificationToken": token,
-			"delivery":          "dev-response",
-		}, true
+		response := gin.H{"delivery": "dev-response"}
+		if CanExposeDevAuthTokens() && strings.TrimSpace(token) != "" {
+			response["verificationToken"] = token
+		} else if !CanExposeDevAuthTokens() {
+			response["delivery"] = "unavailable"
+			response["warning"] = "email delivery is not configured"
+		}
+		return response, true
 	}
 
 	if err := handler.emailSender.SendEmailVerification(ctx.Request.Context(), user, token); err != nil {
@@ -501,30 +516,50 @@ func (handler *Handler) ForgotPassword(ctx *gin.Context) {
 		return
 	}
 
+	// Always return a generic success payload to avoid account enumeration.
 	user, token, err := handler.store.RequestPasswordReset(request.Email)
 	if err != nil {
 		slog.Error("failed to create password reset", "error", err, "email", normalizeEmail(request.Email))
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create password reset"})
+		ctx.JSON(http.StatusOK, gin.H{
+			"ok":       true,
+			"delivery": "accepted",
+			"message":  "if the email is registered, reset instructions will be sent",
+		})
 		return
 	}
 	if token == "" {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "email is not registered"})
+		ctx.JSON(http.StatusOK, gin.H{
+			"ok":       true,
+			"delivery": "accepted",
+			"message":  "if the email is registered, reset instructions will be sent",
+		})
 		return
 	}
 
 	response, ok := handler.deliverPasswordReset(ctx, user, token)
 	if !ok {
+		ctx.JSON(http.StatusOK, gin.H{
+			"ok":       true,
+			"delivery": "accepted",
+			"message":  "if the email is registered, reset instructions will be sent",
+		})
 		return
 	}
 	response["ok"] = true
+	if _, exists := response["message"]; !exists {
+		response["message"] = "if the email is registered, reset instructions will be sent"
+	}
 	ctx.JSON(http.StatusOK, response)
 }
 
 func (handler *Handler) deliverPasswordReset(ctx *gin.Context, user User, token string) (gin.H, bool) {
 	if handler.emailSender == nil {
 		response := gin.H{"delivery": "dev-response"}
-		if token != "" {
+		if CanExposeDevAuthTokens() && strings.TrimSpace(token) != "" {
 			response["resetToken"] = token
+		} else if !CanExposeDevAuthTokens() {
+			response["delivery"] = "unavailable"
+			response["warning"] = "email delivery is not configured"
 		}
 		return response, true
 	}
@@ -535,7 +570,10 @@ func (handler *Handler) deliverPasswordReset(ctx *gin.Context, user User, token 
 
 	if err := handler.emailSender.SendPasswordSetup(ctx.Request.Context(), user, token); err != nil {
 		slog.Error("failed to send password reset email", "error", err, "userID", user.ID, "email", normalizeEmail(user.Email))
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send password reset email"})
+		if CanExposeDevAuthTokens() {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send password reset email"})
+			return nil, false
+		}
 		return nil, false
 	}
 
@@ -666,4 +704,3 @@ func currentSessionToken(ctx *gin.Context) string {
 
 	return token
 }
-
