@@ -4,7 +4,6 @@ import { ref } from "vue";
 import AdminLayout from "../../components/AdminLayout.vue";
 import {
   createAdminExportJob,
-  createAdminImportJob,
   createAdminBackup,
   exportAdminComments,
   exportAdminMessages,
@@ -71,25 +70,10 @@ async function runBackup() {
   }
 }
 
-async function createImport() {
-  runningKey.value = "import";
+function createImport() {
   error.value = "";
-  message.value = "";
-
-  try {
-    const job = await createAdminImportJob({
-      scope: importScope.value,
-      fileName: importFileName.value
-    });
-    jobs.value.unshift(job);
-    message.value = job.message;
-    toast.info("导入任务已创建", job.message);
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : "导入任务创建失败";
-    toast.error("导入任务创建失败", error.value);
-  } finally {
-    runningKey.value = "";
-  }
+  message.value = "批量导入任务暂未开放，请使用文章管理中的 Markdown 导入。";
+  toast.info("批量导入暂未开放", "文章 Markdown 导入请在文章管理页面使用");
 }
 
 function exportTitle(key: string) {
@@ -150,7 +134,9 @@ function exportTitle(key: string) {
         <section class="panel">
           <div class="panel-title">
             <h2>导入入口</h2>
+            <span class="tag">暂未开放</span>
           </div>
+          <p class="muted">批量导入队列暂未开放；文章 Markdown 导入请在文章管理页面使用。</p>
           <div class="settings-stack">
             <div class="field">
               <label for="import-scope">导入范围</label>
@@ -162,7 +148,7 @@ function exportTitle(key: string) {
               </select>
             </div>
             <div class="field"><label for="import-file">文件名</label><input v-model="importFileName" class="input" id="import-file"></div>
-            <button class="button-secondary" type="button" :disabled="!!runningKey" @click="createImport">{{ runningKey === "import" ? "创建中..." : "创建导入任务" }}</button>
+            <button class="button-secondary" type="button" :disabled="!!runningKey" @click="createImport">暂未开放</button>
           </div>
         </section>
 

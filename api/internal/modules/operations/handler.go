@@ -494,13 +494,8 @@ func (handler *Handler) CreateImportJob(ctx *gin.Context) {
 	if !httpx.BindJSON(ctx, &request, "invalid import job payload") {
 		return
 	}
-	job := handler.createJob("import", request.Scope, request.FileName)
-	job.Status = "queued"
-	job.Progress = 10
-	job.Message = "导入任务已创建，等待离线校验和执行。"
-	handler.storeJob(job)
-
-	ctx.JSON(http.StatusAccepted, job)
+	slog.Warn("admin import job is not implemented", "scope", request.Scope, "fileName", request.FileName)
+	ctx.JSON(http.StatusNotImplemented, gin.H{"error": "批量导入任务暂未开放，请使用文章管理中的 Markdown 导入。"})
 }
 
 func (handler *Handler) CreateExportJob(ctx *gin.Context) {
