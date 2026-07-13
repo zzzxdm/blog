@@ -100,6 +100,8 @@ func (handler *Handler) Create(ctx *gin.Context) {
 		approved, err := handler.repo.UpdateStatus(ctx.Request.Context(), comment.ID, "approved")
 		if err == nil {
 			comment = approved
+		} else {
+			slog.Warn("failed to auto approve comment", "error", err, "commentID", comment.ID, "slug", ctx.Param("slug"), "userID", user.ID)
 		}
 	}
 
@@ -148,6 +150,8 @@ func (handler *Handler) CreateReply(ctx *gin.Context) {
 		approved, err := handler.repo.UpdateStatus(ctx.Request.Context(), comment.ID, "approved")
 		if err == nil {
 			comment = approved
+		} else {
+			slog.Warn("failed to auto approve reply", "error", err, "commentID", comment.ID, "parentID", ctx.Param("id"), "userID", user.ID)
 		}
 	}
 

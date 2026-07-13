@@ -459,7 +459,7 @@ func (handler *Handler) ArchivePublished(ctx *gin.Context) {
 		return
 	}
 	if handler.messages != nil {
-		_, _ = handler.messages.Create(ctx.Request.Context(), messages.CreateRequest{
+		if _, err := handler.messages.Create(ctx.Request.Context(), messages.CreateRequest{
 			RecipientID:   submission.AuthorID,
 			RecipientName: submission.AuthorName,
 			Type:          messages.TypeReview,
@@ -469,7 +469,9 @@ func (handler *Handler) ArchivePublished(ctx *gin.Context) {
 			TargetType:    "submission",
 			TargetID:      submission.ID,
 			TargetTitle:   submission.Title,
-		}, reviewer)
+		}, reviewer); err != nil {
+			slog.Warn("failed to create archive notification", "error", err, "submissionID", submission.ID, "reviewerID", reviewer.ID, "recipientID", submission.AuthorID)
+		}
 	}
 
 	ctx.JSON(http.StatusOK, submission)
@@ -511,7 +513,7 @@ func (handler *Handler) RestorePublished(ctx *gin.Context) {
 		return
 	}
 	if handler.messages != nil {
-		_, _ = handler.messages.Create(ctx.Request.Context(), messages.CreateRequest{
+		if _, err := handler.messages.Create(ctx.Request.Context(), messages.CreateRequest{
 			RecipientID:   submission.AuthorID,
 			RecipientName: submission.AuthorName,
 			Type:          messages.TypeReview,
@@ -521,7 +523,9 @@ func (handler *Handler) RestorePublished(ctx *gin.Context) {
 			TargetType:    "submission",
 			TargetID:      submission.ID,
 			TargetTitle:   submission.Title,
-		}, reviewer)
+		}, reviewer); err != nil {
+			slog.Warn("failed to create restore notification", "error", err, "submissionID", submission.ID, "reviewerID", reviewer.ID, "recipientID", submission.AuthorID)
+		}
 	}
 
 	ctx.JSON(http.StatusOK, submission)
@@ -572,6 +576,11 @@ func (handler *Handler) reviewWithRequest(ctx *gin.Context, reviewer auth.User, 
 		return
 	}
 
+	if handler.messages == nil {
+		slog.Error("message repository is unavailable for review notification", "submissionID", submission.ID, "reviewerID", reviewer.ID)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "message repository is unavailable"})
+		return
+	}
 	if _, err := handler.messages.Create(ctx.Request.Context(), reviewMessage(submission, request.Action), reviewer); err != nil {
 		slog.Error("failed to create review message", "error", err, "submissionID", submission.ID, "reviewerID", reviewer.ID, "recipientID", submission.AuthorID)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create review message"})

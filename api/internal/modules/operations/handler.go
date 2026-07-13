@@ -402,7 +402,9 @@ func (handler *Handler) uploadMedia(ctx *gin.Context, user auth.User, defaultCat
 
 	created, err := handler.repo.CreateMedia(ctx.Request.Context(), asset)
 	if err != nil {
-		_ = handler.storage.Delete(ctx.Request.Context(), mediaURL)
+		if deleteErr := handler.storage.Delete(ctx.Request.Context(), mediaURL); deleteErr != nil {
+			slog.Warn("failed to delete uploaded media after record failure", "error", deleteErr, "url", mediaURL, "userID", user.ID)
+		}
 		slog.Error("failed to record media", "error", err, "userID", user.ID, "fileName", originalName, "url", mediaURL)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record media"})
 		return
@@ -447,7 +449,9 @@ func (handler *Handler) DeleteMedia(ctx *gin.Context) {
 		return
 	}
 
-	_ = handler.storage.Delete(ctx.Request.Context(), asset.URL)
+	if err := handler.storage.Delete(ctx.Request.Context(), asset.URL); err != nil {
+		slog.Warn("failed to delete media file", "error", err, "mediaID", asset.ID, "url", asset.URL)
+	}
 	ctx.JSON(http.StatusOK, gin.H{"ok": true, "asset": asset})
 }
 

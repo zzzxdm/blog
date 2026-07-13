@@ -172,6 +172,11 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 	if !ok {
 		return
 	}
+	if handler.postRepo == nil {
+		slog.Error("post repository is unavailable for bookmarks", "userID", user.ID)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "post repository is unavailable"})
+		return
+	}
 
 	bookmarks, err := handler.repo.ListBookmarks(ctx.Request.Context(), user.ID, BookmarkQuery{
 		Keyword:  ctx.Query("q"),
@@ -190,6 +195,7 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 	for _, bookmark := range bookmarks.Items {
 		post, err := handler.postRepo.GetBySlug(ctx.Request.Context(), bookmark.PostSlug)
 		if err != nil {
+			slog.Warn("failed to load bookmarked post", "error", err, "userID", user.ID, "postSlug", bookmark.PostSlug)
 			continue
 		}
 
