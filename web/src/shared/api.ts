@@ -1538,14 +1538,20 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init.headers
-    },
-    ...init
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...init.headers
+      },
+      ...init
+    });
+  } catch (err) {
+    throw apiErrorFromFetch(err);
+  }
 
   if (!response.ok) {
     throw await apiErrorFromResponse(response);
@@ -1555,16 +1561,73 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 async function apiErrorFromResponse(response: Response): Promise<ApiError> {
-  const payload = await response.json().catch(() => null) as { error?: string } | null;
-  return new ApiError(response.status, apiErrorMessage(response.status, payload?.error, response.headers.get("Retry-After")));
+  const serverMessage = await responseErrorMessage(response);
+  return new ApiError(response.status, apiErrorMessage(response.status, serverMessage, response.headers.get("Retry-After")));
 }
 
 function apiErrorMessage(status: number, serverMessage?: string, retryAfter?: string | null) {
+  const detail = cleanErrorMessage(serverMessage);
+
   if (status === 429) {
-    return rateLimitMessage(retryAfter);
+    return detail || rateLimitMessage(retryAfter);
   }
 
-  return serverMessage?.trim() || `Request failed: ${status}`;
+  if (detail) return detail;
+  if (status === 400) return "请求参数有误，请检查填写内容后重试。";
+  if (status === 401) return "登录状态已失效，请重新登录。";
+  if (status === 403) return "没有权限执行该操作。";
+  if (status === 404) return "请求的资源不存在或已被删除。";
+  if (status === 409) return "当前数据状态已变化，请刷新后重试。";
+  if (status === 422) return "提交内容未通过校验，请检查后重试。";
+  if (status >= 500) return `服务器处理失败，请稍后再试或联系管理员。`;
+
+  return `请求失败（${status}），请稍后再试。`;
+}
+
+function apiErrorFromFetch(err: unknown): ApiError {
+  const message = err instanceof Error ? err.message : String(err || "");
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return new ApiError(0, "请求已取消，请重试。");
+  }
+
+  if (isFetchFailureMessage(message)) {
+    return new ApiError(0, "无法连接到服务，请检查网络或确认后端服务已启动。");
+  }
+
+  const detail = cleanErrorMessage(message);
+  return new ApiError(0, detail ? `网络请求失败：${detail}` : "网络请求失败，请稍后重试。");
+}
+
+async function responseErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get("Content-Type") || "";
+  if (contentType.includes("application/json")) {
+    const payload = await response.json().catch(() => null) as { error?: string; message?: string; detail?: string } | null;
+    return payload?.error || payload?.message || payload?.detail || "";
+  }
+
+  return response.text().catch(() => "");
+}
+
+function cleanErrorMessage(message?: string) {
+  const value = message?.trim();
+  if (!value || isGenericErrorMessage(value)) {
+    return "";
+  }
+
+  return value;
+}
+
+function isGenericErrorMessage(message: string) {
+  return /^request failed:?\s*\d+$/i.test(message)
+    || /^failed to (fetch|load)( resource)?/i.test(message)
+    || /^load failed$/i.test(message)
+    || /^networkerror/i.test(message);
+}
+
+function isFetchFailureMessage(message: string) {
+  return /^failed to (fetch|load)( resource)?/i.test(message)
+    || /^load failed$/i.test(message)
+    || /^networkerror/i.test(message);
 }
 
 function rateLimitMessage(retryAfter?: string | null) {
