@@ -929,6 +929,58 @@ textarea {
   padding: 20px;
 }
 
+.loading-state {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  color: var(--muted);
+}
+
+.loading-state-default,
+.loading-state-page {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.loading-state-table {
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+}
+
+.loading-state-compact {
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.loading-state-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.loading-state-icon {
+  flex: 0 0 auto;
+  color: var(--green);
+  font-size: 18px;
+  animation: loading-state-spin 0.9s linear infinite;
+}
+
+.loading-state-skeleton {
+  --el-skeleton-color: color-mix(in srgb, var(--line) 70%, var(--surface));
+  --el-skeleton-to-color: color-mix(in srgb, var(--surface) 70%, #fff);
+}
+
+@keyframes loading-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .panel-title {
   display: flex;
   align-items: center;

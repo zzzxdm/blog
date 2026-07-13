@@ -336,7 +336,7 @@ function nextScheduleValue() {
           </select>
         </form>
 
-        <p v-if="loading" class="muted">正在加载站内信记录...</p>
+        <LoadingState v-if="loading" variant="table" text="正在加载站内信记录..." :rows="4" />
         <table v-else>
           <thead>
             <tr>

@@ -351,7 +351,7 @@ function formatDate(value?: string) {
       <div class="stat-card"><span>文章引用</span><strong>{{ referencedPostCount }}</strong></div>
     </section>
 
-    <p v-if="loading" class="muted">正在加载专题...</p>
+    <LoadingState v-if="loading" variant="table" text="正在加载专题..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="muted">{{ message }}</p>
 

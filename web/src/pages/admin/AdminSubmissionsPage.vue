@@ -400,7 +400,7 @@ function userStatusText(value?: ManagedUser["status"]) {
             </select>
           </form>
 
-          <p v-if="loading" class="muted">正在加载投稿...</p>
+          <LoadingState v-if="loading" variant="table" text="正在加载投稿..." :rows="4" />
           <table v-else>
             <thead>
               <tr>

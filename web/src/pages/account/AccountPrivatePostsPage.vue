@@ -94,7 +94,7 @@ function submissionForPost(post: Post) {
         <button class="button-secondary" type="submit">搜索</button>
       </form>
 
-      <p v-if="loading" class="muted">正在加载私密文章...</p>
+      <LoadingState v-if="loading" variant="table" text="正在加载私密文章..." :rows="4" />
       <p v-else-if="error" class="error">{{ error }}</p>
 
       <div v-else class="article-list">

@@ -183,7 +183,7 @@ function formatDate(value: string) {
       <div class="stat-card"><span>本页异常</span><strong>{{ blockedCount }}</strong><div class="meta-row"><span>拦截或失败</span></div></div>
     </section>
 
-    <p v-if="loading" class="muted">正在加载操作日志...</p>
+    <LoadingState v-if="loading" variant="table" text="正在加载操作日志..." :rows="5" />
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <section v-else class="table-panel">

@@ -390,7 +390,7 @@ watch(() => auth.user?.id, () => {
   </div>
 
   <main class="article-shell">
-    <p v-if="posts.loading" class="muted">正在加载文章...</p>
+    <LoadingState v-if="posts.loading" variant="page" text="正在加载文章..." :rows="5" />
     <p v-else-if="posts.error" class="error">{{ posts.error }}</p>
 
     <template v-else-if="post">
@@ -521,7 +521,7 @@ watch(() => auth.user?.id, () => {
           </div>
 
           <div class="comment-list">
-            <p v-if="commentsLoading" class="muted">正在加载评论...</p>
+            <LoadingState v-if="commentsLoading" compact text="正在加载评论..." :rows="2" />
             <template v-else>
               <article
                 v-for="comment in visibleComments"

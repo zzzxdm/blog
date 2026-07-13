@@ -215,7 +215,7 @@ function statusClass(value: Comment["status"]) {
         </select>
       </form>
 
-      <p v-if="loading" class="muted">正在加载评论...</p>
+      <LoadingState v-if="loading" variant="table" text="正在加载评论..." :rows="4" />
       <table v-else>
         <thead>
           <tr>

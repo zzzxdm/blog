@@ -284,7 +284,7 @@ function previousFeature() {
       </div>
     </section>
 
-    <p v-if="posts.loading" class="muted">正在加载精选内容...</p>
+    <LoadingState v-if="posts.loading" variant="page" text="正在加载精选内容..." :rows="5" />
     <p v-else-if="posts.error" class="error">{{ posts.error }}</p>
 
     <template v-else>

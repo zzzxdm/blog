@@ -53,7 +53,7 @@ function formatNumber(value: number) {
       </div>
     </section>
 
-    <p v-if="loading" class="muted">正在加载作者文章...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载作者文章..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
     <section v-else-if="posts?.items.length" class="archive-list archive-view" aria-label="作者文章">
       <article v-for="post in posts.items" :key="post.id" class="archive-list-item">

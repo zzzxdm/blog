@@ -272,7 +272,7 @@ function stringQuery(value: unknown) {
         <div class="panel-title">
           <h2>热门专题</h2>
         </div>
-        <p v-if="loading" class="muted">正在加载专题...</p>
+        <LoadingState v-if="loading" variant="page" text="正在加载专题..." :rows="4" />
         <ol v-else-if="hotTopics.length" class="rank-list">
           <li v-for="(topic, index) in hotTopics.slice(0, 3)" :key="topic.slug">
             <span class="rank-number">{{ index + 1 }}</span>
@@ -342,7 +342,7 @@ function stringQuery(value: unknown) {
           </div>
         </div>
 
-        <p v-if="postsLoading" class="muted">正在加载专题文章...</p>
+        <LoadingState v-if="postsLoading" variant="table" text="正在加载专题文章..." :rows="4" />
         <p v-else-if="postsError" class="error">{{ postsError }}</p>
         <div v-else-if="currentTopicPosts.length" class="topic-list">
           <article v-for="(post, index) in currentTopicPosts" :key="post.id" class="topic-list-item">

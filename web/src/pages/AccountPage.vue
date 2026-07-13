@@ -103,7 +103,7 @@ function formatTime(value?: string) {
       </div>
     </section>
 
-    <p v-if="loading" class="muted">正在加载个人中心...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载个人中心..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <section v-else class="account-layout">

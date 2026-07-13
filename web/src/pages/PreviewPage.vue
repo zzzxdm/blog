@@ -40,7 +40,7 @@ function formatDate(value: string) {
 
 <template>
   <main class="article-shell">
-    <p v-if="loading" class="muted">正在加载预览...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载预览..." :rows="4" />
     <section v-else-if="error" class="content-shell">
       <article class="article-body">
         <h1>预览不可用</h1>

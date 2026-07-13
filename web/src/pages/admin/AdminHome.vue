@@ -145,7 +145,7 @@ function healthSummary() {
       </div>
     </template>
 
-    <p v-if="loading" class="muted">正在加载后台概览...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载后台概览..." :rows="5" />
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <template v-else>

@@ -399,7 +399,7 @@ function defaultAlt(fileName: string) {
       </div>
     </template>
 
-    <p v-if="loading" class="muted">正在加载文章...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载文章..." :rows="5" />
     <p v-if="error" class="error">{{ error }}</p>
 
     <section class="editor-layout">
@@ -514,7 +514,7 @@ function defaultAlt(fileName: string) {
             <span class="tag">{{ revisions.length }} 个版本</span>
           </div>
           <div class="timeline">
-            <p v-if="revisionLoading" class="muted">正在加载版本...</p>
+            <LoadingState v-if="revisionLoading" compact text="正在加载版本..." :rows="2" />
             <p v-else-if="!current" class="muted">保存草稿后生成版本记录。</p>
             <p v-else-if="!revisions.length" class="muted">暂无版本记录。</p>
             <article v-for="revision in revisions" :key="revision.id" class="timeline-item">

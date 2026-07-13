@@ -276,7 +276,7 @@ function formatDate(value: string) {
       <button class="button" type="button" :disabled="saving || !settings" @click="save">{{ saving ? "保存中..." : "保存设置" }}</button>
     </template>
 
-    <p v-if="loading" class="muted">正在加载账号设置...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载账号设置..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
     <p v-if="persistentMessage" class="muted">{{ message }}</p>
 

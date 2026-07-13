@@ -168,7 +168,7 @@ function normalizeItemOrder(items: NavItem[]) {
       </div>
     </template>
 
-    <p v-if="loading" class="muted">正在加载导航...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载导航..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="muted">{{ message }}</p>
 

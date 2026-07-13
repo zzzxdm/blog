@@ -241,7 +241,7 @@ function typeClass(value: MessageType) {
           <a :class="{ active: filterType === 'admin' }" href="#admin" @click.prevent="chooseType('admin')">管理员</a>
           <a :class="{ active: filterStatus === 'archived' }" href="#archived" @click.prevent="chooseStatus('archived')">归档</a>
         </div>
-        <p v-if="loading" class="muted">正在加载站内信...</p>
+        <LoadingState v-if="loading" variant="table" text="正在加载站内信..." :rows="4" />
         <div v-else class="message-list">
           <a
             v-for="item in messages"

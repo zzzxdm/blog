@@ -449,7 +449,7 @@ function formatDate(value: string) {
         </button>
       </form>
 
-      <p v-if="loading" class="muted">正在加载用户...</p>
+      <LoadingState v-if="loading" variant="table" text="正在加载用户..." :rows="5" />
       <table v-else>
         <thead>
           <tr>

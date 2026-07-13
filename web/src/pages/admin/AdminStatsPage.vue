@@ -75,7 +75,7 @@ async function exportReport() {
       </div>
     </template>
 
-    <p v-if="loading" class="muted">正在加载统计数据...</p>
+    <LoadingState v-if="loading" variant="page" text="正在加载统计数据..." :rows="5" />
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <template v-else>

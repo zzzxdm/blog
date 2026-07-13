@@ -205,7 +205,7 @@ function tagTone(post: Post, index = 0) {
       </div>
     </div>
 
-    <p v-if="posts.loading" class="muted">正在加载文章...</p>
+    <LoadingState v-if="posts.loading" variant="page" text="正在加载文章..." :rows="5" />
     <p v-else-if="posts.error" class="error">{{ posts.error }}</p>
     <p v-else-if="!posts.list?.items.length" class="muted">没有找到匹配的文章。</p>
 

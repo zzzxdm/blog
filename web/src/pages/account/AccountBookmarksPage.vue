@@ -126,7 +126,7 @@ function formatDate(value: string) {
         </select>
       </form>
 
-      <p v-if="loading" class="muted">正在加载收藏...</p>
+      <LoadingState v-if="loading" variant="table" text="正在加载收藏..." :rows="4" />
       <p v-else-if="error" class="error">{{ error }}</p>
 
       <div v-else class="article-list">

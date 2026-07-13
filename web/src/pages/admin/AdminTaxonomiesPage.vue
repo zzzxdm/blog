@@ -296,7 +296,7 @@ function nextCategorySortOrder() {
       <div class="stat-card"><span>可清理</span><strong>{{ unusedCategories + unusedTags }}</strong></div>
     </section>
 
-    <p v-if="loading" class="muted">正在加载分类标签...</p>
+    <LoadingState v-if="loading" variant="table" text="正在加载分类标签..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
     <p v-if="message" class="muted">{{ message }}</p>
 
