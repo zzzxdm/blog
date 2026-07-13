@@ -11,11 +11,14 @@ import {
   type Category
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const bookmarks = ref<BookmarkItem[]>([]);
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const error = ref("");
+const removingSlug = ref("");
 const searchQuery = ref("");
 const categoryFilter = ref("");
 const sortMode = ref("bookmarked");
@@ -85,12 +88,19 @@ async function setPageSize(value: number) {
   await load();
 }
 
-async function removeBookmark(slug: string) {
+async function removeBookmark(item: BookmarkItem) {
+  removingSlug.value = item.slug;
+  error.value = "";
+
   try {
-    await setBookmark(slug, false);
+    await setBookmark(item.slug, false);
+    toast.success("已取消收藏", item.title);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "取消收藏失败";
+    toast.error("取消收藏失败", error.value);
+  } finally {
+    removingSlug.value = "";
   }
 }
 
@@ -139,7 +149,9 @@ function formatDate(value: string) {
             <div class="meta-row">
               <span>{{ item.readingTime }} 分钟阅读</span>
               <span>{{ item.viewCount }} 次阅读</span>
-              <button class="button-secondary" type="button" @click="removeBookmark(item.slug)">取消收藏</button>
+              <button class="button-secondary" type="button" :disabled="removingSlug === item.slug" @click="removeBookmark(item)">
+                {{ removingSlug === item.slug ? "取消中..." : "取消收藏" }}
+              </button>
             </div>
           </div>
         </article>
