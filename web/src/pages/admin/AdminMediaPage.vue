@@ -7,9 +7,12 @@ import {
   deleteAdminMedia,
   getAdminMedia,
   getAdminMediaAsset,
+  getAdminMediaReferences,
+  replaceAdminMediaFile,
   updateAdminMedia,
   uploadAdminMedia,
-  type MediaAsset
+  type MediaAsset,
+  type MediaReference
 } from "../../shared/api";
 import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
@@ -21,6 +24,7 @@ const assets = ref<MediaAsset[]>([]);
 const selectedId = ref("");
 const loading = ref(false);
 const uploading = ref(false);
+const replacing = ref(false);
 const savingMetadata = ref(false);
 const deleting = ref(false);
 const batchMode = ref(false);
@@ -29,12 +33,20 @@ const error = ref("");
 const uploadError = ref("");
 const notice = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
+const replaceFileInput = ref<HTMLInputElement | null>(null);
 const editAlt = ref("");
 const editCategory = ref("");
 const selectedAssetIds = ref<string[]>([]);
 const searchQuery = ref("");
 const typeFilter = ref("");
 const sortMode = ref("latest");
+const imageRefreshKeys = ref<Record<string, string>>({});
+const references = ref<MediaReference[]>([]);
+const referencesLoading = ref(false);
+const referencesError = ref("");
+const referencesPage = ref(1);
+const referencesPageSize = ref(5);
+const referencesTotal = ref(0);
 const page = ref(1);
 const pageSize = ref(12);
 const total = ref(0);
@@ -48,6 +60,13 @@ onMounted(load);
 watch(selected, (asset) => {
   editAlt.value = asset?.alt || "";
   editCategory.value = asset?.category || "";
+  references.value = [];
+  referencesError.value = "";
+  referencesTotal.value = 0;
+  referencesPage.value = 1;
+  if (asset?.usageCount) {
+    void loadReferences(asset.id, 1);
+  }
 }, { immediate: true });
 
 async function load() {
@@ -94,6 +113,35 @@ async function setPageSize(value: number) {
   await load();
 }
 
+async function loadReferences(id = selected.value?.id || "", nextPage = referencesPage.value) {
+  if (!id) {
+    return;
+  }
+
+  referencesLoading.value = true;
+  referencesError.value = "";
+
+  try {
+    const response = await getAdminMediaReferences(id, {
+      page: nextPage,
+      pageSize: referencesPageSize.value
+    });
+    references.value = response.items;
+    referencesPage.value = response.page;
+    referencesPageSize.value = response.pageSize;
+    referencesTotal.value = response.total;
+  } catch (err) {
+    referencesError.value = err instanceof Error ? err.message : "引用信息加载失败";
+    toast.error("引用信息加载失败", referencesError.value);
+  } finally {
+    referencesLoading.value = false;
+  }
+}
+
+async function setReferencesPage(value: number) {
+  await loadReferences(selected.value?.id || "", value);
+}
+
 async function selectAsset(id: string) {
   selectedId.value = id;
   uploadError.value = "";
@@ -112,9 +160,27 @@ function openPicker() {
   fileInput.value?.click();
 }
 
+function openReplacePicker() {
+  if (!selected.value) {
+    return;
+  }
+  if (selected.value.type !== "image") {
+    toast.warning("只能更换图片", "文档资源暂不支持更换文件。");
+    return;
+  }
+  replaceFileInput.value?.click();
+}
+
 async function handleInputChange(event: Event) {
   const input = event.target as HTMLInputElement;
   await uploadFiles(input.files);
+  input.value = "";
+}
+
+async function handleReplaceInputChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] || null;
+  await replaceSelectedFile(file);
   input.value = "";
 }
 
@@ -155,6 +221,35 @@ async function uploadFiles(fileList: FileList | null) {
   }
 }
 
+async function replaceSelectedFile(file: File | null) {
+  if (!selected.value || !file || replacing.value) {
+    return;
+  }
+  if (selected.value.type !== "image") {
+    toast.warning("只能更换图片", "文档资源暂不支持更换文件。");
+    return;
+  }
+
+  const currentId = selected.value.id;
+  replacing.value = true;
+  uploadError.value = "";
+  notice.value = "";
+
+  try {
+    const updated = await replaceAdminMediaFile(currentId, file);
+    assets.value = assets.value.map((item) => (item.id === updated.id ? updated : item));
+    imageRefreshKeys.value = { ...imageRefreshKeys.value, [updated.id]: String(Date.now()) };
+    selectedId.value = updated.id;
+    notice.value = "图片已更换";
+    toast.success("图片已更换", updated.fileName);
+  } catch (err) {
+    uploadError.value = err instanceof Error ? err.message : "图片更换失败";
+    toast.error("图片更换失败", uploadError.value);
+  } finally {
+    replacing.value = false;
+  }
+}
+
 async function saveMetadata() {
   if (!selected.value) {
     return;
@@ -185,7 +280,7 @@ async function deleteSelected() {
     return;
   }
   if (selected.value.usageCount > 0) {
-    toast.warning("资源正在使用中", "请先移除内容引用后再删除。");
+    toast.warning("资源正在使用中", `该资源被引用 ${selected.value.usageCount} 次，请先移除内容引用后再删除。`);
     return;
   }
 
@@ -318,6 +413,39 @@ function formatDate(value: string) {
   return formatDateTime(value);
 }
 
+function referenceTypeLabel(type: string) {
+  if (type === "post") return "文章";
+  if (type === "admin_post") return "后台文章";
+  if (type === "submission") return "投稿";
+  if (type === "topic") return "专题";
+  return "内容";
+}
+
+function referenceStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    published: "已发布",
+    draft: "草稿",
+    review: "待审核",
+    scheduled: "待发布",
+    archived: "已归档",
+    submitted: "已投稿",
+    returned: "已退回",
+    rejected: "已拒绝",
+    active: "启用",
+    inactive: "停用"
+  };
+  return labels[status] || status || "未知";
+}
+
+function mediaImageSrc(asset: MediaAsset) {
+  const refreshKey = imageRefreshKeys.value[asset.id];
+  if (!refreshKey) {
+    return asset.url;
+  }
+
+  return `${asset.url}${asset.url.includes("?") ? "&" : "?"}v=${encodeURIComponent(refreshKey)}`;
+}
+
 </script>
 
 <template>
@@ -367,7 +495,7 @@ function formatDate(value: string) {
               <label v-if="batchMode" class="media-card-checkbox" @click.stop>
                 <input type="checkbox" :checked="isBatchSelected(asset.id)" @change="toggleBatchAsset(asset)">
               </label>
-              <img v-if="asset.type === 'image'" :src="asset.url" :alt="asset.alt">
+              <img v-if="asset.type === 'image'" :src="mediaImageSrc(asset)" :alt="asset.alt">
               <div v-else class="media-card-file">{{ typeLabel(asset.type) }}</div>
               <div class="media-card-body"><strong>{{ asset.fileName }}</strong><div class="meta-row"><span>{{ asset.sizeLabel }}</span><span>{{ asset.usageCount ? `已使用 ${asset.usageCount} 次` : "未使用" }}</span></div><span class="tag">{{ asset.category }}</span></div>
             </article>
@@ -409,10 +537,41 @@ function formatDate(value: string) {
             <div class="meta-row"><span>尺寸 {{ selected.width }} x {{ selected.height }}</span><span>上传于 {{ formatDate(selected.uploadedAt) }}</span></div>
             <div class="header-actions">
               <button class="button" type="button" :disabled="savingMetadata" @click="saveMetadata">{{ savingMetadata ? "保存中..." : "保存信息" }}</button>
+              <button class="button-secondary" type="button" :disabled="replacing || selected.type !== 'image'" @click="openReplacePicker">{{ replacing ? "更换中..." : "更换图片" }}</button>
               <button class="button-secondary" type="button" @click="copySelectedUrl">复制地址</button>
-              <button class="button-secondary" type="button" :disabled="deleting || selected.usageCount > 0" @click="deleteSelected">{{ deleting ? "删除中..." : "删除" }}</button>
+              <button class="button-secondary" type="button" :disabled="deleting" @click="deleteSelected">{{ deleting ? "删除中..." : "删除" }}</button>
             </div>
-            <p v-if="selected.usageCount > 0" class="muted">该资源正在被内容引用，不能直接删除。</p>
+            <input ref="replaceFileInput" hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="handleReplaceInputChange">
+            <span v-if="selected.usageCount > 0" class="muted" style="color:red">该资源正在被以下内容引用，不能直接删除。</span>
+            <section v-if="selected.usageCount > 0" class="reference-list" aria-label="资源引用列表">
+              <LoadingState v-if="referencesLoading" compact text="正在加载引用..." :rows="2" />
+              <p v-else-if="referencesError" class="error">{{ referencesError }}</p>
+              <template v-else>
+                <article v-for="(item, index) in references" :key="item.id" class="reference-item">
+                  <div>
+                    <RouterLink v-if="item.adminUrl || item.url" class="reference-title" :to="item.adminUrl || item.url">
+                      {{ index + 1 }}. {{ item.title || "未命名内容" }}
+                    </RouterLink>
+                    <strong v-else>{{ index + 1 }}. {{ item.title || "未命名内容" }}</strong>
+                    <div class="meta-row">
+                      <span>{{ referenceTypeLabel(item.resourceType) }}</span>
+                      <span>{{ referenceStatusLabel(item.status) }}</span>
+                      <span>{{ item.context }}</span>
+                    </div>
+                  </div>
+                </article>
+                <p v-if="!references.length" class="muted">暂未找到引用明细。</p>
+                <PaginationControls
+                  v-if="referencesTotal > referencesPageSize"
+                  :page="referencesPage"
+                  :page-size="referencesPageSize"
+                  :total="referencesTotal"
+                  :loading="referencesLoading"
+                  item-label="条引用"
+                  @update:page="setReferencesPage"
+                />
+              </template>
+            </section>
           </div>
         </section>
       </aside>

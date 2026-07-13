@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,11 +18,12 @@ const (
 )
 
 type SQLRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	sqlite bool
 }
 
 func NewSQLRepository(ctx context.Context, db *sql.DB) (*SQLRepository, error) {
-	repo := &SQLRepository{db: db}
+	repo := &SQLRepository{db: db, sqlite: database.IsSQLite(db)}
 	if err := repo.ensureSeedData(ctx); err != nil {
 		return nil, err
 	}
@@ -126,11 +128,61 @@ func (repo *SQLRepository) ListMedia(ctx context.Context, query MediaListQuery) 
 	if err := rows.Err(); err != nil {
 		return MediaListResult{}, fmt.Errorf("iterate media assets: %w", err)
 	}
+	if err := rows.Close(); err != nil {
+		return MediaListResult{}, fmt.Errorf("close media assets rows: %w", err)
+	}
+
+	for index := range items {
+		usageCount, err := repo.countMediaReferences(ctx, items[index].ID, items[index].URL)
+		if err != nil {
+			return MediaListResult{}, err
+		}
+		items[index].UsageCount = usageCount
+		items[index] = assetForResponse(items[index])
+	}
 
 	items = filterMedia(items, query)
 	sortMedia(items, query.Sort)
 
 	return pagedMediaResult(items, query), nil
+}
+
+func (repo *SQLRepository) ListMediaReferences(ctx context.Context, id string, page int, pageSize int) (MediaReferenceListResult, error) {
+	asset, err := repo.getMedia(ctx, id)
+	if err != nil {
+		return MediaReferenceListResult{}, err
+	}
+
+	references := make([]MediaReference, 0)
+	tokens := mediaReferenceTokensWithLegacy(id, asset.URL)
+	for _, token := range tokens {
+		items, err := repo.queryMediaReferencesForToken(ctx, token)
+		if err != nil {
+			return MediaReferenceListResult{}, err
+		}
+		references = append(references, items...)
+	}
+	references = dedupeMediaReferences(references)
+	sortMediaReferences(references)
+
+	page = normalizePage(page)
+	pageSize = normalizePageSize(pageSize)
+	total := len(references)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	return MediaReferenceListResult{
+		Items:    references[start:end],
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
 }
 
 func (repo *SQLRepository) CreateMedia(ctx context.Context, asset MediaAsset) (MediaAsset, error) {
@@ -146,8 +198,17 @@ func (repo *SQLRepository) GetMedia(ctx context.Context, id string) (MediaAsset,
 	if err != nil {
 		return MediaAsset{}, err
 	}
+	usageCount, err := repo.countMediaReferences(ctx, id, asset.URL)
+	if err != nil {
+		return MediaAsset{}, err
+	}
+	asset.UsageCount = usageCount
 
-	return asset, nil
+	return assetForResponse(asset), nil
+}
+
+func (repo *SQLRepository) GetMediaFile(ctx context.Context, id string) (MediaAsset, error) {
+	return repo.getMedia(ctx, id)
 }
 
 func (repo *SQLRepository) UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error) {
@@ -167,7 +228,35 @@ func (repo *SQLRepository) UpdateMedia(ctx context.Context, id string, request M
 		return MediaAsset{}, ErrMediaNotFound
 	}
 
-	return repo.getMedia(ctx, id)
+	asset, err := repo.getMedia(ctx, id)
+	if err != nil {
+		return MediaAsset{}, err
+	}
+	return assetForResponse(asset), nil
+}
+
+func (repo *SQLRepository) UpdateMediaFile(ctx context.Context, id string, request MediaFileUpdateRequest) (MediaAsset, error) {
+	result, err := repo.db.ExecContext(ctx, `
+		UPDATE media_assets
+		SET file_name = $2, url = $3, type = $4, size_label = $5, width = $6, height = $7
+		WHERE id = $1
+	`, id, request.FileName, request.URL, request.Type, request.SizeLabel, request.Width, request.Height)
+	if err != nil {
+		return MediaAsset{}, fmt.Errorf("replace media file %s: %w", id, err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return MediaAsset{}, fmt.Errorf("read media file replacement rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return MediaAsset{}, ErrMediaNotFound
+	}
+
+	asset, err := repo.getMedia(ctx, id)
+	if err != nil {
+		return MediaAsset{}, err
+	}
+	return assetForResponse(asset), nil
 }
 
 func (repo *SQLRepository) DeleteMedia(ctx context.Context, id string) (MediaAsset, error) {
@@ -175,7 +264,11 @@ func (repo *SQLRepository) DeleteMedia(ctx context.Context, id string) (MediaAss
 	if err != nil {
 		return MediaAsset{}, err
 	}
-	if asset.UsageCount > 0 {
+	usageCount, err := repo.countMediaReferences(ctx, id, asset.URL)
+	if err != nil {
+		return MediaAsset{}, err
+	}
+	if usageCount > 0 {
 		return MediaAsset{}, ErrMediaInUse
 	}
 
@@ -184,6 +277,209 @@ func (repo *SQLRepository) DeleteMedia(ctx context.Context, id string) (MediaAss
 	}
 
 	return asset, nil
+}
+
+func (repo *SQLRepository) countMediaReferences(ctx context.Context, id string, extraTokens ...string) (int, error) {
+	tokens := mediaReferenceTokensWithLegacy(id, extraTokens...)
+	if len(tokens) == 0 {
+		return 0, nil
+	}
+
+	references := make([]MediaReference, 0)
+	for _, token := range tokens {
+		items, err := repo.queryMediaReferencesForToken(ctx, token)
+		if err != nil {
+			return 0, err
+		}
+		references = append(references, items...)
+	}
+
+	return len(dedupeMediaReferences(references)), nil
+}
+
+func (repo *SQLRepository) queryMediaReferencesForToken(ctx context.Context, token string) ([]MediaReference, error) {
+	pattern := "%" + token + "%"
+	items := make([]MediaReference, 0)
+
+	postRows, err := repo.db.QueryContext(ctx, `
+		SELECT CAST(id AS TEXT), title, status, slug, updated_at,
+			CASE
+				WHEN cover_image LIKE $1 AND content LIKE $1 THEN '封面、正文'
+				WHEN cover_image LIKE $1 THEN '封面'
+				ELSE '正文'
+			END AS context
+		FROM posts
+		WHERE cover_image LIKE $1 OR content LIKE $1
+	`, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("query post media references: %w", err)
+	}
+	for postRows.Next() {
+		var item MediaReference
+		var slug string
+		if err := postRows.Scan(&item.ResourceID, &item.Title, &item.Status, &slug, &item.UpdatedAt, &item.Context); err != nil {
+			_ = postRows.Close()
+			return nil, fmt.Errorf("scan post media reference: %w", err)
+		}
+		item.ResourceType = "post"
+		item.ID = item.ResourceType + ":" + item.ResourceID
+		item.URL = "/posts/" + slug
+		items = append(items, item)
+	}
+	if err := closeRows(postRows, "post media references"); err != nil {
+		return nil, err
+	}
+
+	submissionRows, err := repo.db.QueryContext(ctx, `
+		SELECT CAST(id AS TEXT), title, status, updated_at,
+			CASE
+				WHEN cover_image LIKE $1 AND content LIKE $1 THEN '封面、正文'
+				WHEN cover_image LIKE $1 THEN '封面'
+				ELSE '正文'
+			END AS context
+		FROM submissions
+		WHERE cover_image LIKE $1 OR content LIKE $1
+	`, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("query submission media references: %w", err)
+	}
+	for submissionRows.Next() {
+		var item MediaReference
+		if err := submissionRows.Scan(&item.ResourceID, &item.Title, &item.Status, &item.UpdatedAt, &item.Context); err != nil {
+			_ = submissionRows.Close()
+			return nil, fmt.Errorf("scan submission media reference: %w", err)
+		}
+		item.ResourceType = "submission"
+		item.ID = item.ResourceType + ":" + item.ResourceID
+		item.AdminURL = "/admin/submissions"
+		items = append(items, item)
+	}
+	if err := closeRows(submissionRows, "submission media references"); err != nil {
+		return nil, err
+	}
+
+	topicRows, err := repo.db.QueryContext(ctx, `
+		SELECT CAST(id AS TEXT), title, status, slug, updated_at
+		FROM topics
+		WHERE cover_image LIKE $1
+	`, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("query topic media references: %w", err)
+	}
+	for topicRows.Next() {
+		var item MediaReference
+		var slug string
+		if err := topicRows.Scan(&item.ResourceID, &item.Title, &item.Status, &slug, &item.UpdatedAt); err != nil {
+			_ = topicRows.Close()
+			return nil, fmt.Errorf("scan topic media reference: %w", err)
+		}
+		item.ResourceType = "topic"
+		item.Context = "封面"
+		item.ID = item.ResourceType + ":" + item.ResourceID
+		item.URL = "/topics/" + slug
+		item.AdminURL = "/admin/topics"
+		items = append(items, item)
+	}
+	if err := closeRows(topicRows, "topic media references"); err != nil {
+		return nil, err
+	}
+
+	adminPostRows, err := repo.db.QueryContext(ctx, `
+		SELECT CAST(id AS TEXT), title, status, updated_at, data
+		FROM admin_posts
+		WHERE CAST(data AS TEXT) LIKE $1
+	`, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("query admin post media references: %w", err)
+	}
+	for adminPostRows.Next() {
+		var item MediaReference
+		var data []byte
+		if err := adminPostRows.Scan(&item.ResourceID, &item.Title, &item.Status, &item.UpdatedAt, &data); err != nil {
+			_ = adminPostRows.Close()
+			return nil, fmt.Errorf("scan admin post media reference: %w", err)
+		}
+		item.ResourceType = "admin_post"
+		item.Context = adminPostReferenceContext(data, token)
+		item.ID = item.ResourceType + ":" + item.ResourceID
+		item.AdminURL = "/admin/editor?id=" + item.ResourceID
+		items = append(items, item)
+	}
+	if err := closeRows(adminPostRows, "admin post media references"); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+func mediaReferenceTokensWithLegacy(id string, extraTokens ...string) []string {
+	tokens := MediaAssetReferenceTokens(id)
+	seen := map[string]bool{}
+	result := make([]string, 0, len(tokens)+len(extraTokens))
+	for _, token := range append(tokens, extraTokens...) {
+		token = strings.TrimSpace(token)
+		if token == "" || seen[token] {
+			continue
+		}
+		seen[token] = true
+		result = append(result, token)
+	}
+
+	return result
+}
+
+func dedupeMediaReferences(items []MediaReference) []MediaReference {
+	seen := map[string]bool{}
+	result := make([]MediaReference, 0, len(items))
+	for _, item := range items {
+		key := item.ResourceType + ":" + item.ResourceID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, item)
+	}
+
+	return result
+}
+
+func sortMediaReferences(items []MediaReference) {
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+}
+
+func adminPostReferenceContext(data []byte, token string) string {
+	var item struct {
+		CoverImage string `json:"coverImage"`
+		Content    string `json:"content"`
+	}
+	if err := json.Unmarshal(data, &item); err != nil {
+		return "内容"
+	}
+	inCover := strings.Contains(item.CoverImage, token)
+	inContent := strings.Contains(item.Content, token)
+	switch {
+	case inCover && inContent:
+		return "封面、正文"
+	case inCover:
+		return "封面"
+	case inContent:
+		return "正文"
+	default:
+		return "内容"
+	}
+}
+
+func closeRows(rows *sql.Rows, label string) error {
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate %s: %w", label, err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", label, err)
+	}
+
+	return nil
 }
 
 func (repo *SQLRepository) GetStats(ctx context.Context, rangeKey string) (Stats, error) {
@@ -807,4 +1103,9 @@ func (repo *SQLRepository) getMedia(ctx context.Context, id string) (MediaAsset,
 	}
 
 	return asset, nil
+}
+
+func assetForResponse(asset MediaAsset) MediaAsset {
+	asset.URL = MediaAssetURL(asset.ID)
+	return asset
 }

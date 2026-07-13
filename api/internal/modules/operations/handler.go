@@ -47,6 +47,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, storage MediaStorage) {
 	router.GET("/settings", handler.GetPublicSettings)
 	router.GET("/navigation", handler.GetPublicNavigation)
 	router.POST("/media/uploads", handler.UploadUserMedia)
+	router.GET("/media/:id/file", handler.ResolveMediaFile)
 	router.GET("/admin/settings", handler.GetSettings)
 	router.PUT("/admin/settings", handler.UpdateSettings)
 	router.POST("/admin/settings/test-mail", handler.SendTestMail)
@@ -59,7 +60,9 @@ func RegisterRoutes(router gin.IRouter, repo Repository, storage MediaStorage) {
 	router.GET("/admin/media", handler.ListMedia)
 	router.POST("/admin/media", handler.UploadMedia)
 	router.GET("/admin/media/:id", handler.GetMedia)
+	router.GET("/admin/media/:id/references", handler.ListMediaReferences)
 	router.PATCH("/admin/media/:id", handler.UpdateMedia)
+	router.PUT("/admin/media/:id/file", handler.ReplaceMediaFile)
 	router.DELETE("/admin/media/:id", handler.DeleteMedia)
 	router.GET("/admin/stats", handler.GetStats)
 	router.GET("/admin/statistics", handler.GetStats)
@@ -314,6 +317,20 @@ func (handler *Handler) GetMedia(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, asset)
 }
 
+func (handler *Handler) ListMediaReferences(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	result, err := handler.repo.ListMediaReferences(ctx.Request.Context(), ctx.Param("id"), parsePositiveInt(ctx.Query("page")), parsePositiveInt(ctx.Query("pageSize")))
+	if err != nil {
+		handler.writeMediaError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, result)
+}
+
 func (handler *Handler) UploadMedia(ctx *gin.Context) {
 	user, ok := auth.RequireAdmin(ctx)
 	if !ok {
@@ -410,7 +427,18 @@ func (handler *Handler) uploadMedia(ctx *gin.Context, user auth.User, defaultCat
 		return
 	}
 
+	created.URL = MediaAssetURL(created.ID)
 	ctx.JSON(http.StatusCreated, created)
+}
+
+func (handler *Handler) ResolveMediaFile(ctx *gin.Context) {
+	asset, err := handler.repo.GetMediaFile(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeMediaError(ctx, err)
+		return
+	}
+
+	ctx.Redirect(http.StatusFound, asset.URL)
 }
 
 func (handler *Handler) UpdateMedia(ctx *gin.Context) {
@@ -436,6 +464,88 @@ func (handler *Handler) UpdateMedia(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, asset)
+}
+
+func (handler *Handler) ReplaceMediaFile(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	current, err := handler.repo.GetMediaFile(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		handler.writeMediaError(ctx, err)
+		return
+	}
+	if current.Type != "image" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "only image assets can be replaced"})
+		return
+	}
+
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, maxMediaUploadBytes+(1<<20))
+	fileHeader, err := ctx.FormFile("file")
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	if fileHeader.Size <= 0 || fileHeader.Size > maxMediaUploadBytes {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "file size must be between 1 byte and 10 MB"})
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read upload"})
+		return
+	}
+	defer file.Close()
+
+	contentType, extension, err := detectMediaType(file, fileHeader.Filename)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if mediaKind(contentType) != "image" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "replacement file must be an image"})
+		return
+	}
+	width, height := mediaDimensions(file, contentType)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read upload"})
+		return
+	}
+
+	now := time.Now()
+	relativeDir := now.Format("2006/01/02")
+	originalName := safeOriginalName(fileHeader.Filename)
+	storedName := uniqueStoredName(originalName, extension, now)
+	objectKey := filepath.ToSlash(filepath.Join(relativeDir, storedName))
+	mediaURL, err := handler.storage.Save(ctx.Request.Context(), objectKey, file, fileHeader.Size, contentType)
+	if err != nil {
+		slog.Error("failed to save replacement media file", "error", err, "mediaID", current.ID, "fileName", fileHeader.Filename, "objectKey", objectKey)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to replace media file"})
+		return
+	}
+
+	updated, err := handler.repo.UpdateMediaFile(ctx.Request.Context(), current.ID, MediaFileUpdateRequest{
+		FileName:  originalName,
+		URL:       mediaURL,
+		Type:      mediaKind(contentType),
+		SizeLabel: formatBytes(fileHeader.Size),
+		Width:     width,
+		Height:    height,
+	})
+	if err != nil {
+		if deleteErr := handler.storage.Delete(ctx.Request.Context(), mediaURL); deleteErr != nil {
+			slog.Warn("failed to delete replacement media after record failure", "error", deleteErr, "url", mediaURL, "mediaID", current.ID)
+		}
+		handler.writeMediaError(ctx, err)
+		return
+	}
+	if err := handler.storage.Delete(ctx.Request.Context(), current.URL); err != nil {
+		slog.Warn("failed to delete previous media file after replacement", "error", err, "mediaID", current.ID, "url", current.URL)
+	}
+
+	ctx.JSON(http.StatusOK, updated)
 }
 
 func (handler *Handler) DeleteMedia(ctx *gin.Context) {

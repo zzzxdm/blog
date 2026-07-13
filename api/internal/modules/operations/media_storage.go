@@ -56,29 +56,38 @@ func (storage *LocalMediaStorage) Save(_ context.Context, key string, reader io.
 }
 
 func (storage *LocalMediaStorage) Delete(_ context.Context, publicURL string) error {
-	if !strings.HasPrefix(publicURL, "/uploads/") {
-		return nil
-	}
-
-	relativePath := strings.TrimPrefix(publicURL, "/uploads/")
-	targetPath := filepath.Join(storage.dir, filepath.FromSlash(relativePath))
-	root, err := filepath.Abs(storage.dir)
-	if err != nil {
+	target, ok, err := storage.localPath(publicURL)
+	if err != nil || !ok {
 		return err
-	}
-	target, err := filepath.Abs(targetPath)
-	if err != nil {
-		return err
-	}
-
-	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
-		return nil
 	}
 	if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 
 	return nil
+}
+
+func (storage *LocalMediaStorage) localPath(publicURL string) (string, bool, error) {
+	if !strings.HasPrefix(publicURL, "/uploads/") {
+		return "", false, nil
+	}
+
+	relativePath := strings.TrimPrefix(publicURL, "/uploads/")
+	targetPath := filepath.Join(storage.dir, filepath.FromSlash(relativePath))
+	root, err := filepath.Abs(storage.dir)
+	if err != nil {
+		return "", false, err
+	}
+	target, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", false, err
+	}
+
+	if target == root || !strings.HasPrefix(target, root+string(os.PathSeparator)) {
+		return "", false, nil
+	}
+
+	return target, true, nil
 }
 
 type MinIOMediaStorage struct {

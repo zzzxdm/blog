@@ -155,9 +155,37 @@ type MediaListQuery struct {
 	All      bool
 }
 
+type MediaReference struct {
+	ID           string    `json:"id"`
+	ResourceID   string    `json:"resourceId"`
+	ResourceType string    `json:"resourceType"`
+	Title        string    `json:"title"`
+	Context      string    `json:"context"`
+	Status       string    `json:"status"`
+	URL          string    `json:"url"`
+	AdminURL     string    `json:"adminUrl"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type MediaReferenceListResult struct {
+	Items    []MediaReference `json:"items"`
+	Page     int              `json:"page"`
+	PageSize int              `json:"pageSize"`
+	Total    int              `json:"total"`
+}
+
 type MediaUpdateRequest struct {
 	Alt      string `json:"alt"`
 	Category string `json:"category"`
+}
+
+type MediaFileUpdateRequest struct {
+	FileName  string
+	URL       string
+	Type      string
+	SizeLabel string
+	Width     int
+	Height    int
 }
 
 type Metric struct {

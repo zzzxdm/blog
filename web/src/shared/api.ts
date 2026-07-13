@@ -491,6 +491,25 @@ export interface MediaListResponse {
   total: number;
 }
 
+export interface MediaReference {
+  id: string;
+  resourceId: string;
+  resourceType: string;
+  title: string;
+  context: string;
+  status: string;
+  url: string;
+  adminUrl: string;
+  updatedAt: string;
+}
+
+export interface MediaReferenceListResponse {
+  items: MediaReference[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface StatMetric {
   label: string;
   value: string;
@@ -1333,15 +1352,24 @@ export async function getAdminMediaAsset(id: string): Promise<MediaAsset> {
   return request<MediaAsset>(`/admin/media/${encodeURIComponent(id)}`);
 }
 
+export async function getAdminMediaReferences(id: string, params: { page?: number; pageSize?: number } = {}): Promise<MediaReferenceListResponse> {
+  const query = toQuery(params);
+  return request<MediaReferenceListResponse>(`/admin/media/${encodeURIComponent(id)}/references${query}`);
+}
+
 export async function uploadAdminMedia(file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
-  return uploadMediaTo("/admin/media", file, payload);
+  return uploadMediaTo("/admin/media", file, payload, "POST");
 }
 
 export async function uploadMedia(file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
-  return uploadMediaTo("/media/uploads", file, payload);
+  return uploadMediaTo("/media/uploads", file, payload, "POST");
 }
 
-async function uploadMediaTo(path: string, file: File, payload: { alt?: string; category?: string } = {}): Promise<MediaAsset> {
+export async function replaceAdminMediaFile(id: string, file: File): Promise<MediaAsset> {
+  return uploadMediaTo(`/admin/media/${encodeURIComponent(id)}/file`, file, {}, "PUT");
+}
+
+async function uploadMediaTo(path: string, file: File, payload: { alt?: string; category?: string } = {}, method: "POST" | "PUT"): Promise<MediaAsset> {
   const form = new FormData();
   form.set("file", file);
 
@@ -1353,7 +1381,7 @@ async function uploadMediaTo(path: string, file: File, payload: { alt?: string; 
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
+    method,
     credentials: "include",
     body: form
   });

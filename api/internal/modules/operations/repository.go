@@ -26,9 +26,12 @@ type Repository interface {
 	GetNavigation(ctx context.Context) (Navigation, error)
 	UpdateNavigation(ctx context.Context, navigation Navigation) (Navigation, error)
 	ListMedia(ctx context.Context, query MediaListQuery) (MediaListResult, error)
+	ListMediaReferences(ctx context.Context, id string, page int, pageSize int) (MediaReferenceListResult, error)
 	CreateMedia(ctx context.Context, asset MediaAsset) (MediaAsset, error)
 	GetMedia(ctx context.Context, id string) (MediaAsset, error)
+	GetMediaFile(ctx context.Context, id string) (MediaAsset, error)
 	UpdateMedia(ctx context.Context, id string, request MediaUpdateRequest) (MediaAsset, error)
+	UpdateMediaFile(ctx context.Context, id string, request MediaFileUpdateRequest) (MediaAsset, error)
 	DeleteMedia(ctx context.Context, id string) (MediaAsset, error)
 	GetStats(ctx context.Context, rangeKey string) (Stats, error)
 	ListAuditLogs(ctx context.Context, query AuditLogQuery) (AuditLogListResult, error)
@@ -239,6 +242,24 @@ func cloneStats(stats Stats) Stats {
 
 func cloneAuditLog(item AuditLog) AuditLog {
 	return item
+}
+
+func MediaAssetURL(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+
+	return "/api/media/" + id + "/file"
+}
+
+func MediaAssetReferenceTokens(id string) []string {
+	publicURL := MediaAssetURL(id)
+	if publicURL == "" {
+		return []string{}
+	}
+
+	return []string{publicURL}
 }
 
 func pagedMediaResult(items []MediaAsset, query MediaListQuery) MediaListResult {

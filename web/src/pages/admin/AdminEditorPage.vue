@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import MediaPickerDialog from "../../components/MediaPickerDialog.vue";
 import RichMarkdownEditor from "../../components/RichMarkdownEditor.vue";
 import {
   createAdminPost,
@@ -21,6 +22,7 @@ import {
   type AdminPostVisibility,
   type AdminPostStatus,
   type Category,
+  type MediaAsset,
   type Tag
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
@@ -43,6 +45,7 @@ const categoryOptions = ref<Category[]>([]);
 const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
 const coverFileInput = ref<HTMLInputElement | null>(null);
+const coverPickerOpen = ref(false);
 
 const title = ref("");
 const summary = ref("");
@@ -172,6 +175,12 @@ async function uploadCover(file: File) {
   } finally {
     coverUploading.value = false;
   }
+}
+
+function chooseCoverFromMedia(asset: MediaAsset) {
+  coverImage.value = asset.url;
+  coverPickerOpen.value = false;
+  toast.success("已选择媒体库图片", asset.fileName);
 }
 
 function payload(nextStatus: AdminPostStatus): AdminPostPayload {
@@ -488,6 +497,7 @@ function defaultAlt(fileName: string) {
               <button class="button-secondary" type="button" :disabled="coverUploading" @click="openCoverPicker">
                 {{ coverUploading ? "上传中..." : "上传封面" }}
               </button>
+              <button class="button-secondary" type="button" @click="coverPickerOpen = true">从媒体库选择</button>
               <input
                 ref="coverFileInput"
                 class="sr-only"
@@ -544,5 +554,12 @@ function defaultAlt(fileName: string) {
         </section>
       </aside>
     </section>
+    <MediaPickerDialog
+      :open="coverPickerOpen"
+      title="选择封面图"
+      type="image"
+      @close="coverPickerOpen = false"
+      @select="chooseCoverFromMedia"
+    />
   </AdminLayout>
 </template>
