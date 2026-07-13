@@ -86,7 +86,7 @@ watch(title, (value) => {
   }
 });
 
-async function load() {
+async function load(notify = false) {
   loading.value = true;
   error.value = "";
 
@@ -102,8 +102,12 @@ async function load() {
     total.value = response.total;
     page.value = response.page;
     pageSize.value = response.pageSize;
+    if (notify) {
+      toast.success("专题列表已刷新", `当前筛选共 ${total.value} 个专题。`);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "专题加载失败";
+    toast.error("专题加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -125,7 +129,7 @@ async function setPageSize(value: number) {
   await load();
 }
 
-function resetForm() {
+function resetForm(notify = false) {
   topicId.value = "";
   title.value = "";
   slug.value = "";
@@ -139,6 +143,9 @@ function resetForm() {
   selectedCategories.value = [];
   selectedTags.value = [];
   submitAttempted.value = false;
+  if (notify) {
+    toast.info("已切换到新建专题", "填写专题信息后保存。");
+  }
 }
 
 function editTopic(topic: Topic) {
@@ -157,6 +164,7 @@ function editTopic(topic: Topic) {
   categoryOptions.value = mergeOptions(categoryOptions.value, selectedCategories.value);
   tagOptions.value = mergeOptions(tagOptions.value, selectedTags.value);
   submitAttempted.value = false;
+  toast.info("已载入专题", topic.title);
 }
 
 async function saveTopic() {
@@ -329,7 +337,7 @@ function formatDate(value?: string) {
 <template>
   <AdminLayout title="专题管理" description="管理公开专题、文章匹配规则、排序和专题卡片展示。" mobile-title="专题管理" primary-action="新建专题">
     <template #mobile-action>
-      <button class="button" type="button" @click="resetForm">新建</button>
+      <button class="button" type="button" @click="resetForm(true)">新建</button>
     </template>
 
     <template #actions>
@@ -339,8 +347,8 @@ function formatDate(value?: string) {
           <option value="active">启用</option>
           <option value="draft">草稿</option>
         </select>
-        <button class="button-secondary" type="button" :disabled="loading" @click="load">刷新</button>
-        <button class="button" type="button" @click="resetForm">新建专题</button>
+        <button class="button-secondary" type="button" :disabled="loading" @click="load(true)">刷新</button>
+        <button class="button" type="button" @click="resetForm(true)">新建专题</button>
       </div>
     </template>
 
@@ -509,7 +517,7 @@ function formatDate(value?: string) {
           </label>
           <div class="header-actions">
             <button class="button" type="button" :disabled="saving" @click="saveTopic">{{ saving ? "保存中..." : "保存专题" }}</button>
-            <button class="button-secondary" type="button" @click="resetForm">清空</button>
+            <button class="button-secondary" type="button" @click="resetForm(true)">清空</button>
           </div>
         </form>
       </aside>

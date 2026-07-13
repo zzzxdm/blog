@@ -34,7 +34,7 @@ const approvableComments = computed(() => comments.value.filter((item) => item.s
 
 onMounted(load);
 
-async function load() {
+async function load(notify = false) {
   loading.value = true;
   error.value = "";
 
@@ -51,8 +51,12 @@ async function load() {
     total.value = response.total;
     page.value = response.page;
     pageSize.value = response.pageSize;
+    if (notify) {
+      toast.success("评论列表已刷新", `当前筛选共 ${total.value} 条评论。`);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "评论列表加载失败";
+    toast.error("评论列表加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -183,7 +187,7 @@ function statusClass(value: Comment["status"]) {
         <button class="button-secondary" type="button" :disabled="bulkActing || !approvableComments.length" @click="approveVisiblePending">
           {{ bulkActing ? "处理中..." : `通过当前 ${approvableComments.length}` }}
         </button>
-        <button class="button" type="button" @click="load">刷新</button>
+        <button class="button" type="button" @click="load(true)">刷新</button>
       </div>
     </template>
 

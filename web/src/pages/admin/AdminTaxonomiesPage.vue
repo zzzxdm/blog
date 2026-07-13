@@ -54,7 +54,7 @@ const unusedTags = computed(() => tags.value.filter((item) => item.postCount ===
 
 onMounted(load);
 
-async function load() {
+async function load(notify = false) {
   loading.value = true;
   error.value = "";
 
@@ -71,8 +71,12 @@ async function load() {
     tagTotal.value = tagResult.total;
     tagPage.value = tagResult.page;
     tagPageSize.value = tagResult.pageSize;
+    if (notify) {
+      toast.success("分类标签已刷新", `分类 ${categoryTotal.value} 个，标签 ${tagTotal.value} 个。`);
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "分类标签加载失败";
+    toast.error("分类标签加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -110,12 +114,15 @@ async function setTagPageSize(value: number) {
   await load();
 }
 
-function resetCategoryForm() {
+function resetCategoryForm(notify = false) {
   categoryId.value = "";
   categoryName.value = "";
   categorySlug.value = "";
   categoryDescription.value = "";
   categorySortOrder.value = nextCategorySortOrder();
+  if (notify) {
+    toast.info("已切换到新建分类", "填写分类信息后保存。");
+  }
 }
 
 function editCategory(item: Category) {
@@ -124,6 +131,7 @@ function editCategory(item: Category) {
   categorySlug.value = item.slug;
   categoryDescription.value = item.description;
   categorySortOrder.value = item.sortOrder;
+  toast.info("已载入分类", item.name);
 }
 
 async function saveCategory() {
@@ -198,16 +206,20 @@ async function removeCategory(item: Category) {
   }
 }
 
-function resetTagForm() {
+function resetTagForm(notify = false) {
   tagId.value = "";
   tagName.value = "";
   tagSlug.value = "";
+  if (notify) {
+    toast.info("已切换到新建标签", "填写标签信息后保存。");
+  }
 }
 
 function editTag(item: Tag) {
   tagId.value = item.id;
   tagName.value = item.name;
   tagSlug.value = item.slug;
+  toast.info("已载入标签", item.name);
 }
 
 async function saveTag() {
@@ -290,7 +302,7 @@ function nextCategorySortOrder() {
   <AdminLayout title="分类标签" description="管理文章分类、标签、排序和引用关系，保持内容结构稳定。" mobile-title="分类标签" primary-action="写作" primary-action-to="/admin/editor">
     <template #actions>
       <div class="header-actions">
-        <button class="button-secondary" type="button" :disabled="loading" @click="load">刷新</button>
+        <button class="button-secondary" type="button" :disabled="loading" @click="load(true)">刷新</button>
         <RouterLink class="button" to="/admin/editor">写文章</RouterLink>
       </div>
     </template>
@@ -310,7 +322,7 @@ function nextCategorySortOrder() {
       <section class="table-panel" aria-label="分类列表">
         <div class="panel-title" style="padding: 16px 16px 0;">
           <h2>分类</h2>
-          <button class="button-secondary" type="button" @click="resetCategoryForm">新建分类</button>
+          <button class="button-secondary" type="button" @click="resetCategoryForm(true)">新建分类</button>
         </div>
         <form class="table-toolbar taxonomy-table-toolbar" @submit.prevent="searchCategories">
           <input v-model="categorySearch" class="input" type="search" placeholder="搜索分类名称、Slug、描述" aria-label="搜索分类">
@@ -372,7 +384,7 @@ function nextCategorySortOrder() {
           <div class="field"><label for="category-order">排序</label><input v-model.number="categorySortOrder" class="input" id="category-order" type="number"></div>
           <div class="header-actions">
             <button class="button" type="submit" :disabled="saving || !categoryName">{{ saving ? "保存中..." : "保存分类" }}</button>
-            <button class="button-secondary" type="button" @click="resetCategoryForm">清空</button>
+            <button class="button-secondary" type="button" @click="resetCategoryForm(true)">清空</button>
           </div>
         </form>
       </aside>
@@ -382,7 +394,7 @@ function nextCategorySortOrder() {
       <section class="table-panel" aria-label="标签列表">
         <div class="panel-title" style="padding: 16px 16px 0;">
           <h2>标签</h2>
-          <button class="button-secondary" type="button" @click="resetTagForm">新建标签</button>
+          <button class="button-secondary" type="button" @click="resetTagForm(true)">新建标签</button>
         </div>
         <form class="table-toolbar taxonomy-table-toolbar" @submit.prevent="searchTags">
           <input v-model="tagSearch" class="input" type="search" placeholder="搜索标签名称或 Slug" aria-label="搜索标签">
@@ -443,7 +455,7 @@ function nextCategorySortOrder() {
           </div>
           <div class="header-actions">
             <button class="button" type="submit" :disabled="saving || !tagName">{{ saving ? "保存中..." : "保存标签" }}</button>
-            <button class="button-secondary" type="button" @click="resetTagForm">清空</button>
+            <button class="button-secondary" type="button" @click="resetTagForm(true)">清空</button>
           </div>
         </form>
       </aside>
