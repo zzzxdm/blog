@@ -12,9 +12,11 @@ import {
   type MediaAsset
 } from "../../shared/api";
 import { useConfirmStore } from "../../stores/confirm";
+import { useToastStore } from "../../stores/toast";
 import { formatDateTime } from "../../shared/datetime";
 
 const confirmDialog = useConfirmStore();
+const toast = useToastStore();
 const assets = ref<MediaAsset[]>([]);
 const selectedId = ref("");
 const loading = ref(false);
@@ -70,6 +72,7 @@ async function load() {
     selectedAssetIds.value = selectedAssetIds.value.filter((id) => assets.value.some((item) => item.id === id));
   } catch (err) {
     error.value = err instanceof Error ? err.message : "媒体库加载失败";
+    toast.error("媒体库加载失败", error.value);
   } finally {
     loading.value = false;
   }
@@ -101,6 +104,7 @@ async function selectAsset(id: string) {
     assets.value = assets.value.map((item) => (item.id === id ? asset : item));
   } catch (err) {
     uploadError.value = err instanceof Error ? err.message : "资源详情加载失败";
+    toast.error("资源详情加载失败", uploadError.value);
   }
 }
 
@@ -142,8 +146,10 @@ async function uploadFiles(fileList: FileList | null) {
       selectedId.value = lastUploaded.id;
     }
     notice.value = files.length > 1 ? `已上传 ${files.length} 个文件` : "文件已上传";
+    toast.success("文件已上传", files.length > 1 ? `已上传 ${files.length} 个文件。` : lastUploaded?.fileName);
   } catch (err) {
     uploadError.value = err instanceof Error ? err.message : "上传失败";
+    toast.error("上传失败", uploadError.value);
   } finally {
     uploading.value = false;
   }
@@ -165,15 +171,21 @@ async function saveMetadata() {
     });
     assets.value = assets.value.map((item) => (item.id === updated.id ? updated : item));
     notice.value = "资源信息已保存";
+    toast.success("资源信息已保存", updated.fileName);
   } catch (err) {
     uploadError.value = err instanceof Error ? err.message : "资源信息保存失败";
+    toast.error("资源信息保存失败", uploadError.value);
   } finally {
     savingMetadata.value = false;
   }
 }
 
 async function deleteSelected() {
-  if (!selected.value || selected.value.usageCount > 0) {
+  if (!selected.value) {
+    return;
+  }
+  if (selected.value.usageCount > 0) {
+    toast.warning("资源正在使用中", "请先移除内容引用后再删除。");
     return;
   }
 
@@ -188,6 +200,7 @@ async function deleteSelected() {
   }
 
   const deletedId = selected.value.id;
+  const deletedFileName = selected.value.fileName;
   deleting.value = true;
   uploadError.value = "";
   notice.value = "";
@@ -197,8 +210,10 @@ async function deleteSelected() {
     assets.value = assets.value.filter((item) => item.id !== deletedId);
     selectedId.value = assets.value[0]?.id || "";
     notice.value = "资源已删除";
+    toast.success("资源已删除", deletedFileName);
   } catch (err) {
     uploadError.value = err instanceof Error ? err.message : "资源删除失败";
+    toast.error("资源删除失败", uploadError.value);
   } finally {
     deleting.value = false;
   }
@@ -209,6 +224,7 @@ function toggleBatchMode() {
   selectedAssetIds.value = [];
   notice.value = batchMode.value ? "已进入批量选择模式。" : "";
   uploadError.value = "";
+  toast.info(batchMode.value ? "已进入批量选择" : "已退出批量选择");
 }
 
 function isBatchSelected(id: string) {
@@ -230,6 +246,7 @@ function toggleBatchAsset(asset: MediaAsset) {
 
 async function deleteBatchSelected() {
   if (!deletableBatchAssets.value.length) {
+    toast.warning("没有可删除资源", selectedBatchAssets.value.length ? "选中的资源正在被内容引用。" : "请先选择未使用资源。");
     return;
   }
 
@@ -262,8 +279,10 @@ async function deleteBatchSelected() {
     notice.value = blockedBatchCount.value > 0
       ? `已删除 ${deletedIds.size} 个未使用资源，${blockedBatchCount.value} 个资源仍被引用。`
       : `已删除 ${deletedIds.size} 个资源。`;
+    toast.success("批量删除完成", notice.value);
   } catch (err) {
     uploadError.value = err instanceof Error ? err.message : "批量删除失败";
+    toast.error("批量删除失败", uploadError.value);
   } finally {
     batchDeleting.value = false;
   }
@@ -274,8 +293,17 @@ async function copySelectedUrl() {
     return;
   }
 
-  await navigator.clipboard?.writeText(selected.value.url);
-  notice.value = "资源地址已复制";
+  try {
+    if (!navigator.clipboard) {
+      throw new Error("当前浏览器不支持剪贴板写入");
+    }
+    await navigator.clipboard.writeText(selected.value.url);
+    notice.value = "资源地址已复制";
+    toast.success("资源地址已复制", selected.value.fileName);
+  } catch (err) {
+    uploadError.value = err instanceof Error ? err.message : "复制失败";
+    toast.error("复制失败", uploadError.value);
+  }
 }
 
 function defaultAlt(fileName: string) {
