@@ -59,6 +59,7 @@ async function load() {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "站内信加载失败";
+    toast.error("站内信加载失败", error.value);
   } finally {
     loading.value = false;
   }

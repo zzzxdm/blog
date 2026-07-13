@@ -19,9 +19,11 @@ import {
 } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
 import { useMessageStore } from "../stores/messages";
+import { useToastStore } from "../stores/toast";
 
 const route = useRoute();
 const messageStore = useMessageStore();
+const toast = useToastStore();
 
 const account = ref<AccountSettings | null>(null);
 const submissions = ref<Submission[]>([]);
@@ -68,6 +70,7 @@ async function load() {
     messageStore.setUnread(messagesResponse.stats.unread);
   } catch (err) {
     error.value = err instanceof Error ? err.message : "个人中心加载失败";
+    toast.error("个人中心加载失败", error.value);
   } finally {
     loading.value = false;
   }

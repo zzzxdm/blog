@@ -9,7 +9,9 @@ import {
   type CommentStats
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const comments = ref<Comment[]>([]);
 const stats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
 const status = ref("");
@@ -44,6 +46,7 @@ async function load() {
     pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "评论列表加载失败";
+    toast.error("评论列表加载失败", error.value);
   } finally {
     loading.value = false;
   }

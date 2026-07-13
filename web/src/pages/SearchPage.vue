@@ -5,10 +5,12 @@ import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from "vue-rout
 
 import PaginationControls from "../components/PaginationControls.vue";
 import { getCategories, searchPosts, type Category, type ListResponse, type Post } from "../shared/api";
+import { useToastStore } from "../stores/toast";
 
 const pageSize = 10;
 const route = useRoute();
 const router = useRouter();
+const toast = useToastStore();
 
 const keyword = ref("");
 const category = ref("");
@@ -60,6 +62,7 @@ async function load() {
   } catch (err) {
     results.value = null;
     error.value = err instanceof Error ? err.message : "搜索失败";
+    toast.error("搜索失败", error.value);
   } finally {
     loading.value = false;
   }

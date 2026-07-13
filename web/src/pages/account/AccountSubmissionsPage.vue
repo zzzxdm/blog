@@ -9,7 +9,9 @@ import {
   type SubmissionStats
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const submissions = ref<Submission[]>([]);
 const stats = ref<SubmissionStats>({ draft: 0, submitted: 0, returned: 0, rejected: 0, published: 0, archived: 0, total: 0 });
 const loading = ref(false);
@@ -44,6 +46,7 @@ async function load() {
     pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "投稿列表加载失败";
+    toast.error("投稿列表加载失败", error.value);
   } finally {
     loading.value = false;
   }

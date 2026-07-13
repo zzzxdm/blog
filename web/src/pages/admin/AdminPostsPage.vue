@@ -58,6 +58,7 @@ async function load() {
     pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "文章列表加载失败";
+    toast.error("文章列表加载失败", error.value);
   } finally {
     loading.value = false;
   }

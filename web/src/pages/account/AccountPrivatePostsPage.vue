@@ -10,7 +10,9 @@ import {
   type Submission
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useToastStore } from "../../stores/toast";
 
+const toast = useToastStore();
 const posts = ref<Post[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -45,6 +47,7 @@ async function load() {
     pageSize.value = response.pageSize;
   } catch (err) {
     error.value = err instanceof Error ? err.message : "私密文章加载失败";
+    toast.error("私密文章加载失败", error.value);
   } finally {
     loading.value = false;
   }
