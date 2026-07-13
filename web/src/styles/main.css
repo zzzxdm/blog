@@ -2725,6 +2725,7 @@ textarea {
 }
 
 .table-panel {
+  position: relative;
   overflow: hidden;
 }
 
@@ -3494,11 +3495,15 @@ textarea.input {
   }
 
   .header-actions {
+    display: flex;
+    flex-wrap: wrap;
     width: 100%;
   }
 
+  .header-actions .button,
   .header-actions .button-secondary {
-    flex: 1;
+    flex: 1 1 148px;
+    min-width: 0;
   }
 
   .feature,
@@ -3646,11 +3651,62 @@ textarea.input {
   }
 
   .table-panel {
+    max-width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .table-panel::after {
+    position: sticky;
+    right: 0;
+    bottom: 0;
+    display: block;
+    width: 36px;
+    height: 0;
+    margin-left: auto;
+    box-shadow: -16px 0 18px color-mix(in srgb, var(--surface) 82%, transparent);
+    content: "";
+    pointer-events: none;
   }
 
   table {
-    min-width: 760px;
+    min-width: 680px;
+  }
+
+  th,
+  td {
+    padding: 11px 12px;
+  }
+
+  .pagination {
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .pagination-size,
+  .pagination-summary,
+  .pagination-jump {
+    flex: 1 1 100%;
+  }
+
+  .pagination-summary {
+    order: 2;
+    text-align: center;
+  }
+
+  .pagination-jump {
+    order: 3;
+    justify-content: center;
+  }
+
+  .pagination-size {
+    justify-content: center;
+  }
+
+  .pagination-jump .button-secondary {
+    flex: 0 0 auto;
   }
 
   .comment-item.reply {
@@ -3692,5 +3748,49 @@ textarea.input {
   .footer-links {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-main {
+    padding: 16px 10px 28px;
+  }
+
+  .admin-topbar h1 {
+    font-size: 24px;
+  }
+
+  .table-panel {
+    margin-right: -10px;
+    margin-left: -10px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
+  .table-toolbar {
+    padding: 12px 10px;
+  }
+
+  table {
+    min-width: 620px;
+  }
+
+  th,
+  td {
+    padding: 10px;
+  }
+
+  .page-button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .pagination-jump {
+    align-items: stretch;
+  }
+
+  .pagination-jump .input {
+    width: min(96px, 32vw);
   }
 }
