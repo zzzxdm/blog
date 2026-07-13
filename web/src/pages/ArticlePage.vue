@@ -25,11 +25,13 @@ import { extractMarkdownHeadings, renderMarkdown } from "../shared/markdown";
 import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
+import { useToastStore } from "../stores/toast";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const posts = usePostsStore();
+const toast = useToastStore();
 
 const post = computed(() => posts.current);
 const avatarText = computed(() => post.value?.authorName.slice(0, 1) || "管");
@@ -206,6 +208,7 @@ async function updateReaction(type: "like" | "dislike") {
   }
   if (!auth.user) {
     reactionError.value = "请先登录后再操作";
+    toast.warning("需要登录", "登录后才能参与文章反馈。");
     return;
   }
 
@@ -214,8 +217,10 @@ async function updateReaction(type: "like" | "dislike") {
 
   try {
     reaction.value = await setPostReaction(post.value.slug, type);
+    toast.success(type === "like" ? "已点赞" : "已点踩", post.value.title);
   } catch (error) {
     reactionError.value = error instanceof Error ? error.message : "反馈失败";
+    toast.error("反馈失败", reactionError.value);
   } finally {
     reactionLoading.value = false;
   }
@@ -227,6 +232,7 @@ async function toggleBookmark() {
   }
   if (!auth.user) {
     reactionError.value = "请先登录后再收藏";
+    toast.warning("需要登录", "登录后才能收藏文章。");
     return;
   }
 
@@ -234,9 +240,12 @@ async function toggleBookmark() {
   reactionError.value = "";
 
   try {
-    reaction.value = await setBookmark(post.value.slug, !reaction.value?.bookmarked);
+    const nextBookmarked = !reaction.value?.bookmarked;
+    reaction.value = await setBookmark(post.value.slug, nextBookmarked);
+    toast.success(nextBookmarked ? "已收藏" : "已取消收藏", post.value.title);
   } catch (error) {
     reactionError.value = error instanceof Error ? error.message : "收藏失败";
+    toast.error("收藏失败", reactionError.value);
   } finally {
     reactionLoading.value = false;
   }
@@ -248,10 +257,12 @@ async function submitComment() {
   }
   if (!commentsEnabled.value) {
     commentError.value = "评论已关闭";
+    toast.info("评论已关闭", "管理员暂时关闭了新评论。");
     return;
   }
   if (!auth.user) {
     commentError.value = "请先登录后再评论";
+    toast.warning("需要登录", "登录后才能发表评论。");
     return;
   }
 
@@ -265,18 +276,22 @@ async function submitComment() {
     commentBody.value = "";
     replyTo.value = null;
     commentNotice.value = "评论已提交，等待审核。";
+    toast.success("评论已提交", "审核通过后会公开展示。");
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       commentError.value = "登录状态已过期，请重新登录";
+      toast.warning("登录已过期", "请重新登录后再提交评论。");
       return;
     }
     commentError.value = error instanceof Error ? error.message : "评论提交失败";
+    toast.error("评论提交失败", commentError.value);
   }
 }
 
 async function likeComment(comment: Comment) {
   if (!auth.user) {
     commentError.value = "请先登录后再点赞评论";
+    toast.warning("需要登录", "登录后才能点赞评论。");
     return;
   }
 
@@ -287,8 +302,10 @@ async function likeComment(comment: Comment) {
   try {
     const updated = await toggleCommentLike(comment.id);
     comments.value = comments.value.map((item) => (item.id === updated.id ? { ...item, ...updated } : item));
+    toast.success(updated.liked ? "已点赞评论" : "已取消点赞", comment.authorName);
   } catch (error) {
     commentError.value = error instanceof Error ? error.message : "评论点赞失败";
+    toast.error("评论点赞失败", commentError.value);
   } finally {
     commentActionId.value = "";
   }
@@ -297,6 +314,7 @@ async function likeComment(comment: Comment) {
 async function reportCommentAction(comment: Comment) {
   if (!auth.user) {
     commentError.value = "请先登录后再举报评论";
+    toast.warning("需要登录", "登录后才能举报评论。");
     return;
   }
 
@@ -307,8 +325,10 @@ async function reportCommentAction(comment: Comment) {
   try {
     await reportComment(comment.id, "读者举报");
     commentNotice.value = "举报已提交，管理员会在后台审核。";
+    toast.success("举报已提交", "管理员会在后台审核。");
   } catch (error) {
     commentError.value = error instanceof Error ? error.message : "举报提交失败";
+    toast.error("举报提交失败", commentError.value);
   } finally {
     commentActionId.value = "";
   }

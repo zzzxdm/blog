@@ -22,6 +22,7 @@ import {
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
 import { useConfirmStore } from "../../stores/confirm";
+import { useToastStore } from "../../stores/toast";
 
 type SelectOption = {
   value: string;
@@ -30,6 +31,7 @@ type SelectOption = {
 };
 
 const confirmDialog = useConfirmStore();
+const toast = useToastStore();
 const topics = ref<Topic[]>([]);
 const loading = ref(false);
 const saving = ref(false);
@@ -165,6 +167,7 @@ async function saveTopic() {
   if (!title.value.trim()) {
     error.value = titleRequiredError;
     titleInput.value?.focus();
+    toast.warning("专题标题不能为空", "请输入专题标题后再保存。");
     return;
   }
 
@@ -188,14 +191,17 @@ async function saveTopic() {
     if (topicId.value) {
       await updateAdminTopic(topicId.value, payload);
       message.value = "专题已更新。";
+      toast.success("专题已更新", title.value.trim());
     } else {
       await createAdminTopic(payload);
       message.value = "专题已创建。";
+      toast.success("专题已创建", title.value.trim());
     }
     resetForm();
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "专题保存失败";
+    toast.error("专题保存失败", error.value);
   } finally {
     saving.value = false;
   }
@@ -222,9 +228,11 @@ async function removeTopic(topic: Topic) {
       resetForm();
     }
     message.value = "专题已删除。";
+    toast.success("专题已删除", topic.title);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "专题删除失败";
+    toast.error("专题删除失败", error.value);
   } finally {
     actingId.value = "";
   }

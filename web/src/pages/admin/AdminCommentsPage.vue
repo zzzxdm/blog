@@ -12,6 +12,9 @@ import {
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
 import { downloadJson, exportFileName } from "../../shared/download";
+import { useToastStore } from "../../stores/toast";
+
+const toast = useToastStore();
 
 const comments = ref<Comment[]>([]);
 const stats = ref<CommentStats>({ total: 0, pending: 0, approved: 0, rejected: 0, spam: 0, deleted: 0, likes: 0, replies: 0 });
@@ -79,9 +82,11 @@ async function setStatus(item: Comment, nextStatus: Comment["status"]) {
   try {
     await updateCommentStatus(item.id, nextStatus);
     message.value = "评论状态已更新。";
+    toast.success("评论状态已更新", statusText(nextStatus));
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "评论状态更新失败";
+    toast.error("评论状态更新失败", error.value);
   } finally {
     actingId.value = "";
   }
@@ -89,6 +94,7 @@ async function setStatus(item: Comment, nextStatus: Comment["status"]) {
 
 async function approveVisiblePending() {
   if (!approvableComments.value.length) {
+    toast.info("没有待审核评论", "当前列表没有可批量通过的评论。");
     return;
   }
 
@@ -97,13 +103,16 @@ async function approveVisiblePending() {
   message.value = "";
 
   try {
+    const approvedCount = approvableComments.value.length;
     for (const item of approvableComments.value) {
       await updateCommentStatus(item.id, "approved");
     }
-    message.value = `已通过 ${approvableComments.value.length} 条评论。`;
+    message.value = `已通过 ${approvedCount} 条评论。`;
+    toast.success("批量审核完成", `已通过 ${approvedCount} 条评论。`);
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "批量审核失败";
+    toast.error("批量审核失败", error.value);
   } finally {
     bulkActing.value = false;
   }
@@ -117,8 +126,10 @@ async function exportComments() {
   try {
     downloadJson(exportFileName("comments"), await exportAdminComments(status.value));
     message.value = "评论导出已生成。";
+    toast.success("评论导出已生成", "下载文件已创建。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "评论导出失败";
+    toast.error("评论导出失败", error.value);
   } finally {
     exporting.value = false;
   }
