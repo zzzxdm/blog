@@ -465,6 +465,7 @@ func (handler *Handler) verifyTurnstile(ctx *gin.Context, settings SecuritySetti
 		return true
 	}
 	if strings.TrimSpace(settings.TurnstileSecretKey) == "" {
+		slog.Warn("turnstile verification is enabled but secret key is missing", "path", ctx.FullPath(), "ip", ctx.ClientIP())
 		ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "turnstile is not configured"})
 		return false
 	}
