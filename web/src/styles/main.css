@@ -421,6 +421,8 @@ textarea {
 .button,
 .button-secondary {
   display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   min-height: 38px;
@@ -784,6 +786,7 @@ textarea {
 
 .meta-row {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
@@ -926,6 +929,7 @@ textarea {
 .stat-card,
 .table-panel,
 .editor-panel {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -2061,6 +2065,12 @@ textarea {
   align-items: start;
 }
 
+.account-layout > *,
+.message-layout > *,
+.admin-grid-2 > * {
+  min-width: 0;
+}
+
 .account-nav {
   position: sticky;
   top: 84px;
@@ -2765,6 +2775,10 @@ textarea {
   margin-bottom: 22px;
 }
 
+.admin-topbar > div {
+  min-width: 0;
+}
+
 .admin-topbar h1 {
   margin: 0;
   font-size: 30px;
@@ -3056,6 +3070,7 @@ td {
 
 .settings-stack {
   display: grid;
+  min-width: 0;
   gap: 14px;
 }
 
@@ -3456,12 +3471,28 @@ textarea.input {
   }
 
   .mobile-admin-actions .button {
+    max-width: min(42vw, 160px);
     min-height: 34px;
+    overflow: hidden;
     padding: 0 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .admin-main {
     padding: 20px 16px 32px;
+  }
+
+  .table-panel {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .table-panel table {
+    min-width: 680px;
   }
 }
 
@@ -3746,10 +3777,6 @@ textarea.input {
     pointer-events: none;
   }
 
-  table {
-    min-width: 680px;
-  }
-
   th,
   td {
     padding: 11px 12px;
@@ -3847,7 +3874,7 @@ textarea.input {
     padding: 12px 10px;
   }
 
-  table {
+  .table-panel table {
     min-width: 620px;
   }
 
