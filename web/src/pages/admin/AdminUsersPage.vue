@@ -125,6 +125,7 @@ async function setStatus(user: ManagedUser, status: ManagedUser["status"]) {
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户状态更新失败";
+    toast.error("用户状态更新失败", error.value);
   } finally {
     actingId.value = "";
   }
@@ -172,6 +173,7 @@ async function setRole(user: ManagedUser, role: string) {
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户角色更新失败";
+    toast.error("用户角色更新失败", error.value);
   } finally {
     roleActingId.value = "";
   }
@@ -188,6 +190,7 @@ async function exportUsers() {
     toast.success("用户数据已导出", "下载文件已生成。");
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户导出失败";
+    toast.error("用户导出失败", error.value);
   } finally {
     exporting.value = false;
   }
@@ -243,6 +246,7 @@ async function inviteUser() {
       toast.warning("账号已删除", "已帮你切到已删除用户列表。");
     } else {
       error.value = err instanceof Error ? err.message : "邀请失败";
+      toast.error("邀请失败", error.value);
     }
   } finally {
     inviting.value = false;
@@ -264,6 +268,7 @@ async function resetPassword(user: ManagedUser) {
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "密码重置失败";
+    toast.error("密码重置失败", error.value);
   } finally {
     resettingId.value = "";
   }
@@ -291,6 +296,7 @@ async function restoreUser(user: ManagedUser) {
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户恢复失败";
+    toast.error("用户恢复失败", error.value);
   } finally {
     restoringId.value = "";
   }
@@ -321,6 +327,7 @@ async function deleteUser(user: ManagedUser) {
     await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : "用户删除失败";
+    toast.error("用户删除失败", error.value);
   } finally {
     deletingId.value = "";
   }
