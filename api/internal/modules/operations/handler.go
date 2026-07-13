@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"blog/api/internal/httpx"
 	"errors"
 	"fmt"
 	"image"
@@ -101,8 +102,7 @@ func (handler *Handler) UpdateSettings(ctx *gin.Context) {
 	}
 
 	var request Settings
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid settings payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid settings payload") {
 		return
 	}
 
@@ -175,8 +175,7 @@ func (handler *Handler) UpdateNavigation(ctx *gin.Context) {
 	}
 
 	var request Navigation
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid navigation payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid navigation payload") {
 		return
 	}
 
@@ -214,8 +213,7 @@ func (handler *Handler) CreateRedirect(ctx *gin.Context) {
 	}
 
 	var request RedirectRule
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid redirect payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid redirect payload") {
 		return
 	}
 
@@ -255,8 +253,7 @@ func (handler *Handler) ReplaceRedirects(ctx *gin.Context) {
 	var request struct {
 		Items []RedirectRule `json:"items"`
 	}
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid redirects payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid redirects payload") {
 		return
 	}
 
@@ -420,8 +417,7 @@ func (handler *Handler) UpdateMedia(ctx *gin.Context) {
 	}
 
 	var request MediaUpdateRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid media metadata payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid media metadata payload") {
 		return
 	}
 
@@ -495,7 +491,9 @@ func (handler *Handler) CreateImportJob(ctx *gin.Context) {
 	}
 
 	var request AdminJobRequest
-	_ = ctx.ShouldBindJSON(&request)
+	if !httpx.BindJSON(ctx, &request, "invalid import job payload") {
+		return
+	}
 	job := handler.createJob("import", request.Scope, request.FileName)
 	job.Status = "queued"
 	job.Progress = 10
@@ -511,7 +509,9 @@ func (handler *Handler) CreateExportJob(ctx *gin.Context) {
 	}
 
 	var request AdminJobRequest
-	_ = ctx.ShouldBindJSON(&request)
+	if !httpx.BindJSON(ctx, &request, "invalid export job payload") {
+		return
+	}
 	job := handler.createJob("export", request.Scope, request.FileName)
 	job.Status = "completed"
 	job.Progress = 100

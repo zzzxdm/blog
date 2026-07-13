@@ -1,6 +1,7 @@
 package adminposts
 
 import (
+	"blog/api/internal/httpx"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -153,8 +154,7 @@ func (handler *Handler) save(ctx *gin.Context, id string) {
 	}
 
 	var request SaveRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid post payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid post payload") {
 		return
 	}
 

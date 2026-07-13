@@ -1,6 +1,7 @@
 package taxonomies
 
 import (
+	"blog/api/internal/httpx"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -81,8 +82,7 @@ func (handler *Handler) saveCategory(ctx *gin.Context, id string) {
 	}
 
 	var request SaveCategoryRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid category payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid category payload") {
 		return
 	}
 
@@ -126,8 +126,7 @@ func (handler *Handler) saveTag(ctx *gin.Context, id string) {
 	}
 
 	var request SaveTagRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid tag payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid tag payload") {
 		return
 	}
 

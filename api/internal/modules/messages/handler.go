@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"blog/api/internal/httpx"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -119,8 +120,7 @@ func (handler *Handler) AdminCreate(ctx *gin.Context) {
 	}
 
 	var request CreateRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid message payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid message payload") {
 		return
 	}
 
@@ -146,8 +146,7 @@ func (handler *Handler) AdminBroadcast(ctx *gin.Context) {
 	}
 
 	var request BroadcastRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid broadcast payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid broadcast payload") {
 		return
 	}
 	if len(request.Recipients) == 0 {

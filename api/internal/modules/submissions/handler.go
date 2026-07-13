@@ -1,6 +1,7 @@
 package submissions
 
 import (
+	"blog/api/internal/httpx"
 	"context"
 	"errors"
 	"fmt"
@@ -114,8 +115,7 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	}
 
 	var request SaveRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid submission payload") {
 		return
 	}
 	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
@@ -159,8 +159,7 @@ func (handler *Handler) Update(ctx *gin.Context) {
 	}
 
 	var request SaveRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid submission payload") {
 		return
 	}
 	if saveRequestContainsBlockedWord(request, settings.BlockedWords) {
@@ -219,7 +218,9 @@ func (handler *Handler) Submit(ctx *gin.Context) {
 	var request struct {
 		TurnstileToken string `json:"turnstileToken"`
 	}
-	_ = ctx.ShouldBindJSON(&request)
+	if !httpx.BindOptionalJSON(ctx, &request, "invalid submission payload") {
+		return
+	}
 	if !handler.verifyTurnstile(ctx, settings, request.TurnstileToken) {
 		return
 	}
@@ -364,8 +365,7 @@ func (handler *Handler) AdminUpdate(ctx *gin.Context) {
 	}
 
 	var request SaveRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid submission payload") {
 		return
 	}
 
@@ -385,8 +385,7 @@ func (handler *Handler) Review(ctx *gin.Context) {
 	}
 
 	var request ReviewRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid review payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid review payload") {
 		return
 	}
 
@@ -400,7 +399,9 @@ func (handler *Handler) Approve(ctx *gin.Context) {
 	}
 
 	var request ReviewRequest
-	_ = ctx.ShouldBindJSON(&request)
+	if !httpx.BindOptionalJSON(ctx, &request, "invalid review payload") {
+		return
+	}
 	request.Action = ActionApprove
 	handler.reviewWithRequest(ctx, reviewer, request)
 }
@@ -412,7 +413,9 @@ func (handler *Handler) Reject(ctx *gin.Context) {
 	}
 
 	var request ReviewRequest
-	_ = ctx.ShouldBindJSON(&request)
+	if !httpx.BindOptionalJSON(ctx, &request, "invalid review payload") {
+		return
+	}
 	if strings.TrimSpace(request.Action) == "" {
 		request.Action = ActionReject
 	}

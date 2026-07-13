@@ -1,6 +1,7 @@
 package reactions
 
 import (
+	"blog/api/internal/httpx"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -63,8 +64,7 @@ func (handler *Handler) SetReaction(ctx *gin.Context) {
 	}
 
 	var request ReactionRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid reaction payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid reaction payload") {
 		return
 	}
 
@@ -120,8 +120,7 @@ func (handler *Handler) SetBookmark(ctx *gin.Context) {
 	}
 
 	var request BookmarkRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid bookmark payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid bookmark payload") {
 		return
 	}
 

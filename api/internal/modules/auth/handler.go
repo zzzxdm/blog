@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"blog/api/internal/httpx"
 	"context"
 	"errors"
 	"log/slog"
@@ -161,8 +162,7 @@ func RequireAdmin(ctx *gin.Context) (User, bool) {
 
 func (handler *Handler) Login(ctx *gin.Context) {
 	var request Credentials
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid login payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid login payload") {
 		return
 	}
 
@@ -214,8 +214,7 @@ func (handler *Handler) Login(ctx *gin.Context) {
 
 func (handler *Handler) Register(ctx *gin.Context) {
 	var request RegisterRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid register payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid register payload") {
 		return
 	}
 
@@ -372,8 +371,7 @@ func (handler *Handler) ChangePassword(ctx *gin.Context) {
 	}
 
 	var request PasswordChangeRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid password payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid password payload") {
 		return
 	}
 
@@ -419,8 +417,7 @@ func (handler *Handler) RequestEmailVerification(ctx *gin.Context) {
 
 func (handler *Handler) VerifyEmail(ctx *gin.Context) {
 	var request TokenRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid verification payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid verification payload") {
 		return
 	}
 
@@ -492,8 +489,7 @@ func (handler *Handler) verifyTurnstile(ctx *gin.Context, settings SecuritySetti
 
 func (handler *Handler) ForgotPassword(ctx *gin.Context) {
 	var request ForgotPasswordRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid forgot password payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid forgot password payload") {
 		return
 	}
 
@@ -540,8 +536,7 @@ func (handler *Handler) deliverPasswordReset(ctx *gin.Context, user User, token 
 
 func (handler *Handler) ResetPassword(ctx *gin.Context) {
 	var request ResetPasswordRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid reset password payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid reset password payload") {
 		return
 	}
 

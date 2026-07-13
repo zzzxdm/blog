@@ -1,6 +1,7 @@
 package users
 
 import (
+	"blog/api/internal/httpx"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -150,8 +151,7 @@ func (handler *Handler) Invite(ctx *gin.Context) {
 	}
 
 	var request auth.InviteUserRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid invitation payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid invitation payload") {
 		return
 	}
 	if strings.TrimSpace(request.Email) == "" {
@@ -209,8 +209,7 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 	}
 
 	var request StatusRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user status payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid user status payload") {
 		return
 	}
 
@@ -272,8 +271,7 @@ func (handler *Handler) UpdateRole(ctx *gin.Context) {
 	}
 
 	var request RoleRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user role payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid user role payload") {
 		return
 	}
 
@@ -480,8 +478,7 @@ func (handler *Handler) UpdateAccount(ctx *gin.Context) {
 	}
 
 	var request AccountSettings
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid account settings payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid account settings payload") {
 		return
 	}
 
@@ -514,8 +511,7 @@ func (handler *Handler) UpdateAvatar(ctx *gin.Context) {
 	avatarText := strings.TrimSpace(ctx.PostForm("avatarText"))
 	if avatarText == "" && strings.HasPrefix(ctx.ContentType(), "application/json") {
 		var request AvatarRequest
-		if err := ctx.ShouldBindJSON(&request); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid avatar payload"})
+		if !httpx.BindJSON(ctx, &request, "invalid avatar payload") {
 			return
 		}
 		avatarText = strings.TrimSpace(request.AvatarText)

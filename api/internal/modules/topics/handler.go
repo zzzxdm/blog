@@ -1,6 +1,7 @@
 package topics
 
 import (
+	"blog/api/internal/httpx"
 	"context"
 	"errors"
 	"log/slog"
@@ -130,8 +131,7 @@ func (handler *Handler) save(ctx *gin.Context, id string) {
 	}
 
 	var request SaveRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid topic payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid topic payload") {
 		return
 	}
 

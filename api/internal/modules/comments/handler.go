@@ -1,6 +1,7 @@
 package comments
 
 import (
+	"blog/api/internal/httpx"
 	"context"
 	"errors"
 	"log/slog"
@@ -76,8 +77,7 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	}
 
 	var request CreateRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid comment payload") {
 		return
 	}
 	if containsBlockedWord(request.Body, settings.BlockedWords) {
@@ -121,8 +121,7 @@ func (handler *Handler) CreateReply(ctx *gin.Context) {
 	}
 
 	var request CreateRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid reply payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid reply payload") {
 		return
 	}
 	if containsBlockedWord(request.Body, settings.BlockedWords) {
@@ -210,8 +209,7 @@ func (handler *Handler) Report(ctx *gin.Context) {
 	}
 
 	var request ReportRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid report payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid report payload") {
 		return
 	}
 
@@ -317,8 +315,7 @@ func (handler *Handler) UpdateStatus(ctx *gin.Context) {
 	}
 
 	var request StatusRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid comment status payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid comment status payload") {
 		return
 	}
 
@@ -366,8 +363,7 @@ func (handler *Handler) UpdateReportStatus(ctx *gin.Context) {
 	}
 
 	var request StatusRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid report status payload"})
+	if !httpx.BindJSON(ctx, &request, "invalid report status payload") {
 		return
 	}
 
