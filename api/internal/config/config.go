@@ -15,6 +15,7 @@ type Config struct {
 	DatabaseURL    string
 	SQLitePath     string
 	RedisAddr      string
+	RedisPassword  string
 	UploadDir      string
 	MediaStorage   string
 	MinIOEndpoint  string
@@ -42,6 +43,7 @@ func Load() Config {
 		DatabaseURL:    getenv("DATABASE_URL", "postgres://blog:blog@localhost:5432/blog?sslmode=disable"),
 		SQLitePath:     getenv("SQLITE_PATH", "data/blog.sqlite"),
 		RedisAddr:      getenv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:  getenv("REDIS_PASSWORD", ""),
 		UploadDir:      getenv("UPLOAD_DIR", "uploads"),
 		MediaStorage:   getenv("MEDIA_STORAGE", "local"),
 		MinIOEndpoint:  getenv("MINIO_ENDPOINT", ""),

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -46,8 +45,7 @@ type Handler struct {
 	settings          SecuritySettingsReader
 	emailSender       EmailSender
 	turnstileVerifier TurnstileVerifier
-	loginFailures     map[string]loginFailure
-	loginMu           sync.Mutex
+	loginLock         LoginLockStore
 }
 
 type SecuritySettings struct {
@@ -83,8 +81,15 @@ func NewHandlerWithSettingsAndEmailSender(store Store, settings SecuritySettings
 }
 
 func NewHandlerWithDependencies(store Store, settings SecuritySettingsReader, emailSender EmailSender, turnstileVerifier TurnstileVerifier) *Handler {
+	return NewHandlerWithFullDependencies(store, settings, emailSender, turnstileVerifier, nil)
+}
+
+func NewHandlerWithFullDependencies(store Store, settings SecuritySettingsReader, emailSender EmailSender, turnstileVerifier TurnstileVerifier, loginLock LoginLockStore) *Handler {
 	if turnstileVerifier == nil {
 		turnstileVerifier = NewHTTPTurnstileVerifier()
+	}
+	if loginLock == nil {
+		loginLock = NewLoginLockStore(nil)
 	}
 
 	return &Handler{
@@ -92,7 +97,7 @@ func NewHandlerWithDependencies(store Store, settings SecuritySettingsReader, em
 		settings:          settings,
 		emailSender:       emailSender,
 		turnstileVerifier: turnstileVerifier,
-		loginFailures:     map[string]loginFailure{},
+		loginLock:         loginLock,
 	}
 }
 
@@ -109,7 +114,11 @@ func RegisterRoutesWithSettingsAndEmailSender(router gin.IRouter, store Store, s
 }
 
 func RegisterRoutesWithDependencies(router gin.IRouter, store Store, settings SecuritySettingsReader, emailSender EmailSender, turnstileVerifier TurnstileVerifier) {
-	handler := NewHandlerWithDependencies(store, settings, emailSender, turnstileVerifier)
+	RegisterRoutesWithFullDependencies(router, store, settings, emailSender, turnstileVerifier, nil)
+}
+
+func RegisterRoutesWithFullDependencies(router gin.IRouter, store Store, settings SecuritySettingsReader, emailSender EmailSender, turnstileVerifier TurnstileVerifier, loginLock LoginLockStore) {
+	handler := NewHandlerWithFullDependencies(store, settings, emailSender, turnstileVerifier, loginLock)
 
 	router.POST("/auth/login", handler.Login)
 	router.POST("/auth/register", handler.Register)
@@ -621,54 +630,15 @@ func (handler *Handler) configuredSecuritySettings(ctx *gin.Context) SecuritySet
 }
 
 func (handler *Handler) isLoginLocked(email string, now time.Time) bool {
-	key := normalizeEmail(email)
-	if key == "" {
-		return false
-	}
-
-	handler.loginMu.Lock()
-	defer handler.loginMu.Unlock()
-
-	failure := handler.loginFailures[key]
-	if failure.LockedUntil.IsZero() {
-		return false
-	}
-	if failure.LockedUntil.After(now) {
-		return true
-	}
-
-	delete(handler.loginFailures, key)
-	return false
+	return handler.loginLock.IsLocked(context.Background(), email, now)
 }
 
 func (handler *Handler) recordLoginFailure(email string, now time.Time) bool {
-	key := normalizeEmail(email)
-	if key == "" {
-		return false
-	}
-
-	handler.loginMu.Lock()
-	defer handler.loginMu.Unlock()
-
-	failure := handler.loginFailures[key]
-	failure.Count++
-	if failure.Count >= loginFailureLimit {
-		failure.LockedUntil = now.Add(loginLockDuration)
-	}
-	handler.loginFailures[key] = failure
-
-	return !failure.LockedUntil.IsZero() && failure.LockedUntil.After(now)
+	return handler.loginLock.RecordFailure(context.Background(), email, now)
 }
 
 func (handler *Handler) clearLoginFailure(email string) {
-	key := normalizeEmail(email)
-	if key == "" {
-		return
-	}
-
-	handler.loginMu.Lock()
-	delete(handler.loginFailures, key)
-	handler.loginMu.Unlock()
+	handler.loginLock.Clear(context.Background(), email)
 }
 
 func clampSessionDays(days int) int {

@@ -20,6 +20,7 @@ import (
 	"blog/api/internal/modules/taxonomies"
 	"blog/api/internal/modules/topics"
 	"blog/api/internal/modules/users"
+	"blog/api/internal/redisx"
 
 	"github.com/gin-gonic/gin"
 )
@@ -71,6 +72,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	auth.ConfigureCookieSecurity(secureCookies)
 	auth.ConfigureDevAuthTokens(!strings.EqualFold(strings.TrimSpace(cfg.AppEnv), "production"))
 	requireRepositories(repos)
+	redisClient := redisx.Connect(cfg.RedisAddr, cfg.RedisPassword)
 	if repos.AuthEmailSender == nil {
 		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)
 		if err == nil && emailSender != nil {
@@ -83,8 +85,8 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	router.Use(gin.Recovery())
 	router.Use(cors(cfg.WebOrigin))
 	router.Use(csrfProtection(cfg.WebOrigin, cfg.PublicURL, secureCookies))
-	router.Use(rateLimit(120, time.Minute))
-	router.Use(authSensitiveRateLimit())
+	router.Use(rateLimitWithRedis(redisClient, 120, time.Minute))
+	router.Use(authSensitiveRateLimitWithRedis(redisClient))
 	router.Static("/uploads", uploadDir(cfg.UploadDir))
 
 	router.Use(navigationRedirects(repos.OperationsRepo))
@@ -104,7 +106,7 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 		})
 	})
 
-	auth.RegisterRoutesWithDependencies(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo}, repos.AuthEmailSender, repos.TurnstileVerifier)
+	auth.RegisterRoutesWithFullDependencies(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo}, repos.AuthEmailSender, repos.TurnstileVerifier, auth.NewLoginLockStore(redisClient))
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	topics.RegisterRoutes(api, repos.TopicRepo, repos.PostRepo)
 	posts.RegisterPublicRoutes(api, repos.PostRepo)
@@ -233,5 +235,3 @@ func cors(origin string) gin.HandlerFunc {
 		ctx.Next()
 	}
 }
-
-

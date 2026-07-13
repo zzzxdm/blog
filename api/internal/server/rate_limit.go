@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type rateBucket struct {
@@ -20,7 +22,11 @@ type rateLimitPolicy struct {
 }
 
 func rateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
-	return rateLimitByPolicy(func(ctx *gin.Context) (rateLimitPolicy, bool) {
+	return rateLimitWithRedis(nil, maxRequests, window)
+}
+
+func rateLimitWithRedis(client *redis.Client, maxRequests int, window time.Duration) gin.HandlerFunc {
+	return rateLimitByPolicy(client, func(ctx *gin.Context) (rateLimitPolicy, bool) {
 		if !isWriteMethod(ctx.Request.Method) {
 			return rateLimitPolicy{}, false
 		}
@@ -30,6 +36,10 @@ func rateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 }
 
 func authSensitiveRateLimit() gin.HandlerFunc {
+	return authSensitiveRateLimitWithRedis(nil)
+}
+
+func authSensitiveRateLimitWithRedis(client *redis.Client) gin.HandlerFunc {
 	policies := map[string]rateLimitPolicy{
 		"/api/auth/login":              {MaxRequests: 20, Window: time.Minute},
 		"/api/auth/register":           {MaxRequests: 5, Window: 10 * time.Minute},
@@ -39,7 +49,7 @@ func authSensitiveRateLimit() gin.HandlerFunc {
 		"/api/auth/reset-password":     {MaxRequests: 10, Window: 10 * time.Minute},
 	}
 
-	return rateLimitByPolicy(func(ctx *gin.Context) (rateLimitPolicy, bool) {
+	return rateLimitByPolicy(client, func(ctx *gin.Context) (rateLimitPolicy, bool) {
 		if ctx.Request.Method != http.MethodPost {
 			return rateLimitPolicy{}, false
 		}
@@ -49,7 +59,7 @@ func authSensitiveRateLimit() gin.HandlerFunc {
 	})
 }
 
-func rateLimitByPolicy(policyFor func(*gin.Context) (rateLimitPolicy, bool)) gin.HandlerFunc {
+func rateLimitByPolicy(client *redis.Client, policyFor func(*gin.Context) (rateLimitPolicy, bool)) gin.HandlerFunc {
 	var mu sync.Mutex
 	buckets := map[string]rateBucket{}
 
@@ -60,9 +70,21 @@ func rateLimitByPolicy(policyFor func(*gin.Context) (rateLimitPolicy, bool)) gin
 			return
 		}
 
-		now := time.Now()
 		key := fmt.Sprintf("%s:%s", ctx.ClientIP(), ctx.Request.URL.Path)
+		if client != nil {
+			allowed, err := redisAllow(ctx.Request.Context(), client, "ratelimit:"+key, policy.MaxRequests, policy.Window)
+			if err == nil {
+				if !allowed {
+					ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
+					return
+				}
+				ctx.Next()
+				return
+			}
+			// fall through to memory on redis errors
+		}
 
+		now := time.Now()
 		mu.Lock()
 		bucket := buckets[key]
 		if bucket.WindowStart.IsZero() || now.Sub(bucket.WindowStart) >= policy.Window {
@@ -88,6 +110,22 @@ func rateLimitByPolicy(policyFor func(*gin.Context) (rateLimitPolicy, bool)) gin
 
 		ctx.Next()
 	}
+}
+
+func redisAllow(ctx context.Context, client *redis.Client, key string, maxRequests int, window time.Duration) (bool, error) {
+	pipe := client.TxPipeline()
+	incr := pipe.Incr(ctx, key)
+	pipe.Expire(ctx, key, window)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return false, err
+	}
+
+	count, err := incr.Result()
+	if err != nil {
+		return false, err
+	}
+
+	return count <= int64(maxRequests), nil
 }
 
 func isWriteMethod(method string) bool {
