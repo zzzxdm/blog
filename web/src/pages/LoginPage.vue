@@ -110,9 +110,11 @@ async function submit() {
       mode.value = "verify";
       if (response.delivery === "email-failed") {
         message.value = "账号已创建，但验证邮件发送失败。请登录后到账号设置里重新发送验证邮件。";
+        toast.warning("账号已创建", "验证邮件发送失败，请登录后重新发送。");
         return;
       }
       message.value = response.verificationToken ? `验证 token：${response.verificationToken}` : "验证入口已发送到邮箱，请完成验证后再投稿或互动。";
+      toast.success("注册成功", response.verificationToken ? "请使用页面上的验证 token 完成验证。" : "验证入口已发送到邮箱。");
       return;
     }
 
@@ -133,6 +135,7 @@ async function submit() {
       if (response.resetToken) {
         mode.value = "reset";
         message.value = `重置 token：${response.resetToken}`;
+        toast.info("重置 token 已生成", "请使用页面上的 token 设置新密码。");
         return;
       }
 
