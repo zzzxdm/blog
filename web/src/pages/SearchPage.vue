@@ -152,7 +152,7 @@ function formatNumber(value: number) {
       </button>
     </form>
 
-    <p v-if="loading" class="muted">正在搜索...</p>
+    <LoadingState v-if="loading" variant="table" text="正在搜索..." :rows="4" />
     <p v-else-if="error" class="error">{{ error }}</p>
     <p v-else-if="!keyword.trim()" class="muted">输入关键词开始搜索。</p>
     <p v-else-if="!results?.items.length" class="muted">没有找到匹配内容。</p>
