@@ -108,8 +108,7 @@ onUnmounted(() => {
           <p>支持标题、摘要、正文、分类和标签。</p>
         </div>
         <div v-else-if="loading" class="search-result">
-          <strong>正在搜索</strong>
-          <p>从 PostgreSQL 全文搜索接口获取结果。</p>
+          <LoadingState compact text="正在搜索..." :rows="2" />
         </div>
         <div v-else-if="error" class="search-result">
           <strong>搜索失败</strong>

@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { Loading as LoadingIcon } from "@element-plus/icons-vue";
+import { ElIcon } from "element-plus";
 import { computed, ref } from "vue";
 import { MdEditor, type ExposeParam, type ToolbarNames, type UploadImgCallBack } from "md-editor-v3";
 import "md-editor-v3/lib/style.css";
+import "element-plus/es/components/icon/style/css";
 
 import MarkdownThemeSwitcher from "./MarkdownThemeSwitcher.vue";
 import { uploadMedia } from "../shared/api";
@@ -130,7 +133,12 @@ function defaultAlt(fileName: string) {
         </div>
       </div>
       <MarkdownThemeSwitcher v-model:preview-theme="selectedPreviewTheme" v-model:code-theme="selectedCodeTheme" />
-      <span v-if="uploading" class="muted">图片上传中...</span>
+      <span v-if="uploading" class="inline-loading" role="status" aria-live="polite">
+        <ElIcon class="inline-loading-icon">
+          <LoadingIcon />
+        </ElIcon>
+        图片上传中...
+      </span>
     </div>
 
     <MdEditor

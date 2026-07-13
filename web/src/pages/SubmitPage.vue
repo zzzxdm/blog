@@ -530,13 +530,17 @@ function statusClass(value: string) {
       </div>
     </section>
 
-    <section v-if="!auth.user && !auth.loading" class="panel">
+    <LoadingState v-if="auth.loading" variant="page" text="正在检查登录状态..." :rows="4" />
+
+    <section v-else-if="!auth.user" class="panel">
       <div class="panel-title"><h2>需要登录</h2></div>
       <p class="muted">登录后可以保存草稿、提交审核，并在站内信里接收审核结果。</p>
       <RouterLink class="button" to="/login">去登录</RouterLink>
     </section>
 
-    <section v-if="!submissionsEnabled" class="panel">
+    <LoadingState v-else-if="loadingSubmission" variant="page" text="正在加载投稿..." :rows="5" />
+
+    <section v-else-if="!submissionsEnabled" class="panel">
       <div class="panel-title"><h2>投稿暂未开放</h2></div>
       <p class="muted">管理员已关闭用户投稿入口，已有投稿可在个人中心查看审核结果。</p>
       <RouterLink class="button-secondary" to="/account/submissions">查看我的投稿</RouterLink>
