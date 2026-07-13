@@ -353,7 +353,7 @@ function formatDate(value: string) {
           </select>
         </form>
 
-        <LoadingState v-if="loading" variant="table" text="正在加载媒体资源..." :rows="4" />
+        <LoadingState v-if="loading" variant="card" text="正在加载媒体资源..." :rows="4" />
         <p v-else-if="error" class="error">{{ error }}</p>
         <template v-else>
           <p v-if="uploadError" class="error">{{ uploadError }}</p>
