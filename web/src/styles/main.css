@@ -3368,6 +3368,17 @@ td {
   font-weight: 800;
 }
 
+.topic-cover-preview {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  border-radius: 8px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--surface-muted, #f4f1ea);
+  border: 1px solid var(--line);
+}
+
 .cover-actions {
   display: flex;
   flex-wrap: wrap;

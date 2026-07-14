@@ -5,6 +5,7 @@ import { ElOption, ElSelect } from "element-plus";
 import "element-plus/es/components/select/style/css";
 
 import AdminLayout from "../../components/AdminLayout.vue";
+import MediaPickerDialog from "../../components/MediaPickerDialog.vue";
 import PaginationControls from "../../components/PaginationControls.vue";
 import {
   createAdminTopic,
@@ -13,7 +14,9 @@ import {
   getAdminTopics,
   getTags,
   updateAdminTopic,
+  uploadAdminMedia,
   type Category,
+  type MediaAsset,
   type Tag,
   type Topic,
   type TopicPayload,
@@ -46,6 +49,9 @@ const total = ref(0);
 const statusFilter = ref("");
 const searchQuery = ref("");
 const titleInput = ref<HTMLInputElement | null>(null);
+const coverFileInput = ref<HTMLInputElement | null>(null);
+const coverPickerOpen = ref(false);
+const coverUploading = ref(false);
 const submitAttempted = ref(false);
 
 const topicId = ref("");
@@ -165,6 +171,66 @@ function editTopic(topic: Topic) {
   tagOptions.value = mergeOptions(tagOptions.value, selectedTags.value);
   submitAttempted.value = false;
   toast.info("已载入专题", topic.title);
+}
+
+function openCoverPicker() {
+  if (coverUploading.value) {
+    return;
+  }
+
+  coverFileInput.value?.click();
+}
+
+async function handleCoverPicked(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] || null;
+  input.value = "";
+  if (!file) {
+    return;
+  }
+
+  await uploadCover(file);
+}
+
+async function uploadCover(file: File) {
+  if (!file.type.startsWith("image/")) {
+    toast.error("封面上传失败", "只能上传图片文件。");
+    return;
+  }
+
+  coverUploading.value = true;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const asset = await uploadAdminMedia(file, {
+      alt: imageAlt.value.trim() || title.value.trim() || defaultAlt(file.name),
+      category: "专题封面"
+    });
+    coverImage.value = asset.url;
+    if (!imageAlt.value.trim() && asset.alt) {
+      imageAlt.value = asset.alt;
+    }
+    toast.success("封面已上传", "已更新专题封面预览。");
+  } catch (err) {
+    const uploadError = err instanceof Error ? err.message : "封面上传失败";
+    toast.error("封面上传失败", uploadError);
+  } finally {
+    coverUploading.value = false;
+  }
+}
+
+function chooseCoverFromMedia(asset: MediaAsset) {
+  coverImage.value = asset.url;
+  if (!imageAlt.value.trim() && (asset.alt || asset.fileName)) {
+    imageAlt.value = asset.alt || asset.fileName;
+  }
+  coverPickerOpen.value = false;
+  toast.success("已选择媒体库图片", asset.fileName);
+}
+
+function defaultAlt(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "专题封面";
 }
 
 async function saveTopic() {
@@ -452,7 +518,30 @@ function formatDate(value?: string) {
           </div>
           <div class="field"><label for="topic-slug">Slug</label><input v-model="slug" class="input" id="topic-slug" placeholder="留空时按标题生成"></div>
           <div class="field"><label for="topic-summary">摘要</label><textarea v-model="summary" class="input" id="topic-summary"></textarea></div>
-          <div class="field"><label for="topic-cover">封面图</label><input v-model="coverImage" class="input" id="topic-cover"></div>
+          <div class="field">
+            <label for="topic-cover">封面图</label>
+            <img
+              v-if="coverImage"
+              :src="coverImage"
+              :alt="imageAlt || '专题封面预览'"
+              class="topic-cover-preview"
+            >
+            <div class="cover-actions">
+              <button class="button-secondary" type="button" :disabled="coverUploading" @click="openCoverPicker">
+                {{ coverUploading ? "上传中..." : "上传封面" }}
+              </button>
+              <button class="button-secondary" type="button" :disabled="coverUploading" @click="coverPickerOpen = true">从媒体库选择</button>
+              <input
+                ref="coverFileInput"
+                class="sr-only"
+                type="file"
+                accept="image/*"
+                :disabled="coverUploading"
+                @change="handleCoverPicked"
+              >
+            </div>
+            <input v-model="coverImage" class="input" id="topic-cover" placeholder="图片 URL，可上传或从媒体库选择" aria-label="封面图片 URL">
+          </div>
           <div class="field"><label for="topic-alt">图片 Alt</label><input v-model="imageAlt" class="input" id="topic-alt"></div>
           <div class="field">
             <label for="topic-categories">匹配分类</label>
@@ -522,5 +611,12 @@ function formatDate(value?: string) {
         </form>
       </aside>
     </section>
+    <MediaPickerDialog
+      :open="coverPickerOpen"
+      title="选择专题封面"
+      type="image"
+      @close="coverPickerOpen = false"
+      @select="chooseCoverFromMedia"
+    />
   </AdminLayout>
 </template>
