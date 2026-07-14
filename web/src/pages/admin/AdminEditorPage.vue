@@ -13,6 +13,7 @@ import {
   getAdminPostRevisions,
   getTags,
   publishAdminPost,
+  deleteAdminPostRevision,
   restoreAdminPostRevision,
   uploadAdminMedia,
   updateAdminPost,
@@ -39,6 +40,7 @@ const saving = ref(false);
 const previewing = ref(false);
 const revisionLoading = ref(false);
 const restoringId = ref("");
+const deletingId = ref("");
 const error = ref("");
 const message = ref("");
 const categoryOptions = ref<Category[]>([]);
@@ -334,6 +336,44 @@ async function openPreview() {
   }
 }
 
+
+async function deleteRevision(revision: AdminPostRevision) {
+  if (!current.value) {
+    return;
+  }
+  if (revision.version === current.value.version) {
+    toast.warning("无法删除", "不能删除当前版本。");
+    return;
+  }
+
+  const confirmed = await confirmDialog.open({
+    title: `删除版本 ${revision.version}`,
+    message: "删除后无法恢复该历史版本，确定继续？",
+    confirmText: "删除版本",
+    tone: "danger"
+  });
+  if (!confirmed) {
+    return;
+  }
+
+  deletingId.value = revision.id;
+  error.value = "";
+  message.value = "";
+
+  try {
+    const updated = await deleteAdminPostRevision(current.value.id, revision.id);
+    applyPost(updated);
+    await loadRevisions(updated.id);
+    message.value = `已删除版本 ${revision.version}。`;
+    toast.success("版本已删除", `已删除版本 ${revision.version}。`);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : "版本删除失败";
+    toast.error("版本删除失败", error.value);
+  } finally {
+    deletingId.value = "";
+  }
+}
+
 async function restoreRevision(revision: AdminPostRevision) {
   if (!current.value) {
     return;
@@ -545,8 +585,13 @@ function defaultAlt(fileName: string) {
                 <span>{{ formatDate(revision.createdAt) }}</span>
                 <span>{{ visibilityText(revision.visibility) }}</span>
                 <span>{{ revision.authorName }}</span>
-                <button class="button-secondary" type="button" :disabled="restoringId === revision.id || revision.version === current?.version" @click="restoreRevision(revision)">
+              </div>
+              <div class="meta-row">
+                <button class="button-secondary button-success" type="button" :disabled="restoringId === revision.id || deletingId === revision.id || revision.version === current?.version" @click="restoreRevision(revision)">
                   {{ restoringId === revision.id ? "恢复中..." : "恢复" }}
+                </button>
+                <button class="button-secondary button-danger" type="button" :disabled="deletingId === revision.id || restoringId === revision.id || revision.version === current?.version" @click="deleteRevision(revision)">
+                  {{ deletingId === revision.id ? "删除中..." : "删除" }}
                 </button>
               </div>
             </article>

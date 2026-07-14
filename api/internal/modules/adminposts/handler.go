@@ -46,6 +46,7 @@ func RegisterRoutes(router gin.IRouter, repo Repository, publisher posts.AdminPu
 	router.POST("/admin/posts/:id/publish", handler.Publish)
 	router.POST("/admin/posts/:id/archive", handler.Archive)
 	router.POST("/admin/posts/:id/revisions/:revisionId/restore", handler.RestoreRevision)
+	router.DELETE("/admin/posts/:id/revisions/:revisionId", handler.DeleteRevision)
 }
 
 func (handler *Handler) List(ctx *gin.Context) {
@@ -232,6 +233,20 @@ func (handler *Handler) RestoreRevision(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, post)
 }
 
+func (handler *Handler) DeleteRevision(ctx *gin.Context) {
+	if _, ok := auth.RequireAdmin(ctx); !ok {
+		return
+	}
+
+	post, err := handler.repo.DeleteRevision(ctx.Request.Context(), ctx.Param("id"), ctx.Param("revisionId"))
+	if err != nil {
+		handler.writeError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, post)
+}
+
 func (handler *Handler) writeError(ctx *gin.Context, err error) {
 	if errors.Is(err, ErrPostNotFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "admin post not found"})
@@ -242,6 +257,10 @@ func (handler *Handler) writeError(ctx *gin.Context, err error) {
 		return
 	}
 	if errors.Is(err, ErrInvalidPost) {
+		if strings.Contains(ctx.FullPath(), "/revisions/") && ctx.Request.Method == http.MethodDelete {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete the current version"})
+			return
+		}
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "title and content are required"})
 		return
 	}

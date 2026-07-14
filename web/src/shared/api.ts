@@ -1611,6 +1611,12 @@ export async function restoreAdminPostRevision(id: string, revisionId: string): 
   });
 }
 
+export async function deleteAdminPostRevision(id: string, revisionId: string): Promise<AdminPost> {
+  return request<AdminPost>(`/admin/posts/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}`, {
+    method: "DELETE"
+  });
+}
+
 export class ApiError extends Error {
   status: number;
 

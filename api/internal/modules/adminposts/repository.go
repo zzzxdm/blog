@@ -29,6 +29,7 @@ type Repository interface {
 	PublishDue(ctx context.Context, publisher posts.AdminPublisher, now time.Time) (int, error)
 	ListRevisions(ctx context.Context, id string) (RevisionListResult, error)
 	RestoreRevision(ctx context.Context, id string, revisionID string) (AdminPost, error)
+	DeleteRevision(ctx context.Context, id string, revisionID string) (AdminPost, error)
 }
 
 func countStats(items []AdminPost) Stats {
@@ -299,6 +300,50 @@ func cloneRevision(revision Revision) Revision {
 	return revision
 }
 
+func revisionContentEqual(a Revision, b Revision) bool {
+	return strings.TrimSpace(a.Slug) == strings.TrimSpace(b.Slug) &&
+		strings.TrimSpace(a.Title) == strings.TrimSpace(b.Title) &&
+		strings.TrimSpace(a.Summary) == strings.TrimSpace(b.Summary) &&
+		strings.TrimSpace(a.Content) == strings.TrimSpace(b.Content) &&
+		normalizeVisibility(a.Visibility) == normalizeVisibility(b.Visibility) &&
+		strings.TrimSpace(a.Category) == strings.TrimSpace(b.Category) &&
+		strings.TrimSpace(a.CoverImage) == strings.TrimSpace(b.CoverImage) &&
+		strings.TrimSpace(a.SEOtitle) == strings.TrimSpace(b.SEOtitle) &&
+		strings.TrimSpace(a.SEODescription) == strings.TrimSpace(b.SEODescription) &&
+		tagsEqual(a.Tags, b.Tags)
+}
+
+func postContentEqual(a AdminPost, b AdminPost) bool {
+	return revisionContentEqual(snapshotRevision(a, a.UpdatedAt), snapshotRevision(b, b.UpdatedAt))
+}
+
+func tagsEqual(left []string, right []string) bool {
+	left = normalizeTags(left)
+	right = normalizeTags(right)
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func removeRevision(revisions []Revision, revisionID string) ([]Revision, bool) {
+	filtered := make([]Revision, 0, len(revisions))
+	found := false
+	for _, item := range revisions {
+		if item.ID == revisionID {
+			found = true
+			continue
+		}
+		filtered = append(filtered, cloneRevision(item))
+	}
+	return filtered, found
+}
+
 func normalizeStatus(status string) string {
 	status = strings.ToLower(strings.TrimSpace(status))
 	switch status {
@@ -483,4 +528,49 @@ func seedAdminPosts() map[string]AdminPost {
 	}
 
 	return result
+}
+
+func ensureCurrentRevision(item AdminPost) []Revision {
+	revisions := cloneRevisions(item.Revisions)
+	if item.Version <= 0 {
+		return revisions
+	}
+	current := snapshotRevision(item, item.UpdatedAt)
+	for _, revision := range revisions {
+		if revision.ID == current.ID || revision.Version == current.Version {
+			return revisions
+		}
+	}
+	return appendRevision(revisions, current)
+}
+
+func scheduledAtEqual(left *time.Time, right *time.Time) bool {
+	if left == nil && right == nil {
+		return true
+	}
+	if left == nil || right == nil {
+		return false
+	}
+	return left.Equal(*right)
+}
+
+func hasMatchingContentRevision(item AdminPost) bool {
+	current := snapshotRevision(item, item.UpdatedAt)
+	for _, revision := range item.Revisions {
+		if revisionContentEqual(revision, current) {
+			return true
+		}
+	}
+	return false
+}
+
+func updateMatchingRevisionStatus(item AdminPost, status string) []Revision {
+	current := snapshotRevision(item, item.UpdatedAt)
+	revisions := cloneRevisions(item.Revisions)
+	for i, revision := range revisions {
+		if revisionContentEqual(revision, current) {
+			revisions[i].Status = status
+		}
+	}
+	return revisions
 }

@@ -108,12 +108,15 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 		UpdatedAt:  now,
 	}
 
-	if strings.TrimSpace(id) != "" {
+	var previous AdminPost
+	isCreate := strings.TrimSpace(id) == ""
+	if !isCreate {
 		existing, err := repo.Get(ctx, id)
 		if err != nil {
 			return AdminPost{}, err
 		}
 		item = existing
+		previous = existing
 	}
 
 	item.Slug = defaultString(slugify(request.Slug), slugify(title))
@@ -133,8 +136,6 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 	item.SEODescription = defaultString(strings.TrimSpace(request.SEODescription), item.Summary)
 	item.ScheduledAt = scheduledAt
 	item.ReadingTime = estimateReadingTime(content)
-	item.UpdatedAt = now
-	item.Version++
 	if request.Status != "" {
 		item.Status = normalizeStatus(request.Status)
 	}
@@ -155,7 +156,12 @@ func (repo *SQLRepository) Save(ctx context.Context, id string, request SaveRequ
 			return AdminPost{}, ErrPostNotPublic
 		}
 	}
-	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+
+	item.UpdatedAt = now
+	if isCreate || !postContentEqual(previous, item) || previous.Status != item.Status || !scheduledAtEqual(previous.ScheduledAt, item.ScheduledAt) {
+		item.Version++
+		item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+	}
 
 	if err := repo.savePost(ctx, item, false); err != nil {
 		return AdminPost{}, err
@@ -257,8 +263,13 @@ func (repo *SQLRepository) Publish(ctx context.Context, id string, publisher pos
 	item.UpdatedAt = now
 	item.ViewCount = published.ViewCount
 	item.CommentCount = published.CommentCount
-	item.Version++
-	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+	// Publishing already-saved content should not create a second history entry.
+	if !hasMatchingContentRevision(item) {
+		item.Version++
+		item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
+	} else {
+		item.Revisions = updateMatchingRevisionStatus(item, StatusPublished)
+	}
 
 	if err := repo.savePost(ctx, item, false); err != nil {
 		return AdminPost{}, err
@@ -382,6 +393,41 @@ func (repo *SQLRepository) RestoreRevision(ctx context.Context, id string, revis
 	item.ReadingTime = estimateReadingTime(item.Content)
 	item.Revisions = appendRevision(item.Revisions, snapshotRevision(item, now))
 
+	if err := repo.savePost(ctx, item, false); err != nil {
+		return AdminPost{}, err
+	}
+
+	return clonePost(item), nil
+}
+
+func (repo *SQLRepository) DeleteRevision(ctx context.Context, id string, revisionID string) (AdminPost, error) {
+	item, err := repo.Get(ctx, id)
+	if err != nil {
+		return AdminPost{}, err
+	}
+
+	revisionID = strings.TrimSpace(revisionID)
+	if revisionID == "" {
+		return AdminPost{}, ErrRevisionNotFound
+	}
+
+	// Ensure current content has a revision snapshot so deleting history never loses current version.
+	item.Revisions = ensureCurrentRevision(item)
+
+	if item.Version > 0 {
+		currentID := fmt.Sprintf("%s_rev_%d", item.ID, item.Version)
+		if revisionID == currentID {
+			return AdminPost{}, ErrInvalidPost
+		}
+	}
+
+	revisions, found := removeRevision(item.Revisions, revisionID)
+	if !found {
+		return AdminPost{}, ErrRevisionNotFound
+	}
+
+	item.Revisions = revisions
+	item.UpdatedAt = repo.now()
 	if err := repo.savePost(ctx, item, false); err != nil {
 		return AdminPost{}, err
 	}
