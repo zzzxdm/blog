@@ -81,8 +81,26 @@ export const router = createRouter({
     if (savedPosition) {
       return savedPosition;
     }
+    // 专题页的 #topic-reading 要等数据渲染完再滚，交由 TopicsPage 处理。
+    if (to.path === "/topics" && to.hash === "#topic-reading") {
+      return false;
+    }
     if (to.hash) {
-      return { el: to.hash, top: 24 };
+      return new Promise((resolve) => {
+        const tryScroll = (attempt: number) => {
+          const el = document.querySelector(to.hash);
+          if (el) {
+            resolve({ el: to.hash, top: 24 });
+            return;
+          }
+          if (attempt >= 20) {
+            resolve({ top: 0 });
+            return;
+          }
+          window.setTimeout(() => tryScroll(attempt + 1), 50);
+        };
+        tryScroll(0);
+      });
     }
     return { top: 0 };
   }
@@ -110,3 +128,4 @@ router.beforeEach(async (to) => {
 
   return true;
 });
+

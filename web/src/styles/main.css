@@ -1347,7 +1347,7 @@ textarea {
 }
 
 .topic-reading-layout .sidebar {
-  margin-top: 34px;
+  margin-top: 121px;
 }
 
 .tag-cloud {
@@ -3562,6 +3562,10 @@ textarea.input {
     margin-top: 0;
   }
 
+  .topic-reading-layout .sidebar {
+    margin-top: 0;
+  }
+
   .article-shell {
     width: min(100% - 24px, 760px);
     gap: 24px;
@@ -4262,3 +4266,7 @@ textarea.input {
   border-radius: 8px;
 }
 
+#topic-reading {
+  scroll-margin-top: 88px;
+  margin-bottom: 28px;
+}

@@ -348,7 +348,7 @@ function formatDate(value?: string) {
           <option value="draft">草稿</option>
         </select>
         <button class="button-secondary" type="button" :disabled="loading" @click="load(true)">刷新</button>
-        <button class="button" type="button" @click="resetForm(true)">新建专题</button>
+        <button class="button" type="button" @click="resetForm(true)">新建</button>
       </div>
     </template>
 

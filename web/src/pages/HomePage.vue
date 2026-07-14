@@ -35,10 +35,10 @@ const managedTopics = ref<Topic[]>([]);
 const topicLinkLimit = 6;
 
 const allPosts = computed(() => posts.list?.items ?? []);
-const featuredPosts = computed(() => allPosts.value.slice(0, 4));
+const featuredPosts = computed(() => allPosts.value.slice(0, 5));
 const featureIndex = ref(0);
 const featurePost = computed(() => featuredPosts.value[featureIndex.value] ?? featuredPosts.value[0] ?? null);
-const weeklyPosts = computed(() => allPosts.value.filter((_, index) => index !== featureIndex.value).slice(0, 3));
+const weeklyPosts = computed(() => allPosts.value.filter((_, index) => index !== featureIndex.value).slice(0, 8));
 const latestPosts = computed(() => allPosts.value.slice(1, 5));
 const homepageLayout = computed(() => siteSettings.value?.homepageLayout || "精选文章 + 最新列表");
 const topicFirstLayout = computed(() => homepageLayout.value === "专题优先");

@@ -31,7 +31,7 @@ Thumbs.db
 # Go
 *.test
 *.out
-api/tmp/
+tmp/
 api/build-errors.log
 api/uploads/
 
