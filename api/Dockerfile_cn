@@ -37,6 +37,12 @@ WORKDIR /app
 # 可选：Alpine 国内源
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
+# 时区：Asia/Shanghai
+RUN apk add --no-cache tzdata \
+	&& cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+	&& echo "Asia/Shanghai" > /etc/timezone
+ENV TZ=Asia/Shanghai
+
 COPY --from=build /bin/blog-api /usr/local/bin/blog-api
 COPY --from=build /app/email-templates ./email-templates
 
