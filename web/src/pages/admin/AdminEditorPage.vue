@@ -4,6 +4,8 @@ import { useRoute } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import MediaPickerDialog from "../../components/MediaPickerDialog.vue";
+import MarkdownPreview from "../../components/MarkdownPreview.vue";
+import MarkdownThemeSwitcher from "../../components/MarkdownThemeSwitcher.vue";
 import RichMarkdownEditor from "../../components/RichMarkdownEditor.vue";
 import {
   createAdminPost,
@@ -27,6 +29,7 @@ import {
   type Tag
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useMarkdownPreviewTheme } from "../../shared/markdownPreview";
 import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
 
@@ -48,6 +51,8 @@ const tagOptions = ref<Tag[]>([]);
 const revisions = ref<AdminPostRevision[]>([]);
 const coverFileInput = ref<HTMLInputElement | null>(null);
 const coverPickerOpen = ref(false);
+const previewRevision = ref<AdminPostRevision | null>(null);
+const { selectedPreviewTheme, selectedCodeTheme } = useMarkdownPreviewTheme();
 
 const title = ref("");
 const summary = ref("");
@@ -337,6 +342,15 @@ async function openPreview() {
 }
 
 
+
+function openRevisionPreview(revision: AdminPostRevision) {
+  previewRevision.value = revision;
+}
+
+function closeRevisionPreview() {
+  previewRevision.value = null;
+}
+
 async function deleteRevision(revision: AdminPostRevision) {
   if (!current.value) {
     return;
@@ -397,6 +411,7 @@ async function restoreRevision(revision: AdminPostRevision) {
     const restored = await restoreAdminPostRevision(current.value.id, revision.id);
     applyPost(restored);
     await loadRevisions(restored.id);
+    closeRevisionPreview();
     message.value = `已恢复到版本 ${revision.version}。`;
     toast.success("版本已恢复", `已恢复到版本 ${revision.version}。`);
   } catch (err) {
@@ -587,6 +602,7 @@ function defaultAlt(fileName: string) {
                 <span>{{ revision.authorName }}</span>
               </div>
               <div class="meta-row">
+                <button class="button-secondary" type="button" @click="openRevisionPreview(revision)">预览</button>
                 <button class="button-secondary button-success" type="button" :disabled="restoringId === revision.id || deletingId === revision.id || revision.version === current?.version" @click="restoreRevision(revision)">
                   {{ restoringId === revision.id ? "恢复中..." : "恢复" }}
                 </button>
@@ -599,6 +615,49 @@ function defaultAlt(fileName: string) {
         </section>
       </aside>
     </section>
+
+    <div v-if="previewRevision" class="revision-preview-overlay" role="dialog" aria-modal="true" aria-label="历史版本预览" @click.self="closeRevisionPreview">
+      <div class="revision-preview-dialog">
+        <div class="revision-preview-header">
+          <div>
+            <h2>版本 {{ previewRevision.version }} · {{ previewRevision.title }}</h2>
+            <div class="meta-row">
+              <span>{{ formatDate(previewRevision.createdAt) }}</span>
+              <span>{{ visibilityText(previewRevision.visibility) }}</span>
+              <span>{{ statusText(previewRevision.status) }}</span>
+              <span>{{ previewRevision.authorName }}</span>
+            </div>
+          </div>
+          <button class="search-close" type="button" aria-label="关闭预览" @click="closeRevisionPreview">×</button>
+        </div>
+        <div class="revision-preview-body">
+          <p class="dek">{{ previewRevision.summary || "无摘要" }}</p>
+          <figure v-if="previewRevision.coverImage" class="article-cover revision-preview-cover">
+            <img :src="previewRevision.coverImage" :alt="previewRevision.title">
+          </figure>
+          <MarkdownThemeSwitcher v-model:preview-theme="selectedPreviewTheme" v-model:code-theme="selectedCodeTheme" />
+          <section class="article-markdown">
+            <MarkdownPreview
+              :content="previewRevision.content"
+              :preview-id="`revision-preview-${previewRevision.id}`"
+              :preview-theme="selectedPreviewTheme"
+              :code-theme="selectedCodeTheme"
+            />
+          </section>
+        </div>
+        <div class="revision-preview-footer">
+          <button class="button-secondary" type="button" @click="closeRevisionPreview">关闭</button>
+          <button
+            class="button-secondary button-success"
+            type="button"
+            :disabled="restoringId === previewRevision.id || previewRevision.version === current?.version"
+            @click="restoreRevision(previewRevision)"
+          >
+            {{ restoringId === previewRevision.id ? "恢复中..." : "恢复此版本" }}
+          </button>
+        </div>
+      </div>
+    </div>
     <MediaPickerDialog
       :open="coverPickerOpen"
       title="选择封面图"
