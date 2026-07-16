@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,6 +32,10 @@ import (
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
+	production := strings.EqualFold(strings.TrimSpace(cfg.AppEnv), "production")
+	if production {
+		auth.ConfigureSeedUsers(false)
+	}
 
 	db, repositories, err := setupRepositories(ctx, cfg)
 	if err != nil {
@@ -38,6 +43,33 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	if sqlStore, ok := repositories.AuthStore.(*auth.SQLStore); ok {
+		created, bootErr := sqlStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapAdminEmail, cfg.BootstrapAdminPassword, cfg.BootstrapAdminName)
+		if bootErr != nil {
+			slog.Error("bootstrap admin failed", "error", bootErr)
+			os.Exit(1)
+		}
+		if created {
+			slog.Info("bootstrap admin created", "email", strings.ToLower(strings.TrimSpace(cfg.BootstrapAdminEmail)))
+		}
+
+		hasAdmin, adminErr := sqlStore.HasAnyAdmin(ctx)
+		if adminErr != nil {
+			slog.Warn("failed to check admin accounts", "error", adminErr)
+		} else if !hasAdmin {
+			slog.Warn("no admin account found; set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD then restart to create one")
+		}
+
+		if production {
+			emails, checkErr := sqlStore.ListDemoAccountsWithDefaultPassword(ctx)
+			if checkErr != nil {
+				slog.Warn("failed to audit demo account passwords", "error", checkErr)
+			} else if len(emails) > 0 {
+				slog.Warn("demo accounts still use the default password; change them immediately", "emails", emails)
+			}
+		}
+	}
 
 	router := appserver.NewRouterWithRepositories(cfg, repositories)
 

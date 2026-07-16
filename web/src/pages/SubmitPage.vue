@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { ElOption, ElSelect } from "element-plus";
 import "element-plus/es/components/select/style/css";
 
-import RichMarkdownEditor from "../components/RichMarkdownEditor.vue";
 import {
   createSubmission,
   getCategories,
@@ -22,6 +21,8 @@ import {
 } from "../shared/api";
 import { useAuthStore } from "../stores/auth";
 import { useToastStore } from "../stores/toast";
+
+const RichMarkdownEditor = defineAsyncComponent(() => import("../components/RichMarkdownEditor.vue"));
 
 declare global {
   interface Window {

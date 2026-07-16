@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onMounted, ref, watch } from "vue";
 
 import AdminLayout from "../../components/AdminLayout.vue";
-import MarkdownPreview from "../../components/MarkdownPreview.vue";
 import MarkdownThemeSwitcher from "../../components/MarkdownThemeSwitcher.vue";
 import PaginationControls from "../../components/PaginationControls.vue";
-import RichMarkdownEditor from "../../components/RichMarkdownEditor.vue";
 import {
   getAdminUsers,
   getAdminSubmissions,
@@ -23,6 +21,9 @@ import { formatDateTime } from "../../shared/datetime";
 import { useMarkdownPreviewTheme } from "../../shared/markdownPreview";
 import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
+
+const MarkdownPreview = defineAsyncComponent(() => import("../../components/MarkdownPreview.vue"));
+const RichMarkdownEditor = defineAsyncComponent(() => import("../../components/RichMarkdownEditor.vue"));
 
 const confirmDialog = useConfirmStore();
 const toast = useToastStore();

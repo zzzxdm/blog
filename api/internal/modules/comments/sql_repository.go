@@ -49,9 +49,9 @@ func (repo *SQLRepository) List(ctx context.Context, postSlug string, viewerID s
 }
 
 func (repo *SQLRepository) Create(ctx context.Context, postSlug string, request CreateRequest, user auth.User) (Comment, error) {
-	body := trimString(request.Body)
-	if body == "" {
-		return Comment{}, ErrEmptyBody
+	body, err := SanitizeCommentBody(request.Body)
+	if err != nil {
+		return Comment{}, err
 	}
 
 	id := idgen.NextString()
@@ -74,9 +74,9 @@ func (repo *SQLRepository) Create(ctx context.Context, postSlug string, request 
 }
 
 func (repo *SQLRepository) CreateReply(ctx context.Context, parentID string, request CreateRequest, user auth.User) (Comment, error) {
-	body := trimString(request.Body)
-	if body == "" {
-		return Comment{}, ErrEmptyBody
+	body, err := SanitizeCommentBody(request.Body)
+	if err != nil {
+		return Comment{}, err
 	}
 
 	var postSlug string

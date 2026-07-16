@@ -11,6 +11,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var seedUsersEnabled = true
+
+// ConfigureSeedUsers controls whether demo accounts are inserted on startup.
+// Production should call this with false before NewSQLStore.
+func ConfigureSeedUsers(enabled bool) {
+	seedUsersEnabled = enabled
+}
+
 type SQLStore struct {
 	db  *sql.DB
 	now func() time.Time
@@ -22,8 +30,10 @@ func NewSQLStore(ctx context.Context, db *sql.DB) (*SQLStore, error) {
 		now: time.Now,
 	}
 
-	if err := store.ensureSeedUsers(ctx); err != nil {
-		return nil, err
+	if seedUsersEnabled {
+		if err := store.ensureSeedUsers(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	return store, nil
@@ -748,6 +758,111 @@ func (store *SQLStore) ensureSeedUsers(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+
+// EnsureBootstrapAdmin creates the first admin account from environment configuration.
+// It only inserts when BOOTSTRAP credentials are provided and no admin user exists yet.
+func (store *SQLStore) EnsureBootstrapAdmin(ctx context.Context, email string, password string, displayName string) (bool, error) {
+	email = normalizeEmail(email)
+	password = strings.TrimSpace(password)
+	displayName = strings.TrimSpace(displayName)
+	if email == "" || password == "" {
+		return false, nil
+	}
+	if len(password) < 8 {
+		return false, fmt.Errorf("bootstrap admin password must be at least 8 characters")
+	}
+	if password == "password" {
+		return false, fmt.Errorf("bootstrap admin password must not be the demo default")
+	}
+	if displayName == "" {
+		displayName = "管理员"
+	}
+
+	var adminCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role = 'admin' AND status <> 'deleted'`).Scan(&adminCount); err != nil {
+		return false, fmt.Errorf("count admin users: %w", err)
+	}
+	if adminCount > 0 {
+		return false, nil
+	}
+
+	// If the email already exists as a non-admin, promote it instead of failing the boot.
+	var existingID string
+	var existingRole string
+	err := store.db.QueryRowContext(ctx, `SELECT id, role FROM users WHERE email = $1`, email).Scan(&existingID, &existingRole)
+	if err == nil {
+		hash, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return false, hashErr
+		}
+		if _, err := store.db.ExecContext(ctx, `
+			UPDATE users
+			SET role = 'admin',
+			    status = 'active',
+			    display_name = $2,
+			    avatar_text = $3,
+			    email_verified = true,
+			    password_hash = $4
+			WHERE id = $1
+		`, existingID, displayName, firstRune(displayName), string(hash)); err != nil {
+			return false, fmt.Errorf("promote bootstrap admin: %w", err)
+		}
+		return true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, fmt.Errorf("lookup bootstrap admin email: %w", err)
+	}
+
+	userID, err := store.nextUserID(ctx, store.db)
+	if err != nil {
+		return false, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return false, err
+	}
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO users (id, email, display_name, role, status, avatar_text, email_verified, password_hash)
+		VALUES ($1, $2, $3, 'admin', 'active', $4, true, $5)
+	`, userID, email, displayName, firstRune(displayName), string(hash)); err != nil {
+		return false, fmt.Errorf("insert bootstrap admin: %w", err)
+	}
+	return true, nil
+}
+
+func (store *SQLStore) HasAnyAdmin(ctx context.Context) (bool, error) {
+	var adminCount int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role = 'admin' AND status <> 'deleted'`).Scan(&adminCount); err != nil {
+		return false, fmt.Errorf("count admin users: %w", err)
+	}
+	return adminCount > 0, nil
+}
+
+// ListDemoAccountsWithDefaultPassword returns seed emails that still use the default password.
+func (store *SQLStore) ListDemoAccountsWithDefaultPassword(ctx context.Context) ([]string, error) {
+	emails := []string{
+		"admin@example.com",
+		"linyi@example.com",
+		"chen@example.com",
+		"market@example.com",
+		"noise@example.com",
+	}
+	found := make([]string, 0)
+	for _, email := range emails {
+		_, hash, err := store.userByEmail(ctx, email)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return nil, err
+		}
+		if bcrypt.CompareHashAndPassword([]byte(hash), []byte("password")) == nil {
+			found = append(found, normalizeEmail(email))
+		}
+	}
+	return found, nil
 }
 
 func (store *SQLStore) nextUserID(ctx context.Context, queryer interface {

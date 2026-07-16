@@ -4,7 +4,12 @@ export interface MarkdownHeading {
   text: string;
 }
 
-export function renderMarkdown(markdown: string): string {
+export interface RenderMarkdownOptions {
+  allowImages?: boolean;
+}
+
+export function renderMarkdown(markdown: string, options: RenderMarkdownOptions = {}): string {
+  const allowImages = options.allowImages !== false;
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const html: string[] = [];
   let paragraph: string[] = [];
@@ -17,7 +22,7 @@ export function renderMarkdown(markdown: string): string {
       return;
     }
 
-    html.push(`<p>${renderInline(paragraph.join(" "))}</p>`);
+    html.push(`<p>${renderInline(paragraph.join(" "), allowImages)}</p>`);
     paragraph = [];
   }
 
@@ -26,7 +31,7 @@ export function renderMarkdown(markdown: string): string {
       return;
     }
 
-    html.push(`<ul>${list.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
+    html.push(`<ul>${list.map((item) => `<li>${renderInline(item, allowImages)}</li>`).join("")}</ul>`);
     list = [];
   }
 
@@ -63,14 +68,14 @@ export function renderMarkdown(markdown: string): string {
       flushList();
       const level = heading[1].length + 1;
       const text = heading[2].trim();
-      html.push(`<h${level} id="${slugify(text)}">${renderInline(text)}</h${level}>`);
+      html.push(`<h${level} id="${escapeAttribute(slugify(text))}">${renderInline(text, allowImages)}</h${level}>`);
       return;
     }
 
     if (trimmed.startsWith(">")) {
       flushParagraph();
       flushList();
-      html.push(`<blockquote>${renderInline(trimmed.replace(/^>\s?/, ""))}</blockquote>`);
+      html.push(`<blockquote>${renderInline(trimmed.replace(/^>\s?/, ""), allowImages)}</blockquote>`);
       return;
     }
 
@@ -91,7 +96,12 @@ export function renderMarkdown(markdown: string): string {
   flushParagraph();
   flushList();
 
-  return html.join("\n");
+  return sanitizeRenderedHtml(html.join("\n"));
+}
+
+/** Safer markdown rendering for user comments (no images + final HTML sanitize). */
+export function renderCommentMarkdown(markdown: string): string {
+  return renderMarkdown(stripRawHtmlTags(markdown), { allowImages: false });
 }
 
 export function extractMarkdownHeadings(markdown: string): MarkdownHeading[] {
@@ -127,19 +137,24 @@ export function extractMarkdownHeadings(markdown: string): MarkdownHeading[] {
   return headings;
 }
 
-function renderInline(value: string): string {
+function renderInline(value: string, allowImages: boolean): string {
   const codeSpans: string[] = [];
   let rendered = escapeHtml(value).replace(/`([^`]+)`/g, (_match, code: string) => {
     codeSpans.push(`<code>${code}</code>`);
     return `\u0000${codeSpans.length - 1}\u0000`;
   });
 
-  rendered = rendered.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+(['"])(.*?)\3)?\)/g, (_match, alt: string, src: string, _quote: string, title: string) => {
-    const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : "";
-    return `<img src="${escapeAttribute(safeHref(src))}" alt="${escapeAttribute(alt)}"${titleAttribute}>`;
-  });
+  if (allowImages) {
+    rendered = rendered.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+(['"])(.*?)\3)?\)/g, (_match, alt: string, src: string, _quote: string, title: string) => {
+      const titleAttribute = title ? ` title="${escapeAttribute(title)}"` : "";
+      return `<img src="${escapeAttribute(safeHref(src))}" alt="${escapeAttribute(alt)}"${titleAttribute}>`;
+    });
+  } else {
+    rendered = rendered.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+(['"]).*?\3)?\)/g, (_match, alt: string) => escapeHtml(alt || ""));
+  }
+
   rendered = rendered.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+(['"]).*?\3)?\)/g, (_match, label: string, href: string) => {
-    return `<a href="${escapeAttribute(safeHref(href))}" rel="nofollow noopener">${label}</a>`;
+    return `<a href="${escapeAttribute(safeHref(href))}" rel="nofollow noopener noreferrer" target="_blank">${label}</a>`;
   });
   rendered = rendered.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   rendered = rendered.replace(/\*([^*]+)\*/g, "<em>$1</em>");
@@ -150,17 +165,38 @@ function renderInline(value: string): string {
 
 function safeHref(value: string): string {
   const href = value.trim();
+  const lower = href.toLowerCase();
+
   if (
     href.startsWith("/") ||
     href.startsWith("#") ||
-    href.startsWith("http://") ||
-    href.startsWith("https://") ||
-    href.startsWith("mailto:")
+    lower.startsWith("http://") ||
+    lower.startsWith("https://") ||
+    lower.startsWith("mailto:")
   ) {
+    // Block sneaky schemes after whitespace / control chars, e.g. "java\tscript:".
+    if (/^[\w.+-]+(?:\s|%|\\)/i.test(href) && !/^(https?|mailto):/i.test(href) && !href.startsWith("/") && !href.startsWith("#")) {
+      return "#";
+    }
     return href;
   }
 
   return "#";
+}
+
+/** Final HTML pass for defense-in-depth against renderer bugs. */
+export function sanitizeRenderedHtml(html: string): string {
+  return html
+    .replace(/<\/?(script|style|iframe|object|embed|link|meta|form|input|button|textarea|select)\b[^>]*>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, ' $1="#"')
+    .replace(/\s(href|src)\s*=\s*javascript:[^\s>]+/gi, ' $1="#"')
+    .replace(/\s(href|src)\s*=\s*("|')\s*data:[^"']*\2/gi, ' $1="#"')
+    .replace(/\s(href|src)\s*=\s*data:[^\s>]+/gi, ' $1="#"');
+}
+
+function stripRawHtmlTags(value: string): string {
+  return value.replace(/<\/?[a-zA-Z][^>]*>/g, "");
 }
 
 function slugify(value: string): string {

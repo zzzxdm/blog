@@ -187,6 +187,19 @@ func RequireAdmin(ctx *gin.Context) (User, bool) {
 	return user, true
 }
 
+
+func isDefaultDemoCredential(email string, password string) bool {
+	if password != "password" {
+		return false
+	}
+	switch normalizeEmail(email) {
+	case "admin@example.com", "linyi@example.com", "chen@example.com", "market@example.com", "noise@example.com":
+		return true
+	default:
+		return false
+	}
+}
+
 func (handler *Handler) Login(ctx *gin.Context) {
 	var request Credentials
 	if !httpx.BindJSON(ctx, &request, "invalid login payload") {
@@ -195,6 +208,10 @@ func (handler *Handler) Login(ctx *gin.Context) {
 
 	security := handler.configuredSecuritySettings(ctx)
 	if !handler.verifyTurnstile(ctx, security, request.TurnstileToken, security.TurnstileLogin) {
+		return
+	}
+	if !CanExposeDevAuthTokens() && isDefaultDemoCredential(request.Email, request.Password) {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "default demo credentials are disabled in production"})
 		return
 	}
 	if security.LoginFailureLock && handler.isLoginLocked(request.Email, time.Now()) {

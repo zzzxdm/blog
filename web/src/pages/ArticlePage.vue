@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
-import MarkdownPreview from "../components/MarkdownPreview.vue";
 import MarkdownThemeSwitcher from "../components/MarkdownThemeSwitcher.vue";
 import {
   ApiError,
@@ -21,11 +20,13 @@ import {
   type SiteSettings
 } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
-import { extractMarkdownHeadings, renderMarkdown } from "../shared/markdown";
+import { extractMarkdownHeadings, renderCommentMarkdown } from "../shared/markdown";
 import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
 import { useToastStore } from "../stores/toast";
+
+const MarkdownPreview = defineAsyncComponent(() => import("../components/MarkdownPreview.vue"));
 
 const route = useRoute();
 const router = useRouter();
@@ -140,7 +141,7 @@ function statusClass(status: Comment["status"]) {
 }
 
 function renderedComment(body: string) {
-  return renderMarkdown(body);
+  return renderCommentMarkdown(body);
 }
 
 function startReply(comment: Comment) {

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
-import MarkdownPreview from "../components/MarkdownPreview.vue";
 import MarkdownThemeSwitcher from "../components/MarkdownThemeSwitcher.vue";
 import { getPreviewPost, type AdminPost } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
 import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
+
+const MarkdownPreview = defineAsyncComponent(() => import("../components/MarkdownPreview.vue"));
 
 const route = useRoute();
 const post = ref<AdminPost | null>(null);

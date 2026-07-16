@@ -1,39 +1,45 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import AccountPage from "../pages/AccountPage.vue";
-import AccountBookmarksPage from "../pages/account/AccountBookmarksPage.vue";
-import AccountCommentsPage from "../pages/account/AccountCommentsPage.vue";
-import AccountMessagesPage from "../pages/account/AccountMessagesPage.vue";
-import AccountPrivatePostsPage from "../pages/account/AccountPrivatePostsPage.vue";
-import AccountSettingsPage from "../pages/account/AccountSettingsPage.vue";
-import AccountSubmissionsPage from "../pages/account/AccountSubmissionsPage.vue";
-import AdminAuditPage from "../pages/admin/AdminAuditPage.vue";
-import AdminCommentsPage from "../pages/admin/AdminCommentsPage.vue";
-import AdminEditorPage from "../pages/admin/AdminEditorPage.vue";
-import AdminHome from "../pages/admin/AdminHome.vue";
-import AdminImportExportPage from "../pages/admin/AdminImportExportPage.vue";
-import AdminMediaPage from "../pages/admin/AdminMediaPage.vue";
-import AdminMessagesPage from "../pages/admin/AdminMessagesPage.vue";
-import AdminNavigationPage from "../pages/admin/AdminNavigationPage.vue";
-import AdminPostsPage from "../pages/admin/AdminPostsPage.vue";
-import AdminRedirectsPage from "../pages/admin/AdminRedirectsPage.vue";
-import AdminSettingsPage from "../pages/admin/AdminSettingsPage.vue";
-import AdminStatsPage from "../pages/admin/AdminStatsPage.vue";
-import AdminSubmissionsPage from "../pages/admin/AdminSubmissionsPage.vue";
-import AdminTaxonomiesPage from "../pages/admin/AdminTaxonomiesPage.vue";
-import AdminUsersPage from "../pages/admin/AdminUsersPage.vue";
-import ArchivePage from "../pages/ArchivePage.vue";
-import ArticlePage from "../pages/ArticlePage.vue";
-import AboutPage from "../pages/AboutPage.vue";
-import AuthorPage from "../pages/AuthorPage.vue";
-import HomePage from "../pages/HomePage.vue";
-import LoginPage from "../pages/LoginPage.vue";
-import NotFoundPage from "../pages/NotFoundPage.vue";
-import PreviewPage from "../pages/PreviewPage.vue";
-import SearchPage from "../pages/SearchPage.vue";
-import SubmitPage from "../pages/SubmitPage.vue";
-import TopicsPage from "../pages/TopicsPage.vue";
 import { useAuthStore } from "../stores/auth";
+
+// Keep the home page eager for first paint; lazy-load everything else so admin,
+// account, editor and markdown chunks stay out of the critical path.
+const HomePage = () => import("../pages/HomePage.vue");
+const ArchivePage = () => import("../pages/ArchivePage.vue");
+const TopicsPage = () => import("../pages/TopicsPage.vue");
+const SearchPage = () => import("../pages/SearchPage.vue");
+const AboutPage = () => import("../pages/AboutPage.vue");
+const AuthorPage = () => import("../pages/AuthorPage.vue");
+const PreviewPage = () => import("../pages/PreviewPage.vue");
+const ArticlePage = () => import("../pages/ArticlePage.vue");
+const LoginPage = () => import("../pages/LoginPage.vue");
+const SubmitPage = () => import("../pages/SubmitPage.vue");
+const NotFoundPage = () => import("../pages/NotFoundPage.vue");
+
+const AccountPage = () => import("../pages/AccountPage.vue");
+const AccountBookmarksPage = () => import("../pages/account/AccountBookmarksPage.vue");
+const AccountCommentsPage = () => import("../pages/account/AccountCommentsPage.vue");
+const AccountMessagesPage = () => import("../pages/account/AccountMessagesPage.vue");
+const AccountPrivatePostsPage = () => import("../pages/account/AccountPrivatePostsPage.vue");
+const AccountSettingsPage = () => import("../pages/account/AccountSettingsPage.vue");
+const AccountSubmissionsPage = () => import("../pages/account/AccountSubmissionsPage.vue");
+
+const AdminHome = () => import("../pages/admin/AdminHome.vue");
+const AdminPostsPage = () => import("../pages/admin/AdminPostsPage.vue");
+const AdminSubmissionsPage = () => import("../pages/admin/AdminSubmissionsPage.vue");
+const AdminEditorPage = () => import("../pages/admin/AdminEditorPage.vue");
+const AdminTaxonomiesPage = () => import("../pages/admin/AdminTaxonomiesPage.vue");
+const AdminTopicsPage = () => import("../pages/admin/AdminTopicsPage.vue");
+const AdminCommentsPage = () => import("../pages/admin/AdminCommentsPage.vue");
+const AdminUsersPage = () => import("../pages/admin/AdminUsersPage.vue");
+const AdminMessagesPage = () => import("../pages/admin/AdminMessagesPage.vue");
+const AdminMediaPage = () => import("../pages/admin/AdminMediaPage.vue");
+const AdminNavigationPage = () => import("../pages/admin/AdminNavigationPage.vue");
+const AdminRedirectsPage = () => import("../pages/admin/AdminRedirectsPage.vue");
+const AdminImportExportPage = () => import("../pages/admin/AdminImportExportPage.vue");
+const AdminStatsPage = () => import("../pages/admin/AdminStatsPage.vue");
+const AdminAuditPage = () => import("../pages/admin/AdminAuditPage.vue");
+const AdminSettingsPage = () => import("../pages/admin/AdminSettingsPage.vue");
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -62,7 +68,7 @@ export const router = createRouter({
     { path: "/admin/taxonomies", name: "admin-taxonomies", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/categories", name: "admin-categories", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/tags", name: "admin-tags", component: AdminTaxonomiesPage, meta: { hideChrome: true, requiresAdmin: true } },
-    { path: "/admin/topics", name: "admin-topics", component: () => import("../pages/admin/AdminTopicsPage.vue"), meta: { hideChrome: true, requiresAdmin: true } },
+    { path: "/admin/topics", name: "admin-topics", component: AdminTopicsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/comments", name: "admin-comments", component: AdminCommentsPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/users", name: "admin-users", component: AdminUsersPage, meta: { hideChrome: true, requiresAdmin: true } },
     { path: "/admin/messages", name: "admin-messages", component: AdminMessagesPage, meta: { hideChrome: true, requiresAdmin: true } },
@@ -128,4 +134,3 @@ router.beforeEach(async (to) => {
 
   return true;
 });
-

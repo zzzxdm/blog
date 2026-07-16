@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, defineAsyncComponent, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import AdminLayout from "../../components/AdminLayout.vue";
 import MediaPickerDialog from "../../components/MediaPickerDialog.vue";
-import MarkdownPreview from "../../components/MarkdownPreview.vue";
 import MarkdownThemeSwitcher from "../../components/MarkdownThemeSwitcher.vue";
-import RichMarkdownEditor from "../../components/RichMarkdownEditor.vue";
 import {
   createAdminPost,
   createAdminPostPreview,
@@ -32,6 +30,9 @@ import { formatDateTime } from "../../shared/datetime";
 import { useMarkdownPreviewTheme } from "../../shared/markdownPreview";
 import { useConfirmStore } from "../../stores/confirm";
 import { useToastStore } from "../../stores/toast";
+
+const MarkdownPreview = defineAsyncComponent(() => import("../../components/MarkdownPreview.vue"));
+const RichMarkdownEditor = defineAsyncComponent(() => import("../../components/RichMarkdownEditor.vue"));
 
 const route = useRoute();
 const confirmDialog = useConfirmStore();
@@ -340,8 +341,6 @@ async function openPreview() {
     previewing.value = false;
   }
 }
-
-
 
 function openRevisionPreview(revision: AdminPostRevision) {
   previewRevision.value = revision;

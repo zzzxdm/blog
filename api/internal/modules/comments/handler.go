@@ -80,6 +80,12 @@ func (handler *Handler) Create(ctx *gin.Context) {
 	if !httpx.BindJSON(ctx, &request, "invalid comment payload") {
 		return
 	}
+	sanitizedBody, err := SanitizeCommentBody(request.Body)
+	if err != nil {
+		writeCommentBodyError(ctx, err, "comment")
+		return
+	}
+	request.Body = sanitizedBody
 	if containsBlockedWord(request.Body, settings.BlockedWords) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "comment contains blocked word"})
 		return
@@ -87,8 +93,7 @@ func (handler *Handler) Create(ctx *gin.Context) {
 
 	comment, err := handler.repo.Create(ctx.Request.Context(), ctx.Param("slug"), request, user)
 	if err != nil {
-		if errors.Is(err, ErrEmptyBody) {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "comment body is required"})
+		if writeCommentBodyError(ctx, err, "comment") {
 			return
 		}
 
@@ -126,6 +131,12 @@ func (handler *Handler) CreateReply(ctx *gin.Context) {
 	if !httpx.BindJSON(ctx, &request, "invalid reply payload") {
 		return
 	}
+	sanitizedBody, err := SanitizeCommentBody(request.Body)
+	if err != nil {
+		writeCommentBodyError(ctx, err, "reply")
+		return
+	}
+	request.Body = sanitizedBody
 	if containsBlockedWord(request.Body, settings.BlockedWords) {
 		ctx.JSON(http.StatusForbidden, gin.H{"error": "reply contains blocked word"})
 		return
@@ -133,8 +144,7 @@ func (handler *Handler) CreateReply(ctx *gin.Context) {
 
 	comment, err := handler.repo.CreateReply(ctx.Request.Context(), ctx.Param("id"), request, user)
 	if err != nil {
-		if errors.Is(err, ErrEmptyBody) {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "reply body is required"})
+		if writeCommentBodyError(ctx, err, "reply") {
 			return
 		}
 		if errors.Is(err, ErrCommentNotFound) {
@@ -156,6 +166,19 @@ func (handler *Handler) CreateReply(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, comment)
+}
+
+
+func writeCommentBodyError(ctx *gin.Context, err error, kind string) bool {
+	if errors.Is(err, ErrEmptyBody) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": kind + " body is required"})
+		return true
+	}
+	if errors.Is(err, ErrBodyTooLong) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": kind + " body is too long"})
+		return true
+	}
+	return false
 }
 
 func (handler *Handler) requireCommentSettings(ctx *gin.Context) (operations.Settings, bool) {
