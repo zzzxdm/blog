@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"blog/api/internal/cachex"
 	"blog/api/internal/config"
 	"blog/api/internal/modules/adminposts"
 	"blog/api/internal/modules/auth"
@@ -73,6 +74,8 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	auth.ConfigureDevAuthTokens(!strings.EqualFold(strings.TrimSpace(cfg.AppEnv), "production"))
 	requireRepositories(repos)
 	redisClient := redisx.Connect(cfg.RedisAddr, cfg.RedisPassword)
+	publicCache := cachex.NewTTLStore(redisClient)
+	viewDeduper := cachex.NewViewDeduper(redisClient)
 	if repos.AuthEmailSender == nil {
 		emailSender, err := auth.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.PublicURL)
 		if err == nil && emailSender != nil {
@@ -109,11 +112,11 @@ func NewRouterWithRepositories(cfg config.Config, repos Repositories) *gin.Engin
 	auth.RegisterRoutesWithFullDependencies(api, repos.AuthStore, authSecuritySettingsReader{repo: repos.OperationsRepo}, repos.AuthEmailSender, repos.TurnstileVerifier, auth.NewLoginLockStore(redisClient))
 	taxonomies.RegisterRoutes(api, repos.TaxonomyRepo)
 	topics.RegisterRoutes(api, repos.TopicRepo, repos.PostRepo)
-	posts.RegisterPublicRoutes(api, repos.PostRepo)
+	posts.RegisterPublicRoutesWithDeps(api, repos.PostRepo, viewDeduper, publicCache)
 	comments.RegisterRoutes(api, repos.CommentRepo, repos.OperationsRepo)
 	reactions.RegisterRoutes(api, repos.ReactionRepo, repos.PostRepo)
 	messages.RegisterRoutes(api, repos.MessageRepo)
-	operations.RegisterRoutes(api, repos.OperationsRepo, mediaStorage)
+	operations.RegisterRoutesWithCache(api, repos.OperationsRepo, mediaStorage, publicCache)
 	users.RegisterRoutesWithEmailSender(api, repos.UserRepo, repos.AuthStore, repos.AuthEmailSender)
 
 	var publisher posts.SubmissionPublisher

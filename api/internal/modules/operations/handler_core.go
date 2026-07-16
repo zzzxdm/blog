@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"blog/api/internal/cachex"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,12 +26,17 @@ func (handler *Handler) storeJob(job AdminJob) {
 type Handler struct {
 	repo    Repository
 	storage MediaStorage
+	cache   cachex.TTLStore
 	jobsMu  sync.RWMutex
 	jobs    map[string]AdminJob
 }
 
 func RegisterRoutes(router gin.IRouter, repo Repository, storage MediaStorage) {
-	handler := NewHandler(repo, storage)
+	RegisterRoutesWithCache(router, repo, storage, nil)
+}
+
+func RegisterRoutesWithCache(router gin.IRouter, repo Repository, storage MediaStorage, cache cachex.TTLStore) {
+	handler := NewHandlerWithCache(repo, storage, cache)
 
 	router.GET("/settings", handler.GetPublicSettings)
 	router.GET("/navigation", handler.GetPublicNavigation)
@@ -61,11 +68,18 @@ func RegisterRoutes(router gin.IRouter, repo Repository, storage MediaStorage) {
 }
 
 func NewHandler(repo Repository, storage MediaStorage) *Handler {
+	return NewHandlerWithCache(repo, storage, nil)
+}
+
+func NewHandlerWithCache(repo Repository, storage MediaStorage, cache cachex.TTLStore) *Handler {
 	if storage == nil {
 		storage = NewLocalMediaStorage("uploads")
 	}
+	if cache == nil {
+		cache = cachex.NewTTLStore(nil)
+	}
 
-	return &Handler{repo: repo, storage: storage, jobs: map[string]AdminJob{}}
+	return &Handler{repo: repo, storage: storage, cache: cache, jobs: map[string]AdminJob{}}
 }
 
 func (handler *Handler) createJob(kind string, scope string, fileName string) AdminJob {

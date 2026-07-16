@@ -2,18 +2,25 @@ package operations
 
 import (
 	"blog/api/internal/httpx"
+	"encoding/json"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"log/slog"
 	"net/http"
 
+	"blog/api/internal/cachex"
 	"blog/api/internal/modules/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (handler *Handler) GetPublicSettings(ctx *gin.Context) {
+	if raw, ok := handler.cache.Get(ctx.Request.Context(), cachex.CacheKeyPublicSettings); ok {
+		ctx.Data(http.StatusOK, "application/json; charset=utf-8", []byte(raw))
+		return
+	}
+
 	settings, err := handler.repo.GetSettings(ctx.Request.Context())
 	if err != nil {
 		slog.Error("failed to load public settings", "error", err)
@@ -21,7 +28,11 @@ func (handler *Handler) GetPublicSettings(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, publicSettings(settings))
+	payload := publicSettings(settings)
+	if raw, err := json.Marshal(payload); err == nil {
+		handler.cache.Set(ctx.Request.Context(), cachex.CacheKeyPublicSettings, string(raw), cachex.PublicCacheTTL)
+	}
+	ctx.JSON(http.StatusOK, payload)
 }
 
 func (handler *Handler) RunBackup(ctx *gin.Context) {
@@ -86,5 +97,6 @@ func (handler *Handler) UpdateSettings(ctx *gin.Context) {
 		return
 	}
 
+	handler.cache.Delete(ctx.Request.Context(), cachex.CacheKeyPublicSettings)
 	ctx.JSON(http.StatusOK, settings)
 }

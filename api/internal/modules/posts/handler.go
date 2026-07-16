@@ -1,6 +1,7 @@
 package posts
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"blog/api/internal/cachex"
 	"blog/api/internal/modules/auth"
 
 	"github.com/gin-gonic/gin"
@@ -16,15 +18,31 @@ import (
 const maxSearchKeywordRunes = 80
 
 type Handler struct {
-	repo Repository
+	repo  Repository
+	views cachex.ViewDeduper
+	cache cachex.TTLStore
 }
 
 func NewHandler(repo Repository) *Handler {
-	return &Handler{repo: repo}
+	return NewHandlerWithDeps(repo, nil, nil)
+}
+
+func NewHandlerWithDeps(repo Repository, views cachex.ViewDeduper, cache cachex.TTLStore) *Handler {
+	if views == nil {
+		views = cachex.NewViewDeduper(nil)
+	}
+	if cache == nil {
+		cache = cachex.NewTTLStore(nil)
+	}
+	return &Handler{repo: repo, views: views, cache: cache}
 }
 
 func RegisterPublicRoutes(router gin.IRouter, repo Repository) {
-	handler := NewHandler(repo)
+	RegisterPublicRoutesWithDeps(router, repo, nil, nil)
+}
+
+func RegisterPublicRoutesWithDeps(router gin.IRouter, repo Repository, views cachex.ViewDeduper, cache cachex.TTLStore) {
+	handler := NewHandlerWithDeps(repo, views, cache)
 
 	router.GET("/posts", handler.List)
 	router.GET("/site-stats", handler.Stats)
@@ -129,11 +147,19 @@ func mergeQuery(values url.Values, key string, value string) string {
 }
 
 func (handler *Handler) Stats(ctx *gin.Context) {
+	if raw, ok := handler.cache.Get(ctx.Request.Context(), cachex.CacheKeySiteStats); ok {
+		ctx.Data(http.StatusOK, "application/json; charset=utf-8", []byte(raw))
+		return
+	}
+
 	stats, err := handler.repo.Stats(ctx.Request.Context())
 	if err != nil {
 		slog.Error("failed to load site stats", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load site stats"})
 		return
+	}
+	if raw, err := json.Marshal(stats); err == nil {
+		handler.cache.Set(ctx.Request.Context(), cachex.CacheKeySiteStats, string(raw), cachex.PublicCacheTTL)
 	}
 
 	ctx.JSON(http.StatusOK, stats)
@@ -143,14 +169,22 @@ func (handler *Handler) getPostForPublicView(ctx *gin.Context) (Post, error) {
 	slug := ctx.Param("slug")
 	user, _ := auth.CurrentUser(ctx)
 	viewer := Viewer{ID: user.ID, Role: user.Role}
-	if recorder, ok := handler.repo.(RestrictedViewRecorder); ok {
-		return recorder.RecordRestrictedView(ctx.Request.Context(), slug, viewer)
+
+	sessionToken, _ := ctx.Cookie(auth.SessionCookieName)
+	visitor := cachex.VisitorKey(sessionToken, ctx.ClientIP())
+	shouldCount := handler.views == nil || handler.views.Allow(ctx.Request.Context(), visitor, slug)
+
+	if shouldCount {
+		if recorder, ok := handler.repo.(RestrictedViewRecorder); ok {
+			return recorder.RecordRestrictedView(ctx.Request.Context(), slug, viewer)
+		}
+		if recorder, ok := handler.repo.(ViewRecorder); ok {
+			return recorder.RecordView(ctx.Request.Context(), slug)
+		}
 	}
+
 	if getter, ok := handler.repo.(RestrictedGetter); ok {
 		return getter.GetBySlugForViewer(ctx.Request.Context(), slug, viewer)
-	}
-	if recorder, ok := handler.repo.(ViewRecorder); ok {
-		return recorder.RecordView(ctx.Request.Context(), slug)
 	}
 
 	return handler.repo.GetBySlug(ctx.Request.Context(), slug)
