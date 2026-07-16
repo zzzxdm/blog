@@ -98,7 +98,6 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 					OR p.search_vector @@ input.tsquery
 				OR p.title ILIKE '%' || input.keyword || '%'
 				OR p.summary ILIKE '%' || input.keyword || '%'
-				OR p.content ILIKE '%' || input.keyword || '%'
 				OR c.name ILIKE '%' || input.keyword || '%'
 				OR EXISTS (
 					SELECT 1
@@ -191,7 +190,6 @@ func (repo *SQLRepository) ListPrivate(ctx context.Context, viewer Viewer, query
 				$3 = ''
 				OR p.title ILIKE '%' || $3 || '%'
 				OR p.summary ILIKE '%' || $3 || '%'
-				OR p.content ILIKE '%' || $3 || '%'
 				OR c.name ILIKE '%' || $3 || '%'
 				OR EXISTS (
 					SELECT 1
@@ -576,7 +574,6 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 					OR p.search_vector @@ input.tsquery
 				OR p.title ILIKE '%' || input.keyword || '%'
 				OR p.summary ILIKE '%' || input.keyword || '%'
-				OR p.content ILIKE '%' || input.keyword || '%'
 				OR c.name ILIKE '%' || input.keyword || '%'
 				OR EXISTS (
 					SELECT 1
@@ -607,7 +604,6 @@ func (repo *SQLRepository) countPrivate(ctx context.Context, viewer Viewer, keyw
 				$3 = ''
 				OR lower(p.title) LIKE '%' || lower($3) || '%'
 				OR lower(p.summary) LIKE '%' || lower($3) || '%'
-				OR lower(p.content) LIKE '%' || lower($3) || '%'
 				OR lower(c.name) LIKE '%' || lower($3) || '%'
 				OR EXISTS (
 					SELECT 1
@@ -676,7 +672,6 @@ func (repo *SQLRepository) listSQLite(ctx context.Context, page int, pageSize in
 				$1 = ''
 				OR lower(p.title) LIKE '%' || lower($1) || '%'
 				OR lower(p.summary) LIKE '%' || lower($1) || '%'
-				OR lower(p.content) LIKE '%' || lower($1) || '%'
 				OR lower(c.name) LIKE '%' || lower($1) || '%'
 				OR EXISTS (
 					SELECT 1
@@ -751,7 +746,6 @@ func (repo *SQLRepository) listPrivateSQLite(ctx context.Context, viewer Viewer,
 				$3 = ''
 				OR lower(p.title) LIKE '%' || lower($3) || '%'
 				OR lower(p.summary) LIKE '%' || lower($3) || '%'
-				OR lower(p.content) LIKE '%' || lower($3) || '%'
 				OR lower(c.name) LIKE '%' || lower($3) || '%'
 				OR EXISTS (
 					SELECT 1
@@ -896,7 +890,6 @@ func (repo *SQLRepository) countSQLite(ctx context.Context, keyword string, cate
 				$1 = ''
 				OR lower(p.title) LIKE '%' || lower($1) || '%'
 				OR lower(p.summary) LIKE '%' || lower($1) || '%'
-				OR lower(p.content) LIKE '%' || lower($1) || '%'
 				OR lower(c.name) LIKE '%' || lower($1) || '%'
 				OR EXISTS (
 					SELECT 1
