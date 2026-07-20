@@ -20,12 +20,13 @@ import {
   type SiteSettings
 } from "../shared/api";
 import { formatDateTime } from "../shared/datetime";
-import { extractMarkdownHeadings, renderCommentMarkdown } from "../shared/markdown";
+import { renderCommentMarkdown } from "../shared/markdown";
 import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
 import { useAuthStore } from "../stores/auth";
 import { usePostsStore } from "../stores/posts";
 import { useToastStore } from "../stores/toast";
 
+const MarkdownCatalog = defineAsyncComponent(() => import("../components/MarkdownCatalog.vue"));
 const MarkdownPreview = defineAsyncComponent(() => import("../components/MarkdownPreview.vue"));
 
 const route = useRoute();
@@ -56,7 +57,6 @@ const { selectedPreviewTheme, selectedCodeTheme } = useMarkdownPreviewTheme();
 const likeCount = computed(() => reaction.value?.likeCount ?? post.value?.likeCount ?? 0);
 const dislikeCount = computed(() => reaction.value?.dislikeCount ?? post.value?.dislikeCount ?? 0);
 const bookmarkCount = computed(() => reaction.value?.bookmarkCount ?? 0);
-const tocItems = computed(() => extractMarkdownHeadings(post.value?.content ?? ""));
 const commentsEnabled = computed(() => siteSettings.value?.commentsEnabled ?? true);
 const readingProgressEnabled = computed(() => siteSettings.value?.readingProgressEnabled ?? false);
 const visibleComments = computed(() => {
@@ -560,19 +560,12 @@ watch(() => auth.user?.id, () => {
       </article>
 
       <aside class="toc" aria-label="文章目录">
-        <section v-if="tocItems.length" class="panel">
+        <section class="panel">
           <div class="panel-title">
             <h2>目录</h2>
           </div>
-          <nav>
-            <a
-              v-for="(heading, index) in tocItems"
-              :key="`${heading.id}-${index}`"
-              :class="{ active: index === 0, nested: heading.level > 2 }"
-              :href="`#${heading.id}`"
-            >
-              {{ heading.text }}
-            </a>
+          <nav class="catalog-nav">
+            <MarkdownCatalog :editor-id="`article-${post.id}`" />
           </nav>
         </section>
 

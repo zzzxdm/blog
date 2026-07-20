@@ -25,7 +25,7 @@ func TestAuthSensitiveRateLimitWithRedisLimitsRegister(t *testing.T) {
 		ctx.JSON(http.StatusCreated, gin.H{"ok": true})
 	})
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 30; i++ {
 		recorder := performRateLimitedRegister(router)
 		if recorder.Code != http.StatusCreated {
 			t.Fatalf("request %d status = %d, want 201 body=%s", i+1, recorder.Code, recorder.Body.String())
@@ -34,7 +34,7 @@ func TestAuthSensitiveRateLimitWithRedisLimitsRegister(t *testing.T) {
 
 	recorder := performRateLimitedRegister(router)
 	if recorder.Code != http.StatusTooManyRequests {
-		t.Fatalf("sixth request status = %d, want 429 body=%s", recorder.Code, recorder.Body.String())
+		t.Fatalf("31st request status = %d, want 429 body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 

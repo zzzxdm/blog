@@ -106,6 +106,7 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 					WHERE search_pt.post_id = p.id
 						AND search_t.name ILIKE '%' || input.keyword || '%'
 				)
+					OR ($8 AND p.content ILIKE '%' || input.keyword || '%')
 			)
 			GROUP BY p.id, c.name, input.keyword, input.tsquery
 			ORDER BY
@@ -119,7 +120,7 @@ func (repo *SQLRepository) List(ctx context.Context, query ListQuery) (ListResul
 				p.published_at DESC NULLS LAST,
 				p.created_at DESC
 			LIMIT $5 OFFSET $6
-		`, keyword, category, tag, author, pageSize, offset, sortMode)
+		`, keyword, category, tag, author, pageSize, offset, sortMode, hasCJK(keyword))
 	if err != nil {
 		return ListResult{}, fmt.Errorf("list posts: %w", err)
 	}
@@ -198,11 +199,12 @@ func (repo *SQLRepository) ListPrivate(ctx context.Context, viewer Viewer, query
 					WHERE search_pt.post_id = p.id
 						AND search_t.name ILIKE '%' || $3 || '%'
 				)
+					OR ($6 AND p.content ILIKE '%' || $3 || '%')
 			)
 		GROUP BY p.id, c.name
 		ORDER BY COALESCE(p.published_at, p.created_at) DESC, p.created_at DESC
 		LIMIT $4 OFFSET $5
-	`, viewer.Role, strings.TrimSpace(viewer.ID), keyword, pageSize, offset)
+	`, viewer.Role, strings.TrimSpace(viewer.ID), keyword, pageSize, offset, hasCJK(keyword))
 	if err != nil {
 		return ListResult{}, fmt.Errorf("list private posts: %w", err)
 	}
@@ -582,8 +584,9 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 					WHERE search_pt.post_id = p.id
 						AND search_t.name ILIKE '%' || input.keyword || '%'
 				)
+					OR ($5 AND p.content ILIKE '%' || input.keyword || '%')
 				)
-		`, keyword, category, tag, author).Scan(&total)
+		`, keyword, category, tag, author, hasCJK(keyword)).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("count posts: %w", err)
 	}
@@ -613,7 +616,7 @@ func (repo *SQLRepository) countPrivate(ctx context.Context, viewer Viewer, keyw
 						AND lower(search_t.name) LIKE '%' || lower($3) || '%'
 				)
 			)
-	`, viewer.Role, strings.TrimSpace(viewer.ID), keyword).Scan(&total)
+	`, viewer.Role, strings.TrimSpace(viewer.ID), keyword, hasCJK(keyword)).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("count private posts: %w", err)
 	}
@@ -1112,4 +1115,13 @@ func splitTags(value string) []string {
 	}
 
 	return tags
+}
+
+func hasCJK(s string) bool {
+	for _, r := range s {
+		if (r >= 0x4E00 && r <= 0x9FFF) || (r >= 0x3400 && r <= 0x4DBF) {
+			return true
+		}
+	}
+	return false
 }

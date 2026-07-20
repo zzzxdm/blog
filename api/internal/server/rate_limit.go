@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,12 +27,12 @@ func rateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 }
 
 func rateLimitWithRedis(client *redis.Client, maxRequests int, window time.Duration) gin.HandlerFunc {
-	return rateLimitByPolicy(client, func(ctx *gin.Context) (rateLimitPolicy, bool) {
+	return rateLimitByPolicy(client, func(ctx *gin.Context) (rateLimitPolicy, string, bool) {
 		if !isWriteMethod(ctx.Request.Method) {
-			return rateLimitPolicy{}, false
+			return rateLimitPolicy{}, "", false
 		}
 
-		return rateLimitPolicy{MaxRequests: maxRequests, Window: window}, true
+		return rateLimitPolicy{MaxRequests: maxRequests, Window: window}, "", true
 	})
 }
 
@@ -40,37 +41,38 @@ func authSensitiveRateLimit() gin.HandlerFunc {
 }
 
 func authSensitiveRateLimitWithRedis(client *redis.Client) gin.HandlerFunc {
-	policies := map[string]rateLimitPolicy{
-		"/api/auth/login":              {MaxRequests: 20, Window: time.Minute},
-		"/api/auth/register":           {MaxRequests: 5, Window: 10 * time.Minute},
-		"/api/auth/forgot-password":    {MaxRequests: 5, Window: 10 * time.Minute},
-		"/api/auth/email-verification": {MaxRequests: 3, Window: 10 * time.Minute},
-		"/api/auth/verify-email":       {MaxRequests: 20, Window: 10 * time.Minute},
-		"/api/auth/reset-password":     {MaxRequests: 10, Window: 10 * time.Minute},
-	}
+	// A single unified bucket for all auth-related actions per IP to prevent distributed sweep attacks.
+	authZonePolicy := rateLimitPolicy{MaxRequests: 30, Window: 10 * time.Minute}
 
-	return rateLimitByPolicy(client, func(ctx *gin.Context) (rateLimitPolicy, bool) {
+	return rateLimitByPolicy(client, func(ctx *gin.Context) (rateLimitPolicy, string, bool) {
 		if ctx.Request.Method != http.MethodPost {
-			return rateLimitPolicy{}, false
+			return rateLimitPolicy{}, "", false
 		}
 
-		policy, ok := policies[ctx.Request.URL.Path]
-		return policy, ok
+		if strings.HasPrefix(ctx.Request.URL.Path, "/api/auth/") {
+			// group all auth routes under a single IP key
+			return authZonePolicy, "auth-zone", true
+		}
+
+		return rateLimitPolicy{}, "", false
 	})
 }
 
-func rateLimitByPolicy(client *redis.Client, policyFor func(*gin.Context) (rateLimitPolicy, bool)) gin.HandlerFunc {
+func rateLimitByPolicy(client *redis.Client, policyFor func(*gin.Context) (rateLimitPolicy, string, bool)) gin.HandlerFunc {
 	var mu sync.Mutex
 	buckets := map[string]rateBucket{}
 
 	return func(ctx *gin.Context) {
-		policy, ok := policyFor(ctx)
+		policy, keyScope, ok := policyFor(ctx)
 		if !ok {
 			ctx.Next()
 			return
 		}
 
-		key := fmt.Sprintf("%s:%s", ctx.ClientIP(), ctx.Request.URL.Path)
+		if keyScope == "" {
+			keyScope = ctx.Request.URL.Path
+		}
+		key := fmt.Sprintf("%s:%s", ctx.ClientIP(), keyScope)
 		if client != nil {
 			allowed, err := redisAllow(ctx.Request.Context(), client, "ratelimit:"+key, policy.MaxRequests, policy.Window)
 			if err == nil {
