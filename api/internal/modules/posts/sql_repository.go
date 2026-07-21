@@ -596,27 +596,56 @@ func (repo *SQLRepository) count(ctx context.Context, keyword string, category s
 
 func (repo *SQLRepository) countPrivate(ctx context.Context, viewer Viewer, keyword string) (int, error) {
 	var total int
-	err := repo.db.QueryRowContext(ctx, `
-		SELECT count(*)
-		FROM posts p
-		JOIN categories c ON c.id = p.category_id
-		WHERE p.status = 'published'
-			AND p.visibility = 'private'
-			AND ($1 = 'admin' OR COALESCE(CAST(p.author_id AS TEXT), '') = $2)
-			AND (
-				$3 = ''
-				OR lower(p.title) LIKE '%' || lower($3) || '%'
-				OR lower(p.summary) LIKE '%' || lower($3) || '%'
-				OR lower(c.name) LIKE '%' || lower($3) || '%'
-				OR EXISTS (
-					SELECT 1
-					FROM post_tags search_pt
-					JOIN tags search_t ON search_t.id = search_pt.tag_id
-					WHERE search_pt.post_id = p.id
-						AND lower(search_t.name) LIKE '%' || lower($3) || '%'
+	var err error
+
+	if repo.sqlite {
+		// SQLite 路径与 listPrivateSQLite 过滤条件一致（不含 hasCJK 占位符）
+		err = repo.db.QueryRowContext(ctx, `
+			SELECT count(*)
+			FROM posts p
+			JOIN categories c ON c.id = p.category_id
+			WHERE p.status = 'published'
+				AND p.visibility = 'private'
+				AND ($1 = 'admin' OR COALESCE(CAST(p.author_id AS TEXT), '') = $2)
+				AND (
+					$3 = ''
+					OR lower(p.title) LIKE '%' || lower($3) || '%'
+					OR lower(p.summary) LIKE '%' || lower($3) || '%'
+					OR lower(c.name) LIKE '%' || lower($3) || '%'
+					OR EXISTS (
+						SELECT 1
+						FROM post_tags search_pt
+						JOIN tags search_t ON search_t.id = search_pt.tag_id
+						WHERE search_pt.post_id = p.id
+							AND lower(search_t.name) LIKE '%' || lower($3) || '%'
+					)
 				)
-			)
-	`, viewer.Role, strings.TrimSpace(viewer.ID), keyword, hasCJK(keyword)).Scan(&total)
+		`, viewer.Role, strings.TrimSpace(viewer.ID), keyword).Scan(&total)
+	} else {
+		// Postgres：与 ListPrivate 一致，CJK 时额外扫 content
+		err = repo.db.QueryRowContext(ctx, `
+			SELECT count(*)
+			FROM posts p
+			JOIN categories c ON c.id = p.category_id
+			WHERE p.status = 'published'
+				AND p.visibility = 'private'
+				AND ($1 = 'admin' OR COALESCE(p.author_id::text, '') = $2)
+				AND (
+					$3 = ''
+					OR p.title ILIKE '%' || $3 || '%'
+					OR p.summary ILIKE '%' || $3 || '%'
+					OR c.name ILIKE '%' || $3 || '%'
+					OR EXISTS (
+						SELECT 1
+						FROM post_tags search_pt
+						JOIN tags search_t ON search_t.id = search_pt.tag_id
+						WHERE search_pt.post_id = p.id
+							AND search_t.name ILIKE '%' || $3 || '%'
+					)
+					OR ($4 AND p.content ILIKE '%' || $3 || '%')
+				)
+		`, viewer.Role, strings.TrimSpace(viewer.ID), keyword, hasCJK(keyword)).Scan(&total)
+	}
 	if err != nil {
 		return 0, fmt.Errorf("count private posts: %w", err)
 	}
