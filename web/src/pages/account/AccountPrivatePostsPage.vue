@@ -4,14 +4,18 @@ import { computed, onMounted, ref } from "vue";
 import AccountLayout from "../../components/AccountLayout.vue";
 import PaginationControls from "../../components/PaginationControls.vue";
 import {
-  getMySubmissions,
+  getAdminPosts,
   getMyPrivatePosts,
+  getMySubmissions,
+  type AdminPost,
   type Post,
   type Submission
 } from "../../shared/api";
 import { formatDateTime } from "../../shared/datetime";
+import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 
+const auth = useAuthStore();
 const toast = useToastStore();
 const posts = ref<Post[]>([]);
 const loading = ref(false);
@@ -20,9 +24,13 @@ const searchQuery = ref("");
 const page = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
+/** 私密投稿：publishedPostSlug 与 slug 均可命中 posts.slug */
 const submissionsBySlug = ref<Record<string, Submission>>({});
+/** 后台发布的私密文：admin_posts 通常无 submissions 行 */
+const adminPostsBySlug = ref<Record<string, AdminPost>>({});
 
 const currentCount = computed(() => posts.value.length);
+const isAdmin = computed(() => auth.user?.role === "admin");
 
 onMounted(load);
 
@@ -31,25 +39,67 @@ async function load() {
   error.value = "";
 
   try {
-    const [response, submissionResponse] = await Promise.all([getMyPrivatePosts({
-      q: searchQuery.value,
-      page: page.value,
-      pageSize: pageSize.value
-    }), getMySubmissions({ status: "published", all: true })]);
+    const [response, submissionResponse] = await Promise.all([
+      getMyPrivatePosts({
+        q: searchQuery.value,
+        page: page.value,
+        pageSize: pageSize.value
+      }),
+      getMySubmissions({ status: "published", all: true })
+    ]);
     posts.value = response.items;
-    submissionsBySlug.value = Object.fromEntries(
-      submissionResponse.items
-        .filter((item) => item.visibility === "private" && item.publishedPostSlug)
-        .map((item) => [item.publishedPostSlug || "", item])
-    );
+    submissionsBySlug.value = indexSubmissions(submissionResponse.items);
     total.value = response.total;
     page.value = response.page;
     pageSize.value = response.pageSize;
+
+    if (isAdmin.value) {
+      adminPostsBySlug.value = await loadAdminPrivatePosts();
+    } else {
+      adminPostsBySlug.value = {};
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : "私密文章加载失败";
     toast.error("私密文章加载失败", error.value);
   } finally {
     loading.value = false;
+  }
+}
+
+function indexSubmissions(items: Submission[]): Record<string, Submission> {
+  const map: Record<string, Submission> = {};
+  for (const item of items) {
+    if (item.visibility !== "private") continue;
+    if (item.publishedPostSlug) {
+      map[item.publishedPostSlug] = item;
+    }
+    if (item.slug) {
+      map[item.slug] = item;
+    }
+  }
+  return map;
+}
+
+async function loadAdminPrivatePosts(): Promise<Record<string, AdminPost>> {
+  try {
+    const response = await getAdminPosts({
+      status: "published",
+      all: true
+    });
+    const map: Record<string, AdminPost> = {};
+    for (const item of response.items) {
+      if (item.visibility !== "private") continue;
+      if (item.publishedPostSlug) {
+        map[item.publishedPostSlug] = item;
+      }
+      if (item.slug) {
+        map[item.slug] = item;
+      }
+    }
+    return map;
+  } catch {
+    // 非管理员或接口失败时静默忽略
+    return {};
   }
 }
 
@@ -75,6 +125,10 @@ function formatDate(value: string) {
 
 function submissionForPost(post: Post) {
   return submissionsBySlug.value[post.slug];
+}
+
+function adminPostForPost(post: Post) {
+  return adminPostsBySlug.value[post.slug];
 }
 </script>
 
@@ -115,8 +169,15 @@ function submissionForPost(post: Post) {
               <span>{{ item.readingTime }} 分钟阅读</span>
               <span>{{ item.viewCount }} 次阅读</span>
               <RouterLink class="button-secondary" :to="`/posts/${item.slug}`">查看文章</RouterLink>
-              <RouterLink v-if="submissionForPost(item)" class="button-secondary" :to="`/submit?id=${encodeURIComponent(submissionForPost(item).id)}`">编辑私密文章</RouterLink>
-              <RouterLink v-if="submissionForPost(item)" class="button-secondary" :to="`/submit?id=${encodeURIComponent(submissionForPost(item).id)}&visibility=public`">转公开投稿</RouterLink>
+              <template v-if="submissionForPost(item)">
+                <RouterLink class="button-secondary" :to="`/submit?id=${encodeURIComponent(submissionForPost(item)!.id)}`">编辑私密文章</RouterLink>
+                <RouterLink class="button-secondary" :to="`/submit?id=${encodeURIComponent(submissionForPost(item)!.id)}&visibility=public`">转公开投稿</RouterLink>
+              </template>
+              <RouterLink
+                v-else-if="adminPostForPost(item)"
+                class="button-secondary"
+                :to="`/admin/editor?id=${encodeURIComponent(adminPostForPost(item)!.id)}`"
+              >后台编辑</RouterLink>
             </div>
           </div>
         </article>

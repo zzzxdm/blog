@@ -1,23 +1,22 @@
 <script setup lang="ts">
-import { MdCatalog } from "md-editor-v3";
-import { computed } from "vue";
-import { useMarkdownPreviewTheme } from "../shared/markdownPreview";
+import { MdCatalog, type Themes } from "md-editor-v3";
 
-const props = withDefaults(defineProps<{
+import { markdownPreviewOptions } from "../shared/markdownPreview";
+
+withDefaults(defineProps<{
   editorId?: string;
-  theme?: string;
+  /** md-editor-v3 的 UI 主题，仅 light/dark（不是 previewTheme 如 github） */
+  theme?: Themes;
 }>(), {
   editorId: "markdown-preview",
+  theme: markdownPreviewOptions.theme
 });
-
-const { selectedPreviewTheme } = useMarkdownPreviewTheme();
-const resolvedTheme = computed(() => props.theme || selectedPreviewTheme.value);
 </script>
 
 <template>
   <MdCatalog
     :editor-id="editorId"
-    :theme="resolvedTheme"
+    :theme="theme"
     class="custom-markdown-catalog"
   />
 </template>
