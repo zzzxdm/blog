@@ -141,7 +141,7 @@ func (handler *Handler) ensurePostExists(ctx *gin.Context) bool {
 		return false
 	}
 
-	if _, err := handler.postRepo.GetBySlug(ctx.Request.Context(), ctx.Param("slug")); err != nil {
+	if _, err := handler.loadVisiblePost(ctx, ctx.Param("slug")); err != nil {
 		if errors.Is(err, posts.ErrNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 			return false
@@ -153,6 +153,20 @@ func (handler *Handler) ensurePostExists(ctx *gin.Context) bool {
 	}
 
 	return true
+}
+
+// loadVisiblePost resolves a published post the current viewer is allowed to see.
+// Public posts use GetBySlug; private posts require GetBySlugForViewer so authors/admins
+// can react/bookmark after opening their private articles.
+func (handler *Handler) loadVisiblePost(ctx *gin.Context, slug string) (posts.Post, error) {
+	user, _ := auth.CurrentUser(ctx)
+	viewer := posts.Viewer{ID: user.ID, Role: user.Role}
+
+	if getter, ok := handler.postRepo.(posts.RestrictedGetter); ok {
+		return getter.GetBySlugForViewer(ctx.Request.Context(), slug, viewer)
+	}
+
+	return handler.postRepo.GetBySlug(ctx.Request.Context(), slug)
 }
 
 type BookmarkItem struct {
@@ -193,7 +207,7 @@ func (handler *Handler) ListBookmarks(ctx *gin.Context) {
 
 	items := make([]BookmarkItem, 0, len(bookmarks.Items))
 	for _, bookmark := range bookmarks.Items {
-		post, err := handler.postRepo.GetBySlug(ctx.Request.Context(), bookmark.PostSlug)
+		post, err := handler.loadVisiblePost(ctx, bookmark.PostSlug)
 		if err != nil {
 			slog.Warn("failed to load bookmarked post", "error", err, "userID", user.ID, "postSlug", bookmark.PostSlug)
 			continue
